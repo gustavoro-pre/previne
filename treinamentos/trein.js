@@ -428,7 +428,7 @@ function escolherSubs(f) {
     <div class="actions"><button class="btn ghost" id="esb-back" type="button">Voltar</button><button class="btn primary" id="esb-ok">Salvar</button></div>`);
   $('#esb-back').onclick = () => openFunc(f.id);
   $('#esb-ok').onclick = async () => { if (!guardWrite()) return; const L = $$('#sheet [data-esb]').filter(c => c.checked).map(c => c.dataset.esb);
-    try { await db.doc('funcionarios/' + f.id).update({ subareas: L }); toast('Áreas salvas.', 'ok'); setTimeout(() => openFunc(f.id), 300); } catch (e) { handleErr(e); } };
+    try { const sid = L.includes(f.subareaId) ? f.subareaId : (L[0] || ''); const inf = sid ? subInfo(sid) : null; await db.doc('funcionarios/' + f.id).update({ subareas: L, subareaId: sid, subarea: inf ? str(inf.sub.nome) : '', areaId: inf ? inf.area.id : (f.areaId || ''), area: inf ? str(inf.area.nome) : str(f.area) }); toast('Áreas salvas.', 'ok'); setTimeout(() => openFunc(f.id), 300); } catch (e) { handleErr(e); } };
 }
 async function criarAcessoAluno(f) {
   if (!guardWrite()) return;
