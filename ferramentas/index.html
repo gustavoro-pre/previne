@@ -354,6 +354,8 @@ window.claude = { use: n => new Promise(r => { const go = () => window.__fbUse ?
 <script type="module" src="../fb.js"></script>
 <script>
 "use strict";
+const MODO = window.__MODULO || 'ferramentas'; /* ferramentas | treinamentos: o mesmo app atende os dois módulos */
+const NO_TREIN = MODO === 'ferramentas';
 /* ================= utilidades ================= */
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
@@ -559,7 +561,7 @@ function renderPainel() {
     ${x.excecao ? '<span class="badge b-bad">Fora da lista da função</span>' : ''}${x.kind === 'ferramenta' ? `<div class="t2">Ferramenta: <span class="code">${esc(x.codigo)}</span> ${esc(x.tipoFerr)} · valor ${brl(x.custo)}</div><div class="t2">Pedido em ${fmtDT(x.em)} · retirada em cautela</div>` : `<div class="t2">${esc(x.epiNome)} · qtd ${num(x.qtd)} · ${brl(num(x.custo) * (num(x.qtd) || 1))} · motivo: <b>${esc(MOT[x.motivo] || x.motivo)}</b></div><div class="t2">Pedido em ${fmtDT(x.em)} · última entrega deste EPI: ${(() => { const u = (ultimas()[x.funcionarioId] || {})[x.epiId]; return u ? fmtD(u.data) + ' (' + esc(MOT[u.motivo] || u.motivo) + ')' : 'nunca'; })()}</div>`}</div>
     <div class="side">${S.canEdit && podeDecidir() ? `<button class="btn sm primary" data-decidir="${esc(x.id)}|aprovada">Autorizar</button><button class="btn sm danger" data-decidir="${esc(x.id)}|negada">Negar</button>` : '<span class="badge b-warn">Aguardando gerência</span>'}</div></div>`).join('');
   const trv = treinStatus().filter(x => x.st !== 'ok');
-  $('#p-tr-wrap').classList.toggle('hidden', !trv.length);
+  $('#p-tr-wrap').classList.toggle('hidden', NO_TREIN || !trv.length);
   $('#p-tr').innerHTML = trv.slice(0, 20).map(x => `<button class="item ${x.st === 'vencido' ? 'late' : ''}" data-trein="${esc(x.r.id)}"><div class="main"><div class="t1">${esc(x.r.nome)}</div><div class="t2">${esc(x.r.tipoNome)} · concluído ${fmtD(x.r.termino)}</div></div><div class="side">${trBadge(x.r)}</div></button>`).join('') + (trv.length > 20 ? `<div class="note">+${trv.length - 20} em Cadastros → Treinamentos.</div>` : '');
   $('#p-atraso').innerHTML = !S.ready.caut ? loading() : (late.length ? late.map(cautelaCard).join('') : `<div class="empty">Nenhuma cautela em atraso.</div>`);
   $('#p-trocas').innerHTML = !S.ready.ent ? loading() : (tv.length ? tv.slice(0, 25).map(({ f, e }) => `<button class="item late" data-func="${esc(f.id)}"><div class="main"><div class="t1">${esc(f.nome)} <span class="t2">· ${esc(f.funcao)}</span></div><div class="t2">${esc(e.epiNome)} · última entrega ${fmtD(e.data)}</div></div><div class="side"><span class="badge b-bad">Vencida em ${fmtD(e.proximaTroca)}</span></div></button>`).join('') + (tv.length > 25 ? `<div class="note">+${tv.length - 25} em Relatórios.</div>` : '') : `<div class="empty">Todas as trocas em dia.</div>`);
@@ -1331,27 +1333,29 @@ function openFunc(id) {
     <datalist id="funs">${[...new Set(S.func.map(x => x.funcao).concat(S.kits.map(k => k.funcao)).filter(Boolean))].map(c => `<option value="${esc(c)}">`).join('')}</datalist>
     <datalist id="areas">${[...new Set(S.func.map(x => x.area).filter(Boolean))].map(c => `<option value="${esc(c)}">`).join('')}</datalist></div>
     <div class="actions">${f && !posse.length ? `<button class="btn danger" id="uf-del">Excluir</button>` : ''}${f ? `<button class="btn ghost" id="uf-etq">Crachá QR</button>` : ''}<button class="btn ghost" data-close>Cancelar</button><button class="btn primary" id="uf-save" ${S.canWrite === false ? 'disabled' : ''}>Salvar</button></div>
-    ${f ? `<div class="actions" style="margin-top:8px"><button class="btn ghost" id="uf-ficha">Ficha de EPI (PDF)</button><button class="btn ghost" id="uf-os">OS de Segurança (PDF)</button><button class="btn accent" id="uf-plan">Treinamentos de admissão</button></div>
+    ${f ? `<div class="actions" style="margin-top:8px"><button class="btn ghost" id="uf-ficha">Ficha de EPI (PDF)</button><button class="btn ghost" id="uf-os">OS de Segurança (PDF)</button>${NO_TREIN ? '' : '<button class="btn accent" id="uf-plan">Treinamentos de admissão</button>'}</div>
     <div class="card" style="margin-top:10px"><span class="lbl">Assinatura digital (ZapSign)</span>
     <div class="grid3"><div><label for="uf-zs">Situação</label><select id="uf-zs">${['', 'enviado', 'assinado', 'recusado'].map(x => `<option value="${x}" ${str(f.zsStatus) === x ? 'selected' : ''}>${{ '': 'Não enviado', enviado: 'Enviado para assinar', assinado: 'Assinado', recusado: 'Recusado' }[x]}</option>`).join('')}</select></div>
     <div><label for="uf-zsd">Data</label><input type="date" id="uf-zsd" value="${esc(f.zsData)}"></div><div><label for="uf-zsl">Link do documento</label><input id="uf-zsl" value="${esc(f.zsLink)}" placeholder="https://app.zapsign.com.br/…"></div></div>
     ${/^https:\/\//.test(str(f.zsLink)) ? `<p class="note"><a href="${esc(f.zsLink)}" target="_blank" rel="noopener">Abrir no ZapSign</a></p>` : '<p class="note">Gere o PDF de admissão, envie no ZapSign e cole aqui o link. Salve o cadastro para registrar.</p>'}</div>` : ''}
-    ${f ? `<h3>Ferramentas em posse (${posse.length})</h3><div class="list">${posse.length ? posse.map(p => `<button class="item ${isLate(p.c) ? 'late' : ''}" data-opdev="${esc(p.c.id)}"><div class="main"><span class="code">${esc(p.codigo)}</span> ${esc(p.descricao)}<div class="t2">Desde ${fmtDT(p.c.retiradaEm)} · cautela ${esc(p.c.numero)}</div></div>${isLate(p.c) ? '<span class="badge b-bad">Atrasada</span>' : ''}</button>`).join('') : '<div class="empty">Nenhuma ferramenta em posse.</div>'}</div>
+    ${f ? `${MODO === 'treinamentos' ? '' : `<h3>Ferramentas em posse (${posse.length})</h3><div class="list">${posse.length ? posse.map(p => `<button class="item ${isLate(p.c) ? 'late' : ''}" data-opdev="${esc(p.c.id)}"><div class="main"><span class="code">${esc(p.codigo)}</span> ${esc(p.descricao)}<div class="t2">Desde ${fmtDT(p.c.retiradaEm)} · cautela ${esc(p.c.numero)}</div></div>${isLate(p.c) ? '<span class="badge b-bad">Atrasada</span>' : ''}</button>`).join('') : '<div class="empty">Nenhuma ferramenta em posse.</div>'}</div>
     <div class="head" style="margin:22px 0 8px"><h3 style="margin:0;margin-right:auto">Ficha de EPI · ${ficha.length} entregas · ${brl(gasto)}</h3><button class="btn sm ghost" id="uf-csv">Exportar ficha</button></div>
     <div class="card" style="padding:6px 10px"><div class="tbwrap" style="margin:0"><table class="tb"><thead><tr><th>Data</th><th>EPI</th><th>CA</th><th class="n">Qtd</th><th>Motivo</th></tr></thead><tbody>
     ${ficha.length ? ficha.map(e => `<tr><td>${fmtD(e.data)}</td><td>${esc(e.epiNome)}${e.tamanho ? ' · ' + esc(e.tamanho) : ''}</td><td>${esc(e.ca)}${e.validadeCA && e.validadeCA < str(e.data).slice(0, 10) ? ' <span class="badge b-bad">vencido</span>' : ''}</td><td class="n">${num(e.qtd)}</td><td>${MOTGRP(e.motivo) === 'evit' ? `<span class="badge b-bad">${esc(MOT[e.motivo])}</span>` : esc(MOT[e.motivo] || e.motivo)}</td></tr>`).join('') : '<tr><td colspan="5" class="note">Nenhuma entrega registrada.</td></tr>'}
-    </tbody></table></div></div>
+    </tbody></table></div></div>`}
     <h3>Documentos</h3><div class="card" id="uf-docs">${(() => { const L = S.tr.filter(r => r.funcionarioId === f.id).sort((a, b) => str(a.inicio).localeCompare(str(b.inicio)));
       const ln = (k, t, sub, on) => `<label style="display:flex;gap:10px;align-items:center;color:inherit;font-size:15px;margin:6px 0"><input type="checkbox" data-doc="${k}" ${on ? 'checked' : ''} style="width:20px;height:20px"><span>${t}${sub ? `<div class="note">${sub}</div>` : ''}</span></label>`;
       return ln('ficha', 'Ficha de EPI (NR-06)', ficha.length + ' entrega(s) registrada(s)', true) + ln('os', 'OS de Segurança (NR-01)', esc(f.funcao || 'Sem função'), true)
-        + (L.length ? '<span class="lbl" style="margin-top:8px">Certificados</span>' + L.map(r => ln('tr:' + r.id, esc(r.norma || r.tipoNome), `${fmtD(r.inicio)}${r.termino !== r.inicio ? ' a ' + fmtD(r.termino) : ''} · ${num(r.cargaHoraria)}h · ${trBadge(r)}`, trState(r) !== 'agendado')).join('') : '<p class="note">Nenhum treinamento ainda. Use “Treinamentos de admissão”.</p>');
+        + (NO_TREIN ? '' : L.length ? '<span class="lbl" style="margin-top:8px">Certificados</span>' + L.map(r => ln('tr:' + r.id, esc(r.norma || r.tipoNome), `${fmtD(r.inicio)}${r.termino !== r.inicio ? ' a ' + fmtD(r.termino) : ''} · ${num(r.cargaHoraria)}h · ${trBadge(r)}`, trState(r) !== 'agendado')).join('') : '<p class="note">Nenhum treinamento ainda. Use “Treinamentos de admissão”.</p>');
     })()}<div class="actions" style="margin-top:8px"><button class="btn ghost sm" id="uf-dall" type="button">Marcar todos</button><button class="btn primary" id="uf-dgo" type="button">Baixar selecionados (PDF único)</button></div></div>
-    <h3>Treinamentos</h3><div class="list">${(() => { const L = S.tr.filter(r => r.funcionarioId === f.id).sort((a, b) => str(b.termino).localeCompare(str(a.termino))); return L.length ? L.map(trRow).join('') : '<div class="empty">Nenhum treinamento registrado.</div>'; })()}</div>
+    ${NO_TREIN ? '' : `<h3>Treinamentos</h3><div class="list">${(() => { const L = S.tr.filter(r => r.funcionarioId === f.id).sort((a, b) => str(b.termino).localeCompare(str(a.termino))); return L.length ? L.map(trRow).join('') : '<div class="empty">Nenhum treinamento registrado.</div>'; })()}</div>
     <h3>Agenda de treinamentos</h3><div class="card" style="padding:6px 10px">${agendaHtml(f.id)}</div>
-    <h3>Histórico de cautelas</h3><div class="list">${cautList(histFor('funcionarioId', f.id))}</div>` : ''}`);
+    ${typeof funcExtraHtml === 'function' ? funcExtraHtml(f) : ''}`}
+    ${MODO === 'treinamentos' ? '' : `<h3>Histórico de cautelas</h3><div class="list">${cautList(histFor('funcionarioId', f.id))}</div>`}` : ''}`);
   $('#uf-save').onclick = () => saveFunc(f);
   if (f) {
-    $('#uf-plan').onclick = () => openPlano(f.id);
+    if ($('#uf-plan')) $('#uf-plan').onclick = () => openPlano(f.id);
+    if (typeof funcExtraBind === 'function' && !NO_TREIN) funcExtraBind(f);
     $('#uf-dall').onclick = () => $$('#uf-docs [data-doc]').forEach(c => c.checked = true);
     $('#uf-dgo').onclick = () => { const k = $$('#uf-docs [data-doc]').filter(c => c.checked).map(c => c.dataset.doc); if (!k.length) return toast('Marque ao menos um documento.', 'bad'); gerarDocsFunc(f, k); };
   }
@@ -2438,7 +2442,7 @@ function papelAtual() {
   return (S.uid && m[S.uid] && m[S.uid].papel) || 'none';
 }
 const pode = v => { const a = ACESSO[papelAtual()] || ACESSO.none; return a.views === '*' || a.views.includes(v); };
-const podeSub = s => { const a = ACESSO[papelAtual()] || ACESSO.none; return a.subs === '*' || a.subs.includes(s); };
+const podeSub = s => { if (NO_TREIN && s === 'trein') return false; const a = ACESSO[papelAtual()] || ACESSO.none; return a.subs === '*' || a.subs.includes(s); };
 const podeDecidir = () => ['admin', 'gerente'].includes(papelAtual());
 function aplicarPapel() {
   const pp = papelAtual();
@@ -2493,7 +2497,7 @@ async function renderUsuarios() {
 function renderUsuariosFB() {
   const ae = document.activeElement; if (ae && ['us-n', 'us-e', 'us-p'].includes(ae.id)) return;
   const U = window.__FB.users(); const me = window.__FB.uid;
-  const ids = Object.keys(U).sort((a, b) => (U[a].ativo === false) - (U[b].ativo === false) || str(U[a].nome).localeCompare(str(U[b].nome), 'pt'));
+  const ids = Object.keys(U).filter(id => U[id].papel !== 'funcionario').sort((a, b) => (U[a].ativo === false) - (U[b].ativo === false) || str(U[a].nome).localeCompare(str(U[b].nome), 'pt'));
   const souGestao = papelAtual() === 'gestao'; const ALTOS = ['admin', 'gerente'];
   const opt = (sel, travado) => Object.entries(PAPEIS).filter(([k]) => travado || !souGestao || !ALTOS.includes(k)).map(([k, v]) => `<option value="${k}" ${sel === k ? 'selected' : ''}>${v[0]}</option>`).join('');
   const protegido = u => souGestao && ALTOS.includes(u.papel);
