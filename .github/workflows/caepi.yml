@@ -1,0 +1,20 @@
+name: Atualizar base de CAs (CAEPI)
+on:
+  schedule:
+    - cron: '23 9 * * *'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  caepi:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Baixar e converter a base do MTE
+        run: python3 caepi_update.py
+      - name: Salvar no repositorio
+        run: |
+          git config user.name "atualizador-caepi"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          for f in ca.json ca caepi_status.json; do if [ -e "$f" ]; then git add -A "$f"; fi; done
+          if git diff --cached --quiet; then echo "Sem mudancas"; else git commit -m "Atualiza base de CAs" && git push; fi
