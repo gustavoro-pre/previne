@@ -205,62 +205,81 @@ let tt; function toast(t, k) { const el = $('#toast'); el.textContent = t; el.cl
 /* módulos do portal: novos módulos entram aqui */
 const MODS = [
   { id: 'ferramentas', icone: '🧰', nome: 'Ferramentas & EPI', desc: 'Cautela de ferramentas, entrega de EPI, estoques, notas fiscais (XML), validade de CA, kits e regras por função.', href: 'ferramentas/', pronto: true },
-  { id: 'treinamentos', icone: '🎓', nome: 'Treinamentos', desc: 'NRs, treinamentos da ArcelorMittal, padrões operacionais, cursos on-line com prova e certificados.', pronto: false },
-  { id: 'indicadores', icone: '📊', nome: 'Indicadores', desc: 'KPIs de ferramentas, EPI, treinamentos e padrões operacionais, por área e por funcionário.', pronto: false }
+  { id: 'treinamentos', icone: '🎓', nome: 'Treinamentos', desc: 'NRs, admissão, treinamentos da ArcelorMittal, padrões operacionais, cursos on-line com prova e certificados.', href: 'treinamentos/', pronto: true },
+  { id: 'indicadores', icone: '📊', nome: 'Indicadores', desc: 'KPIs de treinamentos, padrões operacionais, ferramentas e EPI, por área e por funcionário.', href: 'indicadores/', pronto: true }
 ];
 const PAPEIS = {
   admin: ['Administrador', 'Acesso total a todos os módulos, usuários e aprovações'],
   gerente: ['Gerente', 'Ferramentas & EPI: tudo, inclusive aprovar EPI caro ou fora da lista'],
-  gestao: ['Gestão', 'Ferramentas & EPI: tudo, exceto aprovar exceções e dar perfil de Administrador ou Gerente'],
+  gestao: ['Gestão', 'Tudo em todos os módulos, exceto aprovar exceções de EPI e dar perfil de Administrador ou Gerente'],
   almox: ['Almoxarifado', 'Ferramentas & EPI: retirada, devolução, entrega de EPI, estoques e cadastros'],
-  tst: ['TST', 'Ferramentas & EPI: entrega de EPI, kits, regras, treinamentos e relatórios'],
-  rh: ['RH', 'Ferramentas & EPI: funcionários, admissão e treinamentos'],
+  tst: ['TST', 'Ferramentas & EPI: entrega de EPI, kits, regras e relatórios'],
+  rh: ['RH', 'Ferramentas & EPI: funcionários, ficha de EPI e OS'],
   nenhum: ['Sem acesso', 'Não usa Ferramentas & EPI']
 };
-function temModulo(d, id) {
-  if (!d) return false; if (d.papel === 'admin') return true;
-  if (id === 'ferramentas') return !!d.papel && d.papel !== 'nenhum';
-  return !!(d.modulos && d.modulos[id] && d.modulos[id] !== 'nenhum');
+const PAPEIS_MOD = {
+  treinamentos: { gestor: 'Gestor de treinamentos', tst: 'TST', rh: 'RH', instrutor: 'Instrutor', consulta: 'Consulta (só vê)', nenhum: 'Sem acesso' },
+  indicadores: { todos: 'Vê todas as áreas', nenhum: 'Sem acesso' }
+};
+const DESC_MOD = [['Treinamentos · Gestor', 'Tudo no módulo: tipos, turmas, admissão, externos, áreas, padrões, cursos e acesso do aluno'], ['Treinamentos · TST / RH', 'Turmas, admissão, externos, padrões, cursos, áreas e funcionários'], ['Treinamentos · Instrutor', 'Turmas, padrões (listas e assinaturas) e cursos'], ['Treinamentos · Consulta', 'Vê tudo, não altera'], ['Indicadores', 'Todas as áreas, ou só uma área escolhida']];
+let AREAS = [];
+/* mesmo cálculo do fb.js: perfil efetivo em cada módulo */
+function papelMod(d, id) {
+  if (!d) return 'nenhum'; if (d.papel === 'admin') return 'admin'; if (d.papel === 'funcionario') return 'nenhum';
+  if (id === 'ferramentas') return d.papel || 'nenhum';
+  const m = (d.modulos || {})[id]; if (m) return m;
+  if (d.papel === 'gestao') return 'gestao';
+  if (id === 'treinamentos') return ({ gerente: 'gestor', tst: 'tst', rh: 'rh' })[d.papel] || 'nenhum';
+  if (id === 'indicadores') return d.papel === 'gerente' ? 'todos' : 'nenhum';
+  return 'nenhum';
 }
+const temModulo = (d, id) => papelMod(d, id) !== 'nenhum';
+const nomeMod = (id, v) => v === 'admin' ? 'Administrador' : v === 'gestao' ? 'Gestão' : id === 'ferramentas' ? (PAPEIS[v] || [v])[0] : /^area:/.test(v) ? 'Só ' + ((AREAS.find(a => 'area:' + a.id === v) || {}).nome || 'uma área') : ((PAPEIS_MOD[id] || {})[v] || v);
 function renderMods() {
-  const F = window.__FB, d = F.perfil; const adm = ['admin', 'gestao'].includes(d.papel);
+  const F = window.__FB, d = F.perfil;
   $('#p-hello').textContent = 'Olá, ' + str(F.nome).split(' ')[0];
-  const L = MODS.filter(m => temModulo(d, m.id) || (adm && !m.pronto));
-  $('#p-mods').innerHTML = L.length ? L.map(m => {
-    const pf = m.id === 'ferramentas' ? (PAPEIS[d.papel] || [d.papel])[0] : d.papel === 'admin' ? 'Administrador' : str((d.modulos || {})[m.id]);
-    const inner = `<div class="mi">${m.icone}</div><h3>${esc(m.nome)}</h3><p>${esc(m.desc)}</p><div class="pf">${m.pronto ? 'Seu perfil: ' + esc(pf) : '<span class="badge b-info">Em construção</span>'}</div>`;
-    return m.pronto ? `<a class="mod" href="${m.href}">${inner}</a>` : `<div class="mod off">${inner}</div>`;
-  }).join('') : '<div class="empty">Nenhum módulo liberado para você ainda. Fale com o administrador.</div>';
+  const L = MODS.filter(m => temModulo(d, m.id));
+  $('#p-mods').innerHTML = (L.length ? L.map(m => `<a class="mod" href="${m.href}"><div class="mi">${m.icone}</div><h3>${esc(m.nome)}</h3><p>${esc(m.desc)}</p><div class="pf">Seu perfil: ${esc(nomeMod(m.id, papelMod(d, m.id)))}</div></a>`).join('') : '<div class="empty">Nenhum módulo liberado para você ainda. Fale com o administrador.</div>')
+    + (temModulo(d, 'treinamentos') ? `<a class="mod" href="aluno/" target="_blank" rel="noopener"><div class="mi">👷</div><h3>Portal do aluno</h3><p>Onde o funcionário entra com a matrícula para fazer os cursos on-line e assinar os padrões. Envie este link para a equipe.</p><div class="pf">${esc(new URL('aluno/', location.href).href)}</div></a>` : '');
 }
 function renderUsers() {
   const F = window.__FB, d = F.perfil; const souAdm = d.papel === 'admin', souGestao = d.papel === 'gestao';
   $('#p-users').hidden = !(souAdm || souGestao); if ($('#p-users').hidden) return;
-  const ae = document.activeElement; if (ae && ['pu-n', 'pu-e', 'pu-p'].includes(ae.id)) return;
-  const U = F.users(); const me = F.uid; const ALTOS = ['admin', 'gerente'];
+  const ae = document.activeElement; if (ae && ['pu-n', 'pu-e', 'pu-p', 'pu-t', 'pu-i'].includes(ae.id)) return;
+  const U0 = F.users(); const U = {}; Object.keys(U0).forEach(k => { if (U0[k].papel !== 'funcionario') U[k] = U0[k]; });
+  const me = F.uid; const ALTOS = ['admin', 'gerente'];
   const protegido = u => souGestao && ALTOS.includes(u.papel);
   const opt = (sel, travado) => Object.entries(PAPEIS).filter(([k]) => travado || !souGestao || !ALTOS.includes(k)).map(([k, v]) => `<option value="${k}" ${sel === k ? 'selected' : ''}>${v[0]}</option>`).join('');
+  const optM = (id, sel) => { const o = Object.assign({}, PAPEIS_MOD[id]); if (id === 'indicadores') AREAS.forEach(a => o['area:' + a.id] = 'Só a área ' + a.nome); if (!o[sel] && sel !== 'admin' && sel !== 'gestao') o[sel] = nomeMod(id, sel);
+    return (['admin', 'gestao'].includes(sel) ? `<option value="" selected>${sel === 'admin' ? 'Administrador (tudo)' : 'Gestão (tudo)'}</option>` : '') + Object.entries(o).map(([k, v]) => `<option value="${esc(k)}" ${sel === k ? 'selected' : ''}>${esc(v)}</option>`).join(''); };
   const ids = Object.keys(U).sort((a, b) => (U[a].ativo === false) - (U[b].ativo === false) || str(U[a].nome).localeCompare(str(U[b].nome), 'pt'));
-  $('#p-ubody').innerHTML = `<div class="card"><p class="ct">Cadastrar usuário</p><p class="cs">A pessoa recebe um e-mail para criar a própria senha. Depois entra no portal com e-mail e senha.</p>
-    <div class="grid3"><div><label for="pu-n">Nome completo</label><input id="pu-n"></div><div><label for="pu-e">E-mail</label><input id="pu-e" type="email" autocomplete="off"></div><div><label for="pu-p">Perfil em Ferramentas & EPI</label><select id="pu-p">${opt('almox')}</select></div></div>
+  $('#p-ubody').innerHTML = `<div class="card"><p class="ct">Cadastrar usuário</p><p class="cs">A pessoa recebe um e-mail para criar a própria senha. Depois entra no portal com e-mail e senha. Funcionários que só fazem cursos usam o portal do aluno (o acesso é criado no módulo Treinamentos).</p>
+    <div class="grid2"><div><label for="pu-n">Nome completo</label><input id="pu-n"></div><div><label for="pu-e">E-mail</label><input id="pu-e" type="email" autocomplete="off"></div></div>
+    <div class="grid3"><div><label for="pu-p">Ferramentas & EPI</label><select id="pu-p">${opt('nenhum')}</select></div><div><label for="pu-t">Treinamentos</label><select id="pu-t">${optM('treinamentos', 'nenhum')}</select></div><div><label for="pu-i">Indicadores</label><select id="pu-i">${optM('indicadores', 'nenhum')}</select></div></div>
     <div class="actions"><button class="btn primary" id="pu-add">Cadastrar e enviar convite</button></div></div>
-    <div class="card"><p class="ct">Usuários (${ids.length})</p>${ids.map(id => { const u = U[id]; const eu = id === me; const trav = eu || protegido(u);
+    <div class="card"><p class="ct">Usuários (${ids.length})</p>${ids.map(id => { const u = U[id]; const eu = id === me; const trav = eu || protegido(u); const ad = u.papel === 'admin';
+      const sm = mid => `<label class="note" style="margin:0">${mid === 'treinamentos' ? 'Treinamentos' : 'Indicadores'}</label><select data-pm="${esc(id)}|${mid}" style="width:auto;padding:7px" ${trav || ad ? 'disabled' : ''}>${optM(mid, papelMod(u, mid))}</select>`;
       return `<div class="urow"><div class="main"><b>${esc(u.nome)}</b>${eu ? ' <span class="badge b-info">você</span>' : ''}${u.ativo === false ? ' <span class="badge b-bad">Desativado</span>' : ''}<div class="t2 note">${esc(u.email)}</div></div>
       <label class="note" style="margin:0">Ferramentas & EPI</label><select data-pp="${esc(id)}" style="width:auto;padding:7px" ${trav ? 'disabled' : ''}>${opt(u.papel, trav)}</select>
-      <span class="note">Treinamentos · Indicadores: em construção</span>
+      ${sm('treinamentos')}${sm('indicadores')}
       ${protegido(u) ? '' : `<button class="btn sm ghost" data-pinv="${esc(u.email)}">Reenviar convite</button>`}${trav ? '' : `<button class="btn sm ${u.ativo === false ? 'ghost' : 'danger'}" data-pat="${esc(id)}">${u.ativo === false ? 'Reativar' : 'Desativar'}</button>`}</div>`; }).join('')}</div>
-    <div class="card"><p class="ct">O que cada perfil faz</p><div class="tbwrap"><table class="tb"><thead><tr><th>Perfil</th><th>Acesso</th></tr></thead><tbody>${Object.values(PAPEIS).map(p => `<tr><td><b>${p[0]}</b></td><td>${p[1]}</td></tr>`).join('')}</tbody></table></div>
-    <p class="note">Quando os módulos Treinamentos e Indicadores ficarem prontos, cada um terá a sua coluna de perfil aqui.</p></div>`;
+    <div class="card"><p class="ct">O que cada perfil faz</p><div class="tbwrap"><table class="tb"><thead><tr><th>Perfil</th><th>Acesso</th></tr></thead><tbody>${Object.values(PAPEIS).map(p => `<tr><td><b>${p[0]}</b></td><td>${p[1]}</td></tr>`).join('')}${DESC_MOD.map(p => `<tr><td><b>${p[0]}</b></td><td>${p[1]}</td></tr>`).join('')}</tbody></table></div>
+    <p class="note">Quem não tem perfil definido em Treinamentos herda: Gerente vira Gestor, TST e RH continuam TST e RH. Gestão e Administrador veem tudo.</p></div>`;
   $('#pu-add').onclick = async () => {
     const nome = $('#pu-n').value.trim(), email = $('#pu-e').value.trim().toLowerCase(), papel = $('#pu-p').value;
+    const modulos = { treinamentos: $('#pu-t').value, indicadores: $('#pu-i').value };
     if (nome.split(/\s+/).length < 2) return toast('Informe o nome completo.', 'bad');
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return toast('E-mail inválido.', 'bad');
-    if (Object.values(U).some(u => str(u.email).toLowerCase() === email)) return toast('Esse e-mail já está cadastrado.', 'bad');
+    if (Object.values(U0).some(u => str(u.email).toLowerCase() === email)) return toast('Esse e-mail já está cadastrado.', 'bad');
+    if (papel === 'nenhum' && modulos.treinamentos === 'nenhum' && modulos.indicadores === 'nenhum') return toast('Dê acesso a pelo menos um módulo.', 'bad');
     const b = $('#pu-add'); b.disabled = true; b.textContent = 'Cadastrando…';
-    try { await F.criarUsuario({ nome, email, papel }); toast(`Convite enviado para ${email}.`, 'ok'); $('#pu-n').value = ''; $('#pu-e').value = ''; }
+    try { await F.criarUsuario({ nome, email, papel, modulos }); toast(`Convite enviado para ${email}.`, 'ok'); $('#pu-n').value = ''; $('#pu-e').value = ''; }
     catch (e) { toast((e && e.message) || 'Não foi possível cadastrar.', 'bad'); }
     finally { b.disabled = false; b.textContent = 'Cadastrar e enviar convite'; }
   };
   $$('#p-ubody [data-pp]').forEach(sl => sl.onchange = async () => { try { await F.atualizarUsuario(sl.dataset.pp, { papel: sl.value }); toast('Perfil alterado.', 'ok'); } catch (e) { toast('Não foi possível alterar.', 'bad'); } });
+  $$('#p-ubody [data-pm]').forEach(sl => sl.onchange = async () => { const [uid, mid] = sl.dataset.pm.split('|'); if (!sl.value) return; const m = Object.assign({}, U[uid].modulos || {}, { [mid]: sl.value });
+    try { await F.atualizarUsuario(uid, { modulos: m }); toast('Acesso alterado.', 'ok'); } catch (e) { toast('Não foi possível alterar.', 'bad'); } });
   $$('#p-ubody [data-pinv]').forEach(b => b.onclick = async () => { try { await F.reenviarConvite(b.dataset.pinv); toast('Convite reenviado.', 'ok'); } catch (e) { toast('Não foi possível reenviar.', 'bad'); } });
   $$('#p-ubody [data-pat]').forEach(b => { let armed = false; b.onclick = async () => { const u = U[b.dataset.pat]; if (u.ativo !== false && !armed) { armed = true; b.textContent = 'Confirmar'; return; } try { await F.atualizarUsuario(b.dataset.pat, { ativo: u.ativo === false }); toast(u.ativo === false ? 'Reativado.' : 'Desativado.', 'ok'); } catch (e) { toast('Não foi possível alterar.', 'bad'); } }; });
 }
@@ -269,6 +288,7 @@ function renderUsers() {
   db.doc('config/empresa').onSnapshot(s => { const e = s.exists ? s.data() : {}; if (e.nome) $('#p-emp').textContent = e.nome;
     if (/^data:image\/(png|jpeg);base64,/.test(str(e.logo))) { const l = $('header .logo'); l.classList.add('img'); l.innerHTML = `<img src="${e.logo}" alt="Logo">`; } }, () => {});
   db.collection('funcionarios').limit(1).get().then(() => { const c = $('#conn'); c.textContent = 'Online'; c.className = 'conn ok'; }, () => {});
+  db.collection('areas').onSnapshot(q => { AREAS = q.docs.map(x => Object.assign({ id: x.id }, x.data())).sort((a, b) => str(a.nome).localeCompare(str(b.nome), 'pt')); renderUsers(); }, () => {});
   renderMods(); renderUsers();
   window.addEventListener('fb-users', renderUsers);
 })();

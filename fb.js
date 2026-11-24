@@ -60,9 +60,15 @@ function telaSemModulo() {
 /* perfil da pessoa no módulo aberto: Administrador vale para tudo; 'papel' é o perfil de Ferramentas & EPI; os demais módulos ficam em 'modulos' */
 function papelNoModulo(d) {
   if (d.papel === 'admin') return 'admin';
-  if (MOD === 'portal') return d.papel || 'nenhum';
-  if (MOD === 'ferramentas') return d.papel || 'nenhum';
-  return (d.modulos && d.modulos[MOD]) || 'nenhum';
+  if (d.papel === 'funcionario') return 'nenhum';
+  if (MOD === 'portal' || MOD === 'ferramentas') return d.papel || 'nenhum';
+  const m = (d.modulos || {})[MOD];
+  if (m) return m;
+  /* sem perfil definido no módulo: Gestão vale para tudo; Gerente, TST e RH herdam o que já faziam com treinamentos */
+  if (d.papel === 'gestao') return 'gestao';
+  if (MOD === 'treinamentos') return ({ gerente: 'gestor', tst: 'tst', rh: 'rh' })[d.papel] || 'nenhum';
+  if (MOD === 'indicadores') return d.papel === 'gerente' ? 'todos' : 'nenhum';
+  return 'nenhum';
 }
 function telaSemAcesso(u) {
   showGate(`<h1>Acesso não liberado</h1><p class="gsub">A conta <b>${esc(u.email)}</b> está desativada ou ainda não tem perfil. Fale com o administrador.</p>
@@ -162,6 +168,31 @@ async function criarUsuario({ nome, email, papel, modulos }) {
   } finally { deleteApp(tmp).catch(() => {}); }
 }
 const reenviarConvite = email => sendPasswordResetEmail(auth, email);
+/* acesso do funcionário ao portal do aluno: login = matrícula; a conta usa um e-mail interno que não recebe mensagens */
+async function criarAluno({ funcionarioId, nome, chave }) {
+  if (!navigator.onLine) throw { message: 'Criar o acesso precisa de internet.' };
+  const lref = doc(fs, 'login/' + chave);
+  let ant = null;
+  try { const s = await getDocFromServer(lref); ant = s.exists() ? s.data() : null; } catch (e) { throw { message: 'Sem conexão com o servidor. Tente de novo.' }; }
+  const senha = String(100000 + (crypto.getRandomValues(new Uint32Array(1))[0] % 900000));
+  const tmp = initializeApp(FIREBASE_CONFIG, 'aluno-' + Date.now());
+  try {
+    const a2 = getAuth(tmp); let uid = null, email = '', v = ant ? (Number(ant.v) || 1) : 0;
+    for (let k = 0; k < 6 && !uid; k++) {
+      v++; email = chave + (v > 1 ? '.v' + v : '') + '@aluno.previne.app';
+      try { uid = (await createUserWithEmailAndPassword(a2, email, senha)).user.uid; }
+      catch (e) { if (!(e && e.code === 'auth/email-already-in-use')) throw { message: errPt(e) }; }
+    }
+    if (!uid) throw { message: 'Não foi possível criar o acesso. Tente de novo.' };
+    await signOut(a2);
+    const agora = new Date().toISOString(); const b = writeBatch(fs);
+    b.set(doc(fs, 'usuarios/' + uid), { nome, email, papel: 'funcionario', funcionarioId, login: chave, ativo: true, trocarSenha: true, criadoEm: agora, por: ME.uid });
+    b.set(lref, { email, v, uid, funcionarioId, em: agora });
+    if (ant && ant.uid) b.update(doc(fs, 'usuarios/' + ant.uid), { ativo: false });
+    await b.commit();
+    return { senha, email };
+  } finally { deleteApp(tmp).catch(() => {}); }
+}
 const atualizarUsuario = (uid, d) => updateDoc(doc(fs, 'usuarios/' + uid), d);
 
 /* ---------- inicialização ---------- */
@@ -187,10 +218,11 @@ onAuthStateChanged(auth, async u => {
   const d = perf.exists() ? perf.data() : null;
   if (!d && !perf.__srv) return telaErro();
   if (!d || d.ativo === false) return telaSemAcesso(u);
+  if (d.papel === 'funcionario') { location.replace(new URL('./aluno/', import.meta.url).href); return; }
   const pm = papelNoModulo(d);
   if (MOD !== 'portal' && pm === 'nenhum') return telaSemModulo();
   ME = { uid: u.uid, email: u.email, nome: d.nome || u.email, papel: pm };
-  window.__FB = { modulo: MOD, perfil: d, papel: pm, papelGeral: d.papel, uid: u.uid, nome: ME.nome, email: u.email, criarUsuario, reenviarConvite, atualizarUsuario, users: () => USERS, sair: () => signOut(auth).then(() => location.reload()) };
+  window.__FB = { modulo: MOD, perfil: d, papel: pm, papelGeral: d.papel, uid: u.uid, nome: ME.nome, email: u.email, criarUsuario, criarAluno, reenviarConvite, atualizarUsuario, users: () => USERS, sair: () => signOut(auth).then(() => location.reload()) };
   onSnapshot(collection(fs, 'usuarios'), s => { USERS = {}; s.docs.forEach(x => USERS[x.id] = x.data()); const m = USERS[u.uid]; if (m && (m.ativo === false || m.papel !== window.__FB.papelGeral || JSON.stringify(m.modulos || {}) !== JSON.stringify(d.modulos || {}))) location.reload(); window.dispatchEvent(new Event('fb-users')); }, () => {});
   const um = document.getElementById('usermenu'); if (um) { um.hidden = false; um.querySelector('b').textContent = ME.nome.split(' ')[0]; um.onclick = () => { if (confirmSair()) window.__FB.sair(); }; }
   hideGate(); resolveReady();
