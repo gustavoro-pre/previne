@@ -292,6 +292,7 @@ table.tb{width:100%;border-collapse:collapse;font-size:13px}
   <div id="sub-epis" class="sub" hidden>
     <div class="head"><h2>EPIs</h2><button class="btn ghost" id="p-qr" type="button">Etiquetas QR</button><button class="btn ghost" id="p-imp" type="button">Importar lista</button><button class="btn ghost" data-xml type="button">Importar XML (NF-e)</button><button class="btn primary" id="p-new" type="button">+ Novo</button></div>
     <input id="p-q" placeholder="Buscar nome, CA, categoria" autocomplete="off">
+    <div class="chips" id="p-chips"></div>
     <p class="note" id="p-canota" style="margin:8px 0 0"></p>
     <div id="p-list" class="list" style="margin-top:12px"></div>
   </div>
@@ -405,19 +406,20 @@ function calibBadge(f) {
   if (c === 'sem') return `<span class="badge b-warn">Sem data de calibração</span>`;
   return '';
 }
-function caState(p) { if (p.caSituacao && !/^V[ÁA]LIDO/i.test(str(p.caSituacao))) return 'vencido'; const v = str(p.validadeCA); if (!v) return 'sem'; if (v < todayStr()) return 'vencido'; if (v <= addDays(60)) return 'vence'; return 'ok'; }
+function caState(p) { if (p.semCA) return 'semca'; if (p.caSituacao && !/^V[ÁA]LIDO/i.test(str(p.caSituacao))) return 'vencido'; const v = str(p.validadeCA); if (!v) return 'sem'; if (v < todayStr()) return 'vencido'; if (v <= addDays(60)) return 'vence'; return 'ok'; }
 function caBadge(p) {
   const c = caState(p);
   if (c === 'vencido') return `<span class="badge b-bad">CA ${p.caSituacao && !/^V[ÁA]LIDO/i.test(str(p.caSituacao)) ? esc(str(p.caSituacao).toLowerCase()) : 'vencido'}</span>`;
   if (c === 'vence') return `<span class="badge b-warn">CA vence ${fmtD(p.validadeCA)}</span>`;
   if (c === 'sem') return `<span class="badge b-warn">Sem validade do CA</span>`;
+  if (c === 'semca') return `<span class="badge b-mut">Sem CA</span>`;
   return '';
 }
 const pend = c => (Array.isArray(c.itens) ? c.itens : []).filter(i => i && !i.devolvido);
 const isLate = c => c.status === 'aberta' && str(c.previsaoDevolucao) && str(c.previsaoDevolucao) < todayStr();
 
 /* ================= estado ================= */
-const S = { est: [], transf: [], ferr: [], func: [], epis: [], kits: [], caut: [], ent: [], ready: { ferr:false, func:false, epis:false, kits:false, caut:false, ent:false }, canWrite: true, uid: null, emp: {}, regras: { epi: {}, tipos: {} }, sol: [], dec: [], canEdit: false, tt: [], tr: [], isOwner: false, usuarios: {}, ped: [] };
+const S = { areas: [], est: [], transf: [], ferr: [], func: [], epis: [], kits: [], caut: [], ent: [], ready: { ferr:false, func:false, epis:false, kits:false, caut:false, ent:false }, canWrite: true, uid: null, emp: {}, regras: { epi: {}, tipos: {} }, sol: [], dec: [], canEdit: false, tt: [], tr: [], isOwner: false, usuarios: {}, ped: [] };
 const abertas = () => S.caut.filter(c => c.status === 'aberta');
 let db = null, user = null;
 const R = { func: null, itens: [] };
@@ -589,7 +591,7 @@ function ferrRow(f) {
 function epiRow(p) {
   const low = num(p.estoqueMin) > 0 && num(p.estoque) < num(p.estoqueMin);
   return `<button class="item" data-epi="${esc(p.id)}"><div class="main"><div class="t1">${esc(p.nome)}</div>
-    <div class="t2">CA ${esc(p.ca || '—')} · ${esc(p.categoria || '')}${num(p.vidaUtilDias) ? ' · troca a cada ' + num(p.vidaUtilDias) + ' dias' : ''} · ${brl(p.custo)}</div>
+    <div class="t2">${p.semCA ? 'Sem CA' : 'CA ' + esc(p.ca || '—')} · ${esc(p.categoria || '')}${num(p.vidaUtilDias) ? ' · troca a cada ' + num(p.vidaUtilDias) + ' dias' : ''} · ${brl(p.custo)}</div>
     ${saldosTxt(p) ? `<div class="t2">${saldosTxt(p)}</div>` : ''}</div>
     <div class="side"><span class="badge ${low ? 'b-warn' : 'b-mut'}">Geral ${num(p.estoque)}${num(p.estoqueMin) ? ' / mín ' + num(p.estoqueMin) : ''}</span>${caBadge(p)}</div></button>`;
 }
@@ -602,7 +604,7 @@ document.addEventListener('click', e => {
 });
 
 /* ================= busca de funcionário (compartilhada) ================= */
-function matchFunc(f, q) { return norm([f.nome, f.matricula, f.funcao, f.area].join(' ')).includes(q); }
+function matchFunc(f, q) { return norm([f.nome, f.matricula, f.funcao, f.cargo, f.area, f.subarea, f.unidade].join(' ')).includes(q); }
 function matchFerr(f, q) { return norm([f.codigo, f.descricao, f.categoria, f.numSerie, f.marcaModelo].join(' ')).includes(q); }
 function funcPicker(pre, state, onChange) {
   const f = S.func.find(x => x.id === state.func);
@@ -892,7 +894,7 @@ function renderEpiTop() {
   }
   const q = norm($('#e-q').value);
   $('#e-res').innerHTML = !q ? '' : (S.epis.filter(p => !E.itens.some(i => i.epiId === p.id) && norm([p.nome, p.ca, p.categoria].join(' ')).includes(q)).slice(0, 8).map(p =>
-    `<button class="res" data-adde="${esc(p.id)}"><span><b>${esc(p.nome)}</b> <span class="note">CA ${esc(p.ca || '—')} · ${esc(estNome(E.est))}: ${saldo(p, E.est)}</span></span>${caState(p) === 'vencido' ? '<span class="badge b-bad">CA vencido</span>' : epiBloqueio(p, f) ? '<span class="badge b-warn">Fora da lista · exige autorização +</span>' : exigeAut(p) ? '<span class="badge b-warn">Exige autorização +</span>' : '<span class="badge b-ok">Adicionar +</span>'}</button>`).join('') || `<div class="note">Nenhum EPI encontrado.</div>`);
+    `<button class="res" data-adde="${esc(p.id)}"><span><b>${esc(p.nome)}</b> <span class="note">${p.semCA ? 'Sem CA' : 'CA ' + esc(p.ca || '—')} · ${esc(estNome(E.est))}: ${saldo(p, E.est)}</span></span>${caState(p) === 'vencido' ? '<span class="badge b-bad">CA vencido</span>' : epiBloqueio(p, f) ? '<span class="badge b-warn">Fora da lista · exige autorização +</span>' : exigeAut(p) ? '<span class="badge b-warn">Exige autorização +</span>' : '<span class="badge b-ok">Adicionar +</span>'}</button>`).join('') || `<div class="note">Nenhum EPI encontrado.</div>`);
   $('#e-termo').textContent = `Declaro que recebi ${f ? '(' + (f.nome || '') + ') ' : ''}gratuitamente os EPIs listados acima, em perfeito estado, e que fui orientado sobre seu uso correto, guarda, conservação e higienização, conforme a NR-6. Comprometo-me a usá-los apenas para a finalidade a que se destinam e a comunicar qualquer alteração que os torne impróprios para uso.`;
   $('#e-submit').disabled = S.canWrite === false;
 }
@@ -912,7 +914,7 @@ function addEpi(id) {
   const f = S.func.find(x => x.id === E.func);
   if (epiBloqueio(p, f)) toast(`${p.nome} está fora da lista de ${f.funcao || 'esta função'}. Só sai com autorização da gerência.`, 'bad');
   const u = f ? (ultimas()[f.id] || {})[id] : null;
-  const cat = norm(p.categoria); const tam = f ? (/calcad|botin|bota/.test(cat + norm(p.nome)) ? str(f.tamCalcado) : /vest|roupa|unif|camis|calc/.test(cat) ? str(f.tamRoupa) : '') : '';
+  const cat = norm(p.categoria); const cn = cat + ' ' + norm(p.nome); const tam = f ? (/calcad|botin|bota|sapato/.test(cn) ? str(f.tamCalcado) : /calca\b|calca /.test(cn) ? str(f.tamCalca || f.tamRoupa) : /vest|roupa|unif|camis|jaleco|macac|blus/.test(cn) ? str(f.tamCamisa || f.tamRoupa) : '') : '';
   E.itens.push({ epiId: id, qtd: 1, tam, motivo: u ? '' : 'inicial' });
   $('#e-q').value = ''; renderEpiTop(); renderEpiItens();
 }
@@ -1228,7 +1230,7 @@ async function caSync() {
   caSyncFeito = true; const b = await caLoad(); renderEpis(); if (!b) return;
   let n = 0;
   for (const p of S.epis) {
-    const r = b.ca[caKey(p.ca)]; if (!r) continue;
+    if (p.semCA) continue; const r = b.ca[caKey(p.ca)]; if (!r) continue;
     const d = {}; if (r[0] && r[0] !== str(p.validadeCA)) d.validadeCA = r[0]; if (r[1] && r[1] !== str(p.caSituacao)) d.caSituacao = r[1];
     if (Object.keys(d).length) { d.caConferidoEm = todayStr(); try { await db.doc('epis/' + p.id).update(d); n++; await sleep(40); } catch (_) {} }
   }
@@ -1257,12 +1259,15 @@ function estoqueEpiHtml(nome, ca, ignorarId) {
 function renderEpis() {
   if (!S.ready.epis) { $('#p-list').innerHTML = loading(); return; }
   const q = norm($('#p-q').value);
-  const L = S.epis.filter(p => !q || norm([p.nome, p.ca, p.categoria].join(' ')).includes(q)).sort((a, b) => str(a.nome).localeCompare(str(b.nome), 'pt'));
+  $('#p-chips').innerHTML = [['todos', 'Todos'], ['ca', 'Com CA'], ['semca', 'Sem CA']].map(([k, t]) => `<button class="chip ${pFilter === k ? 'on' : ''}" data-pch="${k}">${t} (${S.epis.filter(p => k === 'todos' || (k === 'semca') === !!p.semCA).length})</button>`).join('');
+  const L = S.epis.filter(p => (pFilter === 'todos' || (pFilter === 'semca') === !!p.semCA) && (!q || norm([p.nome, p.ca, p.categoria].join(' ')).includes(q))).sort((a, b) => str(a.nome).localeCompare(str(b.nome), 'pt'));
   $('#p-list').innerHTML = L.length ? L.map(epiRow).join('') : `<div class="empty">${S.epis.length ? 'Nada encontrado.' : 'Nenhum EPI cadastrado.'}</div>`;
   const nt = $('#p-canota'); if (nt) nt.textContent = caBaseNota();
   caSync();
 }
+let pFilter = 'todos';
 $('#p-q').addEventListener('input', renderEpis);
+$('#p-chips').addEventListener('click', e => { const b = e.target.closest('[data-pch]'); if (b) { pFilter = b.dataset.pch; renderEpis(); } });
 $('#p-new').onclick = () => openEpi(null);
 function openEpi(id) {
   const p = id ? S.epis.find(x => x.id === id) : null; if (id && !p) return;
@@ -1271,7 +1276,8 @@ function openEpi(id) {
   const gasto = ents.reduce((a, e) => a + num(e.custo) * num(e.qtd), 0);
   openModal(mtop(p ? 'EPI' : 'Novo EPI') + `<div class="card">
     <label for="pe-nome">Nome / descrição *</label><input id="pe-nome" value="${v('nome')}" placeholder="Ex.: Luva de vaqueta">
-    <div class="grid3"><div><label for="pe-ca">Nº do CA *</label><input id="pe-ca" inputmode="numeric" value="${v('ca')}"></div><div><label for="pe-cav">Validade do CA</label><input type="date" id="pe-cav" value="${v('validadeCA')}"></div>
+    <label style="display:flex;gap:8px;align-items:center;color:inherit;font-size:15px;margin-top:12px"><input type="checkbox" id="pe-semca" ${p && p.semCA ? 'checked' : ''}> Item sem CA (ex.: uniforme, protetor solar, item que não exige certificado)</label>
+    <div class="grid3" id="pe-cabox"><div><label for="pe-ca">Nº do CA *</label><input id="pe-ca" inputmode="numeric" value="${v('ca')}"></div><div><label for="pe-cav">Validade do CA</label><input type="date" id="pe-cav" value="${v('validadeCA')}"></div>
     <div><label for="pe-cat">Categoria</label><input id="pe-cat" list="ecats" value="${v('categoria')}" placeholder="Mãos, Cabeça, Calçado…"></div></div>
     <div class="grid2"><div><label for="pe-vida">Troca a cada (dias)</label><input id="pe-vida" type="number" min="0" value="${p ? num(p.vidaUtilDias) || '' : ''}"></div><div><label for="pe-custo">Custo unitário (R$)</label><input id="pe-custo" inputmode="decimal" value="${p && num(p.custo) ? String(num(p.custo)).replace('.', ',') : ''}"></div></div>
     <div class="grid2"><div><label for="pe-est">Estoque atual</label><input id="pe-est" type="number" min="0" value="${p ? num(p.estoque) : ''}"></div><div><label for="pe-min">Estoque mínimo</label><input id="pe-min" type="number" min="0" value="${p ? num(p.estoqueMin) || '' : ''}"></div></div>
@@ -1289,31 +1295,39 @@ function openEpi(id) {
     if ((!$('#pe-nome').value.trim() || $('#pe-nome').value === autoNome) && i.equipamento) { $('#pe-nome').value = autoNome = i.equipamento; stk(); }
     el.innerHTML = `CAEPI: <b>${esc(i.equipamento || 'equipamento')}</b>${i.fabricante ? ' · ' + esc(i.fabricante) : ''} · ${/^V[ÁA]LIDO/i.test(i.situacao) ? '<span style="color:#1e7d3a">' : '<span style="color:#b3261e">'}${esc(i.situacao || '')}</span>${i.validade ? ' até ' + fmtD(i.validade) : ''}. Validade preenchida automaticamente.`; };
   $('#pe-ca').addEventListener('input', () => { stk(); clearTimeout(caT); caT = setTimeout(consultaCA, 400); });
+  const semCA = () => { const on = $('#pe-semca').checked; $('#pe-cabox').querySelectorAll('#pe-ca,#pe-cav').forEach(i => i.disabled = on); $('#pe-caepi').hidden = on; };
+  $('#pe-semca').onchange = semCA; semCA();
   $('#pe-nome').addEventListener('input', stk);
   $('#pe-stk').addEventListener('click', ev => { const b = ev.target.closest('[data-abrirepi]'); if (b) openEpi(b.dataset.abrirepi); });
   stk(); if ($('#pe-ca').value) consultaCA();
   $('#pe-save').onclick = async () => {
     if (!guardWrite()) return;
-    const nome = $('#pe-nome').value.trim(), ca = $('#pe-ca').value.trim();
-    if (!nome || !ca) return toast('Preencha nome e CA.', 'bad');
-    if (!p && S.epis.some(x => caKey(x.ca) === caKey(ca))) return toast('Este CA já está cadastrado. Abra o item existente e ajuste o estoque.', 'bad');
-    const data = { nome, ca, caSituacao: caSit, validadeCA: $('#pe-cav').value, categoria: $('#pe-cat').value.trim(), vidaUtilDias: num($('#pe-vida').value), custo: num($('#pe-custo').value), estoque: num($('#pe-est').value), estoqueMin: num($('#pe-min').value) };
+    const nome = $('#pe-nome').value.trim(), sc = $('#pe-semca').checked, ca = sc ? '' : $('#pe-ca').value.trim();
+    if (!nome || (!ca && !sc)) return toast(sc ? 'Preencha o nome.' : 'Preencha nome e CA (ou marque “Item sem CA”).', 'bad');
+    if (!p && ca && S.epis.some(x => !x.semCA && caKey(x.ca) === caKey(ca))) return toast('Este CA já está cadastrado. Abra o item existente e ajuste o estoque.', 'bad');
+    if (!p && sc && S.epis.some(x => x.semCA && norm(x.nome) === norm(nome))) return toast('Já existe um item sem CA com esse nome.', 'bad');
+    const data = { nome, ca, semCA: sc, caSituacao: sc ? '' : caSit, validadeCA: sc ? '' : $('#pe-cav').value, categoria: $('#pe-cat').value.trim(), vidaUtilDias: num($('#pe-vida').value), custo: num($('#pe-custo').value), estoque: num($('#pe-est').value), estoqueMin: num($('#pe-min').value) };
     try { if (p) await db.doc('epis/' + p.id).update(data); else await db.collection('epis').doc().set(Object.assign({ criadoEm: new Date().toISOString() }, data)); closeModal(); toast('EPI salvo.', 'ok'); } catch (e) { handleErr(e); }
   };
   const del = $('#pe-del'); if (del) armDelete(del, () => db.doc('epis/' + p.id).delete());
-  const pe = $('#pe-etq'); if (pe) pe.onclick = () => gerarEtiquetas('epi', [p], 'etiqueta_epi_' + norm(p.ca) + '.pdf');
+  const pe = $('#pe-etq'); if (pe) pe.onclick = () => gerarEtiquetas('epi', [p], 'etiqueta_epi_' + norm(p.ca || p.nome).replace(/[^a-z0-9]+/g, '_') + '.pdf');
 }
 
 /* Funcionários */
 const UCH = [['ativos', 'Ativos'], ['posse', 'Com ferramenta'], ['inativos', 'Inativos']];
+const SITS = ['Trabalhando', 'Afastado', 'Férias'];
+const TAM_CAMISA = ['PP', 'P', 'M', 'G', 'GG', 'XG', 'EXG', 'XGG', 'G1', 'G2', 'G3', 'G4'];
+const TAM_CALCA = Array.from({ length: 15 }, (_, i) => String(34 + i * 2));
+const TAM_CALCADO = Array.from({ length: 16 }, (_, i) => String(33 + i));
+function opcoesTam(L, atual) { atual = str(atual).trim(); const l = atual && !L.includes(atual) ? L.concat([atual]) : L; return '<option value="">—</option>' + l.map(x => `<option ${x === atual ? 'selected' : ''}>${esc(x)}</option>`).join(''); }
 function renderFunc() {
   $('#u-chips').innerHTML = UCH.map(([k, t]) => `<button class="chip ${uFilter === k ? 'on' : ''}" data-uch="${k}">${t}</button>`).join('');
   if (!S.ready.func) { $('#u-list').innerHTML = loading(); return; }
   const pm = posseMap(); const q = norm($('#u-q').value);
   const L = S.func.filter(f => (uFilter === 'ativos' ? f.ativo !== false : uFilter === 'inativos' ? f.ativo === false : !!pm[f.id]) && (!q || matchFunc(f, q))).sort((a, b) => str(a.nome).localeCompare(str(b.nome), 'pt'));
   $('#u-list').innerHTML = L.length ? L.slice(0, 300).map(f => `<button class="item" data-func="${esc(f.id)}"><div class="main"><div class="t1">${esc(f.nome)}</div>
-    <div class="t2">${[f.matricula, f.funcao, f.area].filter(Boolean).map(esc).join(' · ') || '&nbsp;'}</div></div>
-    <div class="side">${pm[f.id] ? `<span class="badge b-info">${pm[f.id]} ferr. em posse</span>` : ''}${f.ativo === false ? '<span class="badge b-mut">Inativo</span>' : ''}</div></button>`).join('') : `<div class="empty">${S.func.length ? 'Nada encontrado.' : 'Nenhum funcionário cadastrado.'}</div>`;
+    <div class="t2">${[f.matricula, f.funcao, [f.area, f.subarea].filter(Boolean).join(' / '), f.unidade].filter(Boolean).map(esc).join(' · ') || '&nbsp;'}</div></div>
+    <div class="side">${f.situacao && f.situacao !== 'Trabalhando' && f.ativo !== false ? `<span class="badge b-warn">${esc(f.situacao)}</span>` : ''}${pm[f.id] ? `<span class="badge b-info">${pm[f.id]} ferr. em posse</span>` : ''}${f.ativo === false ? '<span class="badge b-mut">Inativo</span>' : ''}</div></button>`).join('') : `<div class="empty">${S.func.length ? 'Nada encontrado.' : 'Nenhum funcionário cadastrado.'}</div>`;
 }
 $('#u-q').addEventListener('input', renderFunc);
 $('#u-chips').addEventListener('click', e => { const b = e.target.closest('[data-uch]'); if (b) { uFilter = b.dataset.uch; renderFunc(); } });
@@ -1327,10 +1341,15 @@ function openFunc(id) {
   const gasto = ficha.reduce((a, e) => a + num(e.custo) * num(e.qtd), 0);
   openModal(mtop(f ? esc(f.nome) : 'Novo funcionário') + `<div class="card">
     <label for="uf-nome">Nome completo *</label><input id="uf-nome" value="${v('nome')}">
-    <div class="grid2"><div><label for="uf-mat">Matrícula</label><input id="uf-mat" value="${v('matricula')}"></div><div><label for="uf-fun">Função</label><input id="uf-fun" list="funs" value="${v('funcao')}" placeholder="Ex.: Eletricista"></div></div>
-    <div class="grid3"><div><label for="uf-area">Área / contrato</label><input id="uf-area" list="areas" value="${v('area')}"></div><div><label for="uf-tc">Nº calçado</label><input id="uf-tc" value="${v('tamCalcado')}"></div><div><label for="uf-tr">Tam. roupa</label><input id="uf-tr" value="${v('tamRoupa')}" placeholder="P/M/G/GG"></div></div>
-    <label style="display:flex;gap:8px;align-items:center;color:inherit;font-size:15px;margin-top:14px"><input type="checkbox" id="uf-at" ${!f || f.ativo !== false ? 'checked' : ''}> Ativo</label>
+    <div class="grid3"><div><label for="uf-mat">Matrícula</label><input id="uf-mat" value="${v('matricula')}"></div><div><label for="uf-fun">Função</label><input id="uf-fun" list="funs" value="${v('funcao')}" placeholder="Ex.: Eletricista II"></div><div><label for="uf-cg">Cargo (grupo)</label><input id="uf-cg" list="cargos" value="${v('cargo')}" placeholder="Ex.: Eletricista"></div></div>
+    <div class="grid3"><div><label for="uf-area">Área</label>${S.areas.length ? `<select id="uf-area"><option value="">—</option>${S.areas.slice().sort((a, b) => str(a.nome).localeCompare(str(b.nome), 'pt')).map(a => `<option value="${esc(a.id)}" ${f && (f.areaId === a.id || (!f.areaId && norm(f.area) === norm(a.nome))) ? 'selected' : ''}>${esc(a.nome)}</option>`).join('')}</select>` : `<input id="uf-area" list="areas" value="${v('area')}">`}</div>
+      <div><label for="uf-sub">Sub-área</label><select id="uf-sub"></select></div><div><label for="uf-un">Unidade</label><input id="uf-un" list="unids" value="${v('unidade')}" placeholder="Resende, Barra Mansa…"></div></div>
+    <div class="grid3"><div><label for="uf-adm">Data de admissão</label><input type="date" id="uf-adm" value="${v('admissao')}"></div><div><label for="uf-nas">Data de nascimento</label><input type="date" id="uf-nas" value="${v('nascimento')}"></div><div><label for="uf-sit">Situação</label><select id="uf-sit">${SITS.map(x => `<option ${(f ? str(f.situacao) || 'Trabalhando' : 'Trabalhando') === x ? 'selected' : ''}>${x}</option>`).join('')}</select></div></div>
+    <div class="grid3"><div><label for="uf-tr">Tamanho de camisa</label><select id="uf-tr">${opcoesTam(TAM_CAMISA, f ? (f.tamCamisa || f.tamRoupa) : '')}</select></div><div><label for="uf-tca">Tamanho de calça</label><select id="uf-tca">${opcoesTam(TAM_CALCA, f ? f.tamCalca : '')}</select></div><div><label for="uf-tc">Nº do calçado</label><select id="uf-tc">${opcoesTam(TAM_CALCADO, f ? f.tamCalcado : '')}</select></div></div>
+    <label style="display:flex;gap:8px;align-items:center;color:inherit;font-size:15px;margin-top:14px"><input type="checkbox" id="uf-at" ${!f || f.ativo !== false ? 'checked' : ''}> Ativo na empresa (desmarque quando for desligado)</label>
     <datalist id="funs">${[...new Set(S.func.map(x => x.funcao).concat(S.kits.map(k => k.funcao)).filter(Boolean))].map(c => `<option value="${esc(c)}">`).join('')}</datalist>
+    <datalist id="cargos">${[...new Set(S.func.map(x => x.cargo).filter(Boolean))].map(c => `<option value="${esc(c)}">`).join('')}</datalist>
+    <datalist id="unids">${[...new Set(['Resende', 'Barra Mansa'].concat(S.func.map(x => x.unidade)).filter(Boolean))].map(c => `<option value="${esc(c)}">`).join('')}</datalist>
     <datalist id="areas">${[...new Set(S.func.map(x => x.area).filter(Boolean))].map(c => `<option value="${esc(c)}">`).join('')}</datalist></div>
     <div class="actions">${f && !posse.length ? `<button class="btn danger" id="uf-del">Excluir</button>` : ''}${f ? `<button class="btn ghost" id="uf-etq">Crachá QR</button>` : ''}<button class="btn ghost" data-close>Cancelar</button><button class="btn primary" id="uf-save" ${S.canWrite === false ? 'disabled' : ''}>Salvar</button></div>
     ${f ? `<div class="actions" style="margin-top:8px"><button class="btn ghost" id="uf-ficha">Ficha de EPI (PDF)</button><button class="btn ghost" id="uf-os">OS de Segurança (PDF)</button>${NO_TREIN ? '' : '<button class="btn accent" id="uf-plan">Treinamentos de admissão</button>'}</div>
@@ -1352,6 +1371,9 @@ function openFunc(id) {
     <h3>Agenda de treinamentos</h3><div class="card" style="padding:6px 10px">${agendaHtml(f.id)}</div>
     ${typeof funcExtraHtml === 'function' ? funcExtraHtml(f) : ''}`}
     ${MODO === 'treinamentos' ? '' : `<h3>Histórico de cautelas</h3><div class="list">${cautList(histFor('funcionarioId', f.id))}</div>`}` : ''}`);
+  const drawSub = () => { const el = $('#uf-area'), a = el && el.tagName === 'SELECT' ? S.areas.find(z => z.id === el.value) : null; const atual = f ? (f.subareaId || '') : '';
+    $('#uf-sub').innerHTML = '<option value="">—</option>' + (a ? (a.subs || []).map(z => `<option value="${esc(z.id)}" ${z.id === atual ? 'selected' : ''}>${esc(z.nome)}</option>`).join('') : ''); $('#uf-sub').disabled = !a || !(a.subs || []).length; };
+  if ($('#uf-area').tagName === 'SELECT') $('#uf-area').onchange = drawSub; drawSub();
   $('#uf-save').onclick = () => saveFunc(f);
   if (f) {
     if ($('#uf-plan')) $('#uf-plan').onclick = () => openPlano(f.id);
@@ -1370,7 +1392,12 @@ async function saveFunc(f) {
   const nome = $('#uf-nome').value.trim(), matricula = $('#uf-mat').value.trim();
   if (!nome) return toast('Preencha o nome.', 'bad');
   if (matricula && S.func.some(x => norm(x.matricula) === norm(matricula) && (!f || x.id !== f.id))) return toast('Já existe funcionário com essa matrícula.', 'bad');
-  const data = { nome, matricula, funcao: $('#uf-fun').value.trim(), area: $('#uf-area').value.trim(), tamCalcado: $('#uf-tc').value.trim(), tamRoupa: $('#uf-tr').value.trim(), ativo: $('#uf-at').checked };
+  const ae = $('#uf-area'); const ar = ae.tagName === 'SELECT' ? S.areas.find(z => z.id === ae.value) : null; const subId = ar ? $('#uf-sub').value : '';
+  const subsAnt = Array.isArray(f && f.subareas) ? f.subareas.filter(z => z !== (f.subareaId || '')) : [];
+  const data = { nome, matricula, funcao: $('#uf-fun').value.trim(), cargo: $('#uf-cg').value.trim(), area: ar ? str(ar.nome) : (ae.tagName === 'SELECT' ? '' : ae.value.trim()), areaId: ar ? ar.id : '', subareaId: subId,
+    subarea: subId ? str(((ar.subs || []).find(z => z.id === subId) || {}).nome) : '', subareas: subId ? [...new Set([subId].concat(subsAnt))] : subsAnt,
+    unidade: $('#uf-un').value.trim(), admissao: $('#uf-adm').value, nascimento: $('#uf-nas').value, situacao: $('#uf-sit').value,
+    tamCamisa: $('#uf-tr').value, tamRoupa: $('#uf-tr').value, tamCalca: $('#uf-tca').value, tamCalcado: $('#uf-tc').value, ativo: $('#uf-at').checked };
   if ($('#uf-zs')) Object.assign(data, { zsStatus: $('#uf-zs').value, zsData: $('#uf-zsd').value, zsLink: $('#uf-zsl').value.trim() });
   const btn = $('#uf-save'); btn.disabled = true;
   try { if (f) await db.doc('funcionarios/' + f.id).update(data); else await db.collection('funcionarios').doc().set(Object.assign({ criadoEm: new Date().toISOString() }, data)); closeModal(); toast('Funcionário salvo.', 'ok'); }
@@ -1536,7 +1563,7 @@ async function abrirNFe(notas, idx) {
     try {
       for (const it of L) {
         if (it.dest === 'epi') {
-          let p = it.epiId ? S.epis.find(x => x.id === it.epiId) : S.epis.find(x => caKey(x.ca) === caKey(it.ca));
+          let p = it.epiId ? S.epis.find(x => x.id === it.epiId) : (it.ca ? S.epis.find(x => !x.semCA && caKey(x.ca) === caKey(it.ca)) : null);
           if (p) { await db.doc('epis/' + p.id).update({ estoque: num(p.estoque) + it.qtd, custo: it.vUnCom || num(p.custo), ultimaNF: nf.numero, ultimaEntrada: nf.data }); p.estoque = num(p.estoque) + it.qtd; reg.push({ item: it.xProd, destino: 'epi', id: p.id, qtd: it.qtd }); }
           else { const ref = db.collection('epis').doc(); await ref.set({ nome: str(it.nome).trim() || it.xProd, ca: it.ca, validadeCA: it.caVal || '', caSituacao: it.caSit || '', categoria: '', vidaUtilDias: 0, custo: it.vUnCom, estoque: it.qtd, estoqueMin: 0, ultimaNF: nf.numero, ultimaEntrada: nf.data, criadoEm: agora }); reg.push({ item: it.xProd, destino: 'epi', id: ref.id, qtd: it.qtd }); }
         } else {
@@ -1585,7 +1612,67 @@ function openImport(kind) {
   };
 }
 $('#f-imp').onclick = () => openImport('ferr');
-$('#u-imp').onclick = () => openImport('func');
+$('#u-imp').onclick = () => openImportFunc();
+/* importação de funcionários: planilha do RH (.xlsx) ou colado do Excel com cabeçalho; atualiza quem já existe pela matrícula */
+const IMPF_COLS = [['matricula', /^matr/], ['nome', /^nome/], ['funcao', /^func/], ['subarea', /^sub/], ['area', /^area/], ['unidade', /^unid/], ['admissao', /admiss/], ['nascimento', /nasc/], ['situacao', /^situa/], ['cargo', /^cargo/], ['tamCamisa', /camis/], ['tamCalcado', /calcado/], ['tamCalca', /calca/]];
+const IMPF_NOMES = { matricula: 'Matrícula', nome: 'Nome', funcao: 'Função', area: 'Área', subarea: 'Sub-área', unidade: 'Unidade', admissao: 'Admissão', nascimento: 'Nascimento', situacao: 'Situação', cargo: 'Cargo', tamCamisa: 'Camisa', tamCalca: 'Calça', tamCalcado: 'Calçado' };
+const loadXLSX = () => loadScript('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js', () => window.XLSX);
+function impfMapa(head) { const m = {}; head.forEach((h, i) => { const n = norm(h).replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim(); const c = IMPF_COLS.find(([k, re]) => re.test(n) && m[k] == null); if (c) m[c[0]] = i; }); return m; }
+function impfData(v) { if (v == null || v === '') return ''; if (typeof v === 'number' && v > 1000) { const d = new Date(Math.round((v - 25569) * 86400000)); return d.getUTCFullYear() + '-' + z2(d.getUTCMonth() + 1) + '-' + z2(d.getUTCDate()); } if (v instanceof Date) return ymd(v); return parseBR(str(v)); }
+function impfLinha(r, m) {
+  const g = k => m[k] == null ? '' : r[m[k]]; const t = k => { const v = g(k); return v == null ? '' : (typeof v === 'number' ? String(Math.round(v)) : str(v).trim()); };
+  const sit = norm(t('situacao')); const camisa = (str(t('tamCamisa')).toUpperCase().match(/^[A-Z0-9]+/) || [''])[0];
+  return { matricula: t('matricula'), nome: t('nome').replace(/\s+/g, ' '), funcao: t('funcao'), cargo: t('cargo'), area: t('area'), subarea: t('subarea'), unidade: t('unidade') ? t('unidade').toLowerCase().replace(/(^|\s)\S/g, c => c.toUpperCase()) : '',
+    admissao: impfData(g('admissao')), nascimento: impfData(g('nascimento')), situacao: /afast/.test(sit) ? 'Afastado' : /feria/.test(sit) ? 'Férias' : /deslig|demit/.test(sit) ? 'Desligado' : sit ? 'Trabalhando' : '',
+    tamCamisa: camisa, tamCalca: t('tamCalca'), tamCalcado: t('tamCalcado') };
+}
+function openImportFunc() {
+  openModal(mtop('Importar funcionários') + `<div class="card"><p class="note" style="margin-top:0">Escolha a planilha do RH (.xlsx) <b>ou</b> copie do Excel com a linha de cabeçalho e cole abaixo. Colunas reconhecidas: ${Object.values(IMPF_NOMES).join(', ')}. Quem já existe (mesma matrícula) é <b>atualizado</b>; células vazias não apagam o que já está cadastrado. Áreas e sub-áreas novas são criadas.</p>
+    <input type="file" id="if-file" accept=".xlsx,.xls,.csv" style="padding:8px"><textarea id="if-txt" rows="6" placeholder="MATRICULA&#9;NOME&#9;FUNÇÃO&#9;ÁREA&#9;SUB-ÁREA&#9;UNIDADE&#9;ADMISSÃO&#9;SITUAÇÃO…" style="margin-top:8px"></textarea><div id="if-prev" class="note" style="margin-top:8px"></div></div>
+    <div class="actions"><button class="btn ghost" data-close>Cancelar</button><button class="btn primary" id="if-go" disabled>Importar</button></div>`);
+  let L = [];
+  const preparar = tab => {
+    const hi = tab.findIndex(r => { const m = impfMapa(r.map(str)); return m.nome != null; });
+    if (hi < 0) { $('#if-prev').innerHTML = '<span style="color:var(--bad)">Não achei a linha de cabeçalho com a coluna NOME.</span>'; $('#if-go').disabled = true; return; }
+    const m = impfMapa(tab[hi].map(str)); L = tab.slice(hi + 1).map(r => impfLinha(r, m)).filter(x => x.nome);
+    const vistos = new Set(); let rep = 0; L = L.filter(x => { const k = x.matricula ? 'm' + norm(x.matricula) : 'n' + norm(x.nome); if (vistos.has(k)) { rep++; return false; } vistos.add(k); return true; });
+    const exist = x => S.func.find(f => x.matricula ? norm(f.matricula) === norm(x.matricula) : norm(f.nome) === norm(x.nome));
+    const novos = L.filter(x => !exist(x)).length; const areas = new Set(L.map(x => norm(x.area)).filter(Boolean)); const areasNovas = [...areas].filter(a => !S.areas.some(z => norm(z.nome) === a)).length;
+    $('#if-prev').innerHTML = `Colunas: ${Object.keys(m).map(k => IMPF_NOMES[k]).join(', ')}<br><b>${L.length}</b> funcionário(s): <b>${novos}</b> novo(s) e <b>${L.length - novos}</b> a atualizar${rep ? ` · ${rep} repetido(s) ignorado(s)` : ''}${areas.size ? ` · ${areas.size} área(s), ${areasNovas} nova(s)` : ''}.${L.filter(x => !x.matricula).length ? `<br><span style="color:var(--warn)">${L.filter(x => !x.matricula).length} sem matrícula.</span>` : ''}`;
+    $('#if-go').disabled = !L.length || S.canWrite === false;
+  };
+  $('#if-file').onchange = async e => { const file = e.target.files[0]; if (!file) return; $('#if-prev').textContent = 'Lendo a planilha…';
+    try { await loadXLSX(); const wb = XLSX.read(await file.arrayBuffer(), { type: 'array' }); let tab = null;
+      for (const n of wb.SheetNames) { const t = XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, raw: true, defval: '' }); if (t.some(r => impfMapa(r.map(str)).nome != null)) { tab = t; break; } }
+      preparar(tab || []); } catch (er) { $('#if-prev').innerHTML = '<span style="color:var(--bad)">Não consegui ler o arquivo. Salve como .xlsx ou cole o conteúdo abaixo.</span>'; } };
+  $('#if-txt').addEventListener('input', () => preparar(splitLines($('#if-txt').value)));
+  $('#if-go').onclick = async () => {
+    if (!guardWrite()) return; const btn = $('#if-go'); btn.disabled = true; const now = new Date().toISOString();
+    try {
+      /* 1. áreas e sub-áreas */
+      const A = {}; S.areas.forEach(a => A[norm(a.nome)] = { id: a.id, nome: a.nome, subs: (a.subs || []).slice(), mud: false, novo: false });
+      L.forEach(x => { if (!x.area) return; const k = norm(x.area); if (!A[k]) A[k] = { id: db.collection('areas').doc().id, nome: x.area, subs: [], mud: true, novo: true };
+        if (x.subarea && !A[k].subs.some(z => norm(z.nome) === norm(x.subarea))) { A[k].subs.push({ id: Math.random().toString(36).slice(2, 10), nome: x.subarea }); A[k].mud = true; } });
+      let areasOk = true; btn.textContent = 'Criando áreas…';
+      for (const a of Object.values(A).filter(z => z.mud)) { try { if (a.novo) await db.doc('areas/' + a.id).set({ nome: a.nome, subs: a.subs, criadoEm: now }); else await db.doc('areas/' + a.id).update({ subs: a.subs }); } catch (_) { areasOk = false; } }
+      /* 2. funcionários */
+      let nN = 0, nA = 0, i = 0;
+      for (const x of L) {
+        i++; btn.textContent = `Importando ${i}/${L.length}…`;
+        const a = x.area && areasOk ? A[norm(x.area)] : null; const sb = a && x.subarea ? a.subs.find(z => norm(z.nome) === norm(x.subarea)) : null;
+        const d = {}; ['matricula', 'nome', 'funcao', 'cargo', 'unidade', 'admissao', 'nascimento', 'tamCamisa', 'tamCalca', 'tamCalcado'].forEach(k => { if (x[k]) d[k] = x[k]; });
+        if (x.tamCamisa) d.tamRoupa = x.tamCamisa;
+        if (x.situacao === 'Desligado') d.ativo = false; else if (x.situacao) d.situacao = x.situacao;
+        if (x.area) { d.area = a ? a.nome : x.area; if (a) d.areaId = a.id; d.subarea = sb ? sb.nome : (x.subarea || ''); }
+        const f = S.func.find(z => x.matricula ? norm(z.matricula) === norm(x.matricula) : norm(z.nome) === norm(x.nome));
+        if (a) { const ant = f && Array.isArray(f.subareas) ? f.subareas.filter(z => z !== (f.subareaId || '')) : []; d.subareaId = sb ? sb.id : ''; d.subareas = sb ? [...new Set([sb.id].concat(ant))] : ant; }
+        if (f) { await db.doc('funcionarios/' + f.id).update(d); nA++; } else { await db.collection('funcionarios').doc().set(Object.assign({ ativo: true, situacao: 'Trabalhando', criadoEm: now }, d)); nN++; }
+        await sleep(i % 40 === 0 ? 1200 : 50);
+      }
+      closeModal(); toast(`${nN} novo(s) e ${nA} atualizado(s).${areasOk ? '' : ' Áreas não foram criadas (sem permissão): ficou só o nome.'}`, areasOk ? 'ok' : 'bad');
+    } catch (e) { handleErr(e); btn.textContent = 'Parou: tente de novo'; btn.disabled = false; }
+  };
+}
 $('#p-imp').onclick = () => openImport('epi');
 
 /* ================= relatórios ================= */
@@ -1793,13 +1880,13 @@ const loadJsQR = () => loadScript('https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/
 const loadQRGen = () => loadScript('https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js', () => window.qrcode);
 const loadPDF = () => loadScript('https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js', () => window.jspdf && window.jspdf.jsPDF);
 /* conteúdo do QR: FER:<código> · FUN:<matrícula> · EPI:<CA> (texto simples também é aceito) */
-const qrText = (tipo, x) => tipo === 'fer' ? 'FER:' + str(x.codigo) : tipo === 'fun' ? 'FUN:' + (str(x.matricula) || 'ID-' + x.id) : 'EPI:' + str(x.ca);
+const qrText = (tipo, x) => tipo === 'fer' ? 'FER:' + str(x.codigo) : tipo === 'fun' ? 'FUN:' + (str(x.matricula) || 'ID-' + x.id) : 'EPI:' + (x.semCA || !str(x.ca) ? 'ID-' + x.id : str(x.ca));
 function resolveCode(raw) {
   const t = str(raw).trim(); if (!t) return null;
   const m = t.match(/^(FER|FUN|EPI):(.+)$/i); const k = m ? m[1].toUpperCase() : ''; const v = norm(m ? m[2] : t);
   const fer = () => S.ferr.find(x => norm(x.codigo) === v && x.status !== 'baixada');
   const fun = () => S.func.find(x => v.startsWith('id-') ? x.id === t.slice(t.indexOf(':') + 4) : norm(x.matricula) === v);
-  const epi = () => S.epis.find(x => norm(x.ca) === v);
+  const epi = () => S.epis.find(x => v.startsWith('id-') ? x.id === t.slice(t.indexOf(':') + 4) : (!x.semCA && norm(x.ca) === v));
   if (k === 'FER') { const o = fer(); return o ? { tipo: 'fer', o } : { tipo: 'fer', o: null, v }; }
   if (k === 'FUN') { const o = fun(); return o ? { tipo: 'fun', o } : { tipo: 'fun', o: null, v }; }
   if (k === 'EPI') { const o = epi(); return o ? { tipo: 'epi', o } : { tipo: 'epi', o: null, v }; }
@@ -1989,7 +2076,7 @@ function fichaInto(P, f) {
   const doc = P.doc;
   {
     P.header('FICHA DE CONTROLE DE EPI', 'Registro de fornecimento · NR-06');
-    P.box([['Funcionário', f.nome], ['Matrícula', f.matricula], ['Função', f.funcao], ['Área / contrato', f.area], ['Nº calçado', f.tamCalcado], ['Tam. roupa', f.tamRoupa]]);
+    P.box([['Funcionário', f.nome], ['Matrícula', f.matricula], ['Função', f.funcao], ['Área', [f.area, f.subarea].filter(Boolean).join(' / ')], ['Unidade', f.unidade], ['Admissão', fmtD(f.admissao)], ['Nº calçado', f.tamCalcado], ['Camisa / calça', [f.tamCamisa || f.tamRoupa, f.tamCalca].filter(Boolean).join(' / ')]]);
     P.text('Declaro que recebi gratuitamente os Equipamentos de Proteção Individual relacionados abaixo, novos e em perfeito estado, e que fui orientado sobre o uso correto, a guarda, a conservação e a higienização de cada um. Comprometo-me a usá-los apenas para a finalidade a que se destinam, a responsabilizar-me pela sua guarda e conservação, a comunicar qualquer alteração que os torne impróprios para uso e a devolvê-los quando substituídos ou no desligamento. Estou ciente de que a recusa injustificada ao uso do EPI constitui ato faltoso (CLT, art. 158, parágrafo único).', { size: 8.2, color: [60, 66, 80], gap: 3 });
     const cols = [['Data', 20], ['EPI', 58], ['CA', 15], ['Qtd', 9], ['Tam.', 11], ['Motivo', 30], ['Assinatura', 37]];
     const th = () => { P.need(8); doc.setFillColor(20, 33, 61); doc.rect(P.L, P.y, P.W, 6.5, 'F'); P.font(8, true, [255, 255, 255]); let x = P.L; cols.forEach(([t, w]) => { doc.text(t, x + 1.5, P.y + 4.4); x += w; }); P.y += 6.5; };
@@ -2579,6 +2666,7 @@ show(); renderEpiItens();
   db.collection('decisoes').onSnapshot(s => { S.dec = s.docs.map(asObj); sched(); }, e => console.warn(e));
   if (!window.__FBMODE) db.doc('config/usuarios').onSnapshot(d => { S.usuarios = (d.exists && (d.data() || {}).users) || {}; S.usrReady = true; sched(); pedirAcesso(); }, e => console.warn(e));
   if (!window.__FBMODE) db.collection('pedidos_acesso').onSnapshot(s => { S.ped = s.docs.map(asObj); sched(); }, e => console.warn(e));
+  db.collection('areas').onSnapshot(s => { S.areas = s.docs.map(asObj); sched(); }, e => console.warn(e));
   db.collection('estoques').onSnapshot(s => { S.est = s.docs.map(asObj); sched(); }, e => console.warn(e));
   db.collection('transferencias').onSnapshot(s => { S.transf = s.docs.map(asObj); sched(); }, e => console.warn(e));
   db.collection('trein_tipos').onSnapshot(s => { S.tt = s.docs.map(asObj); sched(); }, e => console.warn(e));
