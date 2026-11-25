@@ -19,7 +19,7 @@ const kpi = (t, n, k, f) => `<button class="kpi ${k || ''}" ${f ? `data-kf="${f}
 
 const TIPOS_PADRAO = [
   ['Manual / política', 'MAN'], ['Procedimento de gestão', 'PG'], ['Procedimento operacional', 'PO'], ['Instrução de trabalho', 'IT'], ['Formulário / modelo', 'FOR'],
-  ['Registro', 'REG'], ['Plano / programa', 'PL'], ['APR padrão', 'APR'], ['Plano de rigging / içamento', 'PR'], ['Laudo / relatório técnico', 'LT'], ['ART', 'ART'],
+  ['Registro', 'REG'], ['Material de treinamento', 'MT'], ['Plano / programa', 'PL'], ['APR padrão', 'APR'], ['Plano de rigging / içamento', 'PR'], ['Laudo / relatório técnico', 'LT'], ['ART', 'ART'],
   ['PGR / inventário de riscos', 'PGR'], ['PCMSO', 'PCM'], ['Certificado / licença', 'CL'], ['Contrato / aditivo', 'CT'], ['Proposta comercial', 'PC'],
   ['Desenho / diagrama', 'DE'], ['Norma de cliente', 'NC'], ['Outro', 'OU']];
 /* processos do Sistema de Gestão Integrado (ISO 9001, 14001 e 45001): a sigla entra no código */

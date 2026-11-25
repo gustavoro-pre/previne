@@ -2163,7 +2163,8 @@ function fichaInto(P, f, entregador) {
     const th = () => { P.need(8); doc.setFillColor(20, 33, 61); doc.rect(P.L, P.y, P.W, 6.5, 'F'); P.font(8, true, [255, 255, 255]); let x = P.L; cols.forEach(([t, w]) => { doc.text(t, x + 1.5, P.y + 4.4); x += w; }); P.y += 6.5; };
     th();
     const rows = S.ent.filter(e => e.funcionarioId === f.id).sort((a, b) => str(a.data).localeCompare(str(b.data)));
-    if (!rows.length) { P.text('Nenhuma entrega registrada.', { size: 8.5, color: [120, 120, 120] }); }
+    if (!rows.length && f.__modelo) { for (let i = 0; i < 14; i++) { const h = 10.5; if (P.need(h)) th(); let x = P.L; doc.setDrawColor(200); doc.setLineWidth(0.15); cols.forEach(([, w]) => { doc.line(x, P.y, x, P.y + h); x += w; }); doc.line(P.R, P.y, P.R, P.y + h); doc.line(P.L, P.y + h, P.R, P.y + h); P.y += h; } }
+    else if (!rows.length) { P.text('Nenhuma entrega registrada.', { size: 8.5, color: [120, 120, 120] }); }
     rows.forEach((e, i) => {
       const h = 10.5;
       if (P.need(h)) th();
@@ -2176,7 +2177,7 @@ function fichaInto(P, f, entregador) {
       else { doc.setDrawColor(170); doc.setLineWidth(0.2); doc.line(x + 2, P.y + 8, x + cols[6][1] - 2, P.y + 8); }
       doc.setDrawColor(225); doc.setLineWidth(0.1); doc.line(P.L, P.y + h, P.R, P.y + h); P.y += h;
     });
-    const cpfL = c => 'CPF ' + (c ? fmtCpfF(c) : '_____._____._____-____'), ent = entregador || (S.emp && S.emp.responsavel) || '';
+    const cpfL = c => 'CPF ' + (c ? fmtCpfF(c) : '_____._____._____-____'), ent = f.__modelo ? '' : entregador || (S.emp && S.emp.responsavel) || '';
     const pe = ent && S.func.find(x => norm(x.nome) === norm(ent));
     P.sign([str(f.nome) + ' · Funcionário\n' + cpfL(f.cpf), 'Responsável pela entrega' + (ent ? ' · ' + ent : '') + '\n' + cpfL(pe && pe.cpf)]); P.just = false;
   }
