@@ -2476,6 +2476,20 @@ async function sigPngDeArquivo(file) {
   x.putImageData(d, 0, 0); if (x1 <= x0) throw new Error('vazia');
   const o = document.createElement('canvas'); o.width = x1 - x0 + 8; o.height = y1 - y0 + 8; o.getContext('2d').drawImage(c, x0 - 4, y0 - 4, o.width, o.height, 0, 0, o.width, o.height); return o.toDataURL('image/png');
 }
+/* texto justificado com trechos em negrito: quebra por palavra e distribui o espaço; a última linha fica alinhada à esquerda (ou centralizada) */
+function justLinhas(doc, partes, larg, setFont) {
+  const pal = []; partes.forEach(p => str(p.t).split(/\s+/).filter(Boolean).forEach(w => pal.push({ w, b: !!p.b })));
+  const larguraDe = x => { setFont(x.b); return doc.getTextWidth(x.w); }; setFont(false); const esp = doc.getTextWidth(' ');
+  const L = []; let cur = [], wcur = 0;
+  pal.forEach(x => { const wx = larguraDe(x); const novo = cur.length ? wcur + esp + wx : wx; if (cur.length && novo > larg) { L.push({ ws: cur, w: wcur }); cur = [x]; wcur = wx; } else { cur.push(x); wcur = novo; } x.larg = wx; });
+  if (cur.length) L.push({ ws: cur, w: wcur }); return L;
+}
+function justTexto(doc, partes, x, y, larg, lh, setFont, centralizaUltima) {
+  const L = justLinhas(doc, partes, larg, setFont); setFont(false); const esp = doc.getTextWidth(' ');
+  L.forEach((ln, i) => { const ultima = i === L.length - 1; const soma = ln.ws.reduce((a, q) => a + q.larg, 0); const gap = !ultima && ln.ws.length > 1 ? (larg - soma) / (ln.ws.length - 1) : esp;
+    let xx = ultima && centralizaUltima ? x + (larg - ln.w) / 2 : x; ln.ws.forEach(q => { setFont(q.b); doc.text(q.w, xx, y); xx += q.larg + gap; }); y += lh; });
+  return y;
+}
 /* desenha um certificado (frente e verso, A4 paisagem) no documento informado */
 function certSigs(r) {
   const e = S.emp || {};
@@ -2525,8 +2539,8 @@ function certInto(doc, r, novaPagina) {
   const periodo = r.inicio === r.termino ? 'em ' + fmtD(r.termino) : 'no período de ' + fmtD(r.inicio) + ' a ' + fmtD(r.termino);
   const cpfC = fmtCpfF(r.cpf || (S.func.find(x => x.id === r.funcionarioId) || {}).cpf || '');
   const frase = `${cpfC ? 'CPF ' + cpfC + ', ' : ''}concluiu com aproveitamento o treinamento ${r.tipoNome}${r.norma && !str(r.tipoNome).startsWith(r.norma) ? ', em atendimento à ' + r.norma : ''}, com carga horária de ${num(r.cargaHoraria)} ${num(r.cargaHoraria) === 1 ? 'hora' : 'horas'}, realizado ${periodo}.`;
-  font(12, false, [40, 44, 52]); const ls = doc.splitTextToSize(frase, 210); doc.text(ls, W / 2, y0 + 46, { align: 'center', lineHeightFactor: 1.5 });
-  if (r.validade) center('Válido até ' + fmtD(r.validade), y0 + 46 + ls.length * 6.4 + 3, 10, true, [154, 91, 0]);
+  font(12, false, [40, 44, 52]); const yF = justTexto(doc, [{ t: frase, b: false }], W / 2 - 105, y0 + 46, 210, 6.4, (b) => font(12, b, b ? [20, 33, 61] : [40, 44, 52]), true);
+  if (r.validade) center('Válido até ' + fmtD(r.validade), yF + 3, 10, true, [154, 91, 0]);
   const sigs = certSigs(r); const n = sigs.length, sw = n >= 4 ? 56 : 68, gap = n === 2 ? 50 : n === 3 ? 16 : 8, tot = n * sw + (n - 1) * gap; let x = (W - tot) / 2; const yl = 171;
   sigs.forEach(([nm, rol, im]) => { if (/^data:image\/png/.test(str(im))) { try { const p = doc.getImageProperties(im), q = p.width / p.height; let h = 20, w = h * q; if (w > sw) { w = sw; h = w / q; } doc.addImage(im, 'PNG', x + sw / 2 - w / 2, yl - 1 - h, w, h); } catch (_) {} }
     doc.setDrawColor(60, 66, 80); doc.setLineWidth(0.3); doc.line(x, yl, x + sw, yl); font(8.8, true, [20, 33, 61]); doc.text(doc.splitTextToSize(str(nm), sw)[0], x + sw / 2, yl + 4.5, { align: 'center' }); font(7, false, [90, 96, 110]); doc.text(doc.splitTextToSize(rol, sw).slice(0, 2), x + sw / 2, yl + 8.3, { align: 'center' }); x += sw + gap; });
@@ -2551,8 +2565,7 @@ function certInto(doc, r, novaPagina) {
     const cx = 20 + col * (colW + 15), ind = it.sub ? 17 : 9;
     if (it.n) { if (!it.sub) { doc.setFillColor(20, 33, 61); doc.circle(cx + 3, y - 1.4, 3.1, 'F'); font(it.n.length > 1 ? 6.6 : 7.5, true, [255, 255, 255]); doc.text(it.n, cx + 3, y - 0.2, { align: 'center' }); } else { font(7.8, true, [180, 125, 0]); doc.text(it.n, cx + 9, y); } }
     else { doc.setFillColor(242, 169, 0); doc.circle(cx + 3, y - 1.3, 1, 'F'); }
-    font(10); const ls2 = doc.splitTextToSize((it.tit ? it.tit + ' ' : '') + it.txt, colW - ind);
-    ls2.forEach((l, k) => { const xx = cx + ind + (it.sub ? 0 : 0); if (k === 0 && it.tit) { const tw = Math.min(l.length, it.tit.length); font(10, true, [20, 33, 61]); doc.text(l.slice(0, tw), xx, y); const w0 = doc.getTextWidth(l.slice(0, tw)); font(10, false, [40, 44, 52]); doc.text(l.slice(tw), xx + w0, y); } else { font(10, false, [40, 44, 52]); doc.text(l, xx, y); } y += lh; });
+    y = justTexto(doc, (it.tit ? [{ t: it.tit, b: true }] : []).concat([{ t: it.txt, b: false }]), cx + ind, y, colW - ind, lh, (bb) => font(10, bb, bb ? [20, 33, 61] : [40, 44, 52]));
     y += 3;
   });
   doc.setDrawColor(226, 229, 234); doc.line(20, 176, W - 20, 176);
