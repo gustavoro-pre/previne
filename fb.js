@@ -95,7 +95,7 @@ function docRef(path) {
   return {
     id: r.id, path,
     get: () => getDoc(r).then(wDoc, e => { throw mapErr(e); }),
-    set: d => write(setDoc(r, d)),
+    set: (d, o) => write(o ? setDoc(r, d, o) : setDoc(r, d)),
     update: d => write(updateDoc(r, d)),
     delete: () => write(deleteDoc(r)),
     onSnapshot: (next, err) => onSnapshot(r, s => next(wDoc(s)), e => err && err(mapErr(e))),

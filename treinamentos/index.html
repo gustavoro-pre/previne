@@ -2154,7 +2154,7 @@ function fichaInto(P, f, entregador) {
   const doc = P.doc; P.just = true;
   {
     const { os } = osDa(f.funcao);
-    P.header('FICHA DE CONTROLE DE EPI', 'Revisão ' + (str(os.revisao) || '00') + ' – Registro de fornecimento · NR-06', 'FEPI-' + (str(os.codigo).replace(/^OS-SST-/, '') || norm(f.funcao).replace(/[^a-z0-9]+/g, '-').toUpperCase().slice(0, 24)));
+    const mc = modeloCab('ficha', 'FEPI-' + (str(os.codigo).replace(/^OS-SST-/, '') || norm(f.funcao).replace(/[^a-z0-9]+/g, '-').toUpperCase().slice(0, 24)), str(os.revisao), 'Registro de fornecimento · NR-06'); P.header('FICHA DE CONTROLE DE EPI', mc.sub, mc.cod);
     P.box([['Funcionário', f.nome], ['CPF', f.cpf ? fmtCpfF(f.cpf) : '—'], ['Função', f.funcao], ['Área', [f.area, f.subarea].filter(Boolean).join(' / ')], ['Unidade', f.unidade], ['Admissão', fmtD(f.admissao)], ['Nº calçado', f.tamCalcado], ['Camisa / calça', [f.tamCamisa || f.tamRoupa, f.tamCalca].filter(Boolean).join(' / ')]]);
     P.text('Declaro que recebi gratuitamente os Equipamentos de Proteção Individual relacionados abaixo, novos e em perfeito estado, e que fui orientado sobre o uso correto, a guarda, a conservação e a higienização de cada um. Comprometo-me a usá-los apenas para a finalidade a que se destinam, a responsabilizar-me pela sua guarda e conservação, a comunicar qualquer alteração que os torne impróprios para uso e a devolvê-los quando substituídos ou no desligamento. Estou ciente de que a recusa injustificada ao uso do EPI constitui ato faltoso (CLT, art. 158, parágrafo único).', { size: 8.2, color: [60, 66, 80], gap: 3 });
     Object.keys(ADIC).filter(a => f[a]).forEach(a => { const ks = kitsAdic(f).filter(k => k.adicional === a); const eps = ks.flatMap(k => k.epis || []).map(x => S.epis.find(p => p.id === x.epiId)).filter(Boolean);
@@ -2216,12 +2216,14 @@ async function gerarDocsFunc(f, keys) {
   try { await dl.save({ filename: nome, data: doc.output('blob') }); toast(`PDF com ${keys.length} documento(s) pronto.`, 'ok'); } catch (er) { if (!(er && er.code === 'declined')) toast('Não foi possível salvar o PDF.', 'bad'); }
   if (modelo) setTimeout(() => toast('A OS usou o texto-modelo da função. Revise em Cadastros → Kits.', 'bad'), 3600);
 }
+/* código e revisão aprovados no módulo Documentação (lista mestra) para os modelos do portal */
+function modeloCab(k, codPadrao, revPadrao, extra) { const m = (S.modelos || {})[k]; return m && m.codigo ? { cod: m.codigo, sub: 'Rev. ' + String(+m.rev || 0).padStart(2, '0') + ' de ' + fmtD(m.data) + (extra ? ' – ' + extra : '') } : { cod: codPadrao, sub: 'Revisão ' + (revPadrao || '00') + (extra ? ' – ' + extra : '') }; }
 function osCidade() { const e = str((S.emp || {}).endereco); const m = e.match(/([A-Za-zÀ-ú .]+)\s*[\/-]\s*([A-Z]{2})\b/); return /resende/i.test(e) || !e ? 'Resende/RJ' : m ? m[1].trim().split(/,|-/).pop().trim() + '/' + m[2] : ''; }
 function osInto(P, f) {
   const doc = P.doc;
   const { os, modelo } = osDa(f.funcao);
   const base = str(os.base) || 'PGR / PCMSO', cod = str(os.codigo) || 'OS-SST-' + norm(f.funcao).replace(/[^a-z0-9]+/g, '-').toUpperCase().slice(0, 24);
-  P.fs = 8.5; P.just = true; P.header('ORDEM DE SERVIÇO – SST', 'Revisão ' + (str(os.revisao) || '00') + ' – Base: ' + base, cod);
+  const mc = modeloCab('os', cod, str(os.revisao), 'Base: ' + base); P.fs = 8.5; P.just = true; P.header('ORDEM DE SERVIÇO – SST', mc.sub, mc.cod);
   P.text('Esta Ordem de Serviço informa o trabalhador sobre os riscos ocupacionais da sua função, as medidas de prevenção adotadas pela empresa e os procedimentos que ele deve seguir, em cumprimento à NR-01, item 1.4.1, alínea "c", e ao art. 157, inciso II, da CLT. As informações de riscos e exames foram extraídas do ' + base + ' da empresa.', { size: 9, gap: 1, align: 'justify' });
   let sn = 1;
   P.section(sn++, 'Identificação');
@@ -2649,7 +2651,7 @@ async function gerarCertificados(regs, nome) {
 }
 function listaInto(P, d, parts) {
   const doc = P.doc;
-  P.header('LISTA DE PRESENÇA', 'Treinamento · NR-01, item 1.7');
+  { const mc = modeloCab('lista', '', '', 'Treinamento · NR-01'); P.header('LISTA DE PRESENÇA', mc.cod ? mc.sub : 'Treinamento · NR-01', mc.cod); }
   P.box([['Treinamento', d.t.nome], ['Carga horária', d.ch + 'h'], ['Início', fmtD(d.inicio)], ['Término', fmtD(d.termino)], ['Local', str(d.local).replace(/ensino a dist[âa]ncia \(portal do aluno\)/i, 'Portal do Aluno')], ['Instrutor', d.instrutor + ' · ' + d.instrutorQualif]]);
   const cols = [['Nº', 10], ['Nome completo', 78], ['Matrícula', 22], ['Função', 30], ['Assinatura', 40]];
   const th = () => { P.need(8); doc.setFillColor(20, 33, 61); doc.rect(P.L, P.y, P.W, 6.5, 'F'); P.font(8, true, [255, 255, 255]); let x = P.L; cols.forEach(([t, w]) => { doc.text(t, x + 1.5, P.y + 4.4); x += w; }); P.y += 6.5; };
@@ -2848,6 +2850,7 @@ show(); renderEpiItens();
   const asObj = d => Object.assign({}, d.data() || {}, { id: d.id });
   let EMP0 = {}, SIG0 = {}; const mergeEmp = () => { S.emp = Object.assign({}, EMP0, { tstAssin: SIG0.tstAssin || EMP0.tstAssin || '', instrutorAssin: SIG0.instrutorAssin || EMP0.instrutorAssin || '' }); sched(); };
   db.doc('config/empresa').onSnapshot(d => { EMP0 = d.exists ? (d.data() || {}) : {}; mergeEmp(); }, e => console.warn(e));
+  db.doc('config/modelos').onSnapshot(d => { S.modelos = d.exists ? (d.data() || {}) : {}; }, () => {});
   db.doc('config/assinaturas').onSnapshot(d => { SIG0 = d.exists ? (d.data() || {}) : {}; mergeEmp(); }, () => {});
   if (typeof S.cursoSig === 'undefined') S.cursoSig = {};
   db.collection('cursos_priv').onSnapshot(q => { S.cursoSig = {}; q.docs.forEach(x => S.cursoSig[x.id] = (x.data() || {}).instrutorAssin || ''); }, () => {});
@@ -2870,7 +2873,7 @@ show(); renderEpiItens();
    O módulo Admissão abre esta página escondida (iframe) com #gerar-adm=<código> e recebe o PDF pronto,
    gerado com os mesmos kits, EPIs e textos de OS cadastrados aqui. */
 function termoEpiInto(P, f) {
-  P.header('TERMO DE EPI', 'Recebimento e responsabilidade · NR-06');
+  { const mc = modeloCab('termoepi', '', '', 'Recebimento e responsabilidade · NR-06'); P.header('TERMO DE EPI', mc.cod ? mc.sub : 'Recebimento e responsabilidade · NR-06', mc.cod); }
   P.box([['Funcionário', f.nome], ['CPF', f.cpf ? fmtCpfF(f.cpf) : '—'], ['Função', f.funcao], ['Área', [f.area, f.subarea].filter(Boolean).join(' / ')], ['Unidade', f.unidade], ['Nº calçado', f.tamCalcado], ['Camisa / calça', [f.tamCamisa, f.tamCalca].filter(Boolean).join(' / ')], ['Data', fmtD(todayStr())]]);
   P.text('Declaro que fui informado de que a empresa me fornecerá gratuitamente os Equipamentos de Proteção Individual adequados aos riscos da minha função, relacionados abaixo, e que fui orientado sobre o uso correto, a guarda, a conservação e a higienização de cada um. Comprometo-me a usá-los apenas para a finalidade a que se destinam, a responsabilizar-me pela sua guarda e conservação, a comunicar qualquer alteração que os torne impróprios para uso e a cumprir as determinações sobre o uso adequado (NR-06, item 6.7.1; CLT, art. 158).', { size: 9, gap: 3 });
   P.section(1, 'EPIs da função');

@@ -138,6 +138,8 @@ service cloud.firestore {
     match /admissoes_priv/{tk} { allow read, write: if admi(['rh']); }
 
     // documentação: quem consulta não vê nem baixa documentos restritos
+    // código e revisão aprovados dos modelos gerados pelo portal (OS, ficha de EPI…): todos da equipe leem
+    match /config/modelos { allow read: if equipe(); allow write: if docm(['editor']); }
     match /config/documentos { allow read: if docm(['editor', 'consulta']); allow write: if docm(['editor']); }
     match /docs/{id} {
       allow read: if docm(['editor']) || (docm(['consulta']) && resource.data.restrito == false);

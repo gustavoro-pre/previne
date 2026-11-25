@@ -66,4 +66,13 @@ if (novosAut.length) {
   }
 }
 await estAutRef.set({ ids: pendAut.map(d => d.id) });
+// documentos (novos ou novas revisões) aguardando aprovação: vai para o aprovador indicado
+const docsP = (await db.collection('docs').get()).docs.filter(d => { const p = d.data().pend; return p && !p.recusa && p.aprovador; });
+const estDocRef = db.doc('push_estado/docs'); const estDoc = new Set(((await estDocRef.get()).data() || {}).ids || []);
+for (const d of docsP) {
+  const p = d.data().pend, kid = d.id + ':' + p.rev + ':' + p.em; if (estDoc.has(kid)) continue;
+  const alvo = toks.filter(t => chave(t.nome) === chave(p.aprovador));
+  for (const t of alvo) { try { await admin.messaging().send({ token: t.token, webpush: { headers: { Urgency: 'high', TTL: '86400' }, data: { title: 'Documento para aprovar', body: `${d.data().codigo} ${d.data().titulo || ''} (Rev. ${String(+p.rev || 0).padStart(2, '0')}) enviado por ${p.por}.`, url: '/documentos/#aprov', tag: 'doc' } } }); } catch (e) { console.log('falha no envio:', e.code || ''); } }
+}
+await estDocRef.set({ ids: docsP.map(d => d.id + ':' + d.data().pend.rev + ':' + d.data().pend.em) });
 console.log('ok');
