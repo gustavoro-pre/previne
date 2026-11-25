@@ -2871,7 +2871,7 @@ show(); renderEpiItens();
    gerado com os mesmos kits, EPIs e textos de OS cadastrados aqui. */
 function termoEpiInto(P, f) {
   P.header('TERMO DE EPI', 'Recebimento e responsabilidade · NR-06');
-  P.box([['Funcionário', f.nome], ['Matrícula', f.matricula || 'a definir'], ['Função', f.funcao], ['Área', [f.area, f.subarea].filter(Boolean).join(' / ')], ['Unidade', f.unidade], ['Nº calçado', f.tamCalcado], ['Camisa / calça', [f.tamCamisa, f.tamCalca].filter(Boolean).join(' / ')], ['Data', fmtD(todayStr())]]);
+  P.box([['Funcionário', f.nome], ['CPF', f.cpf ? fmtCpfF(f.cpf) : '—'], ['Função', f.funcao], ['Área', [f.area, f.subarea].filter(Boolean).join(' / ')], ['Unidade', f.unidade], ['Nº calçado', f.tamCalcado], ['Camisa / calça', [f.tamCamisa, f.tamCalca].filter(Boolean).join(' / ')], ['Data', fmtD(todayStr())]]);
   P.text('Declaro que fui informado de que a empresa me fornecerá gratuitamente os Equipamentos de Proteção Individual adequados aos riscos da minha função, relacionados abaixo, e que fui orientado sobre o uso correto, a guarda, a conservação e a higienização de cada um. Comprometo-me a usá-los apenas para a finalidade a que se destinam, a responsabilizar-me pela sua guarda e conservação, a comunicar qualquer alteração que os torne impróprios para uso e a cumprir as determinações sobre o uso adequado (NR-06, item 6.7.1; CLT, art. 158).', { size: 9, gap: 3 });
   P.section(1, 'EPIs da função');
   const ke = [...kitEpisF(f).entries()].map(([id, q]) => [S.epis.find(p => p.id === id), q]).filter(x => x[0]);
@@ -2889,7 +2889,7 @@ function termoEpiInto(P, f) {
     try {
       const sn = await db.doc('admissoes/' + tk).get(); if (!sn.exists) return fim({ erro: 'Admissão não encontrada.' });
       const a = sn.data(), dd = (a.cand || {}).dados || {};
-      const f = { id: a.funcionarioId || 'adm-' + tk, nome: str(a.nome), matricula: str(a.matricula), funcao: str(a.funcao), area: str(a.area), areaId: str(a.areaId), subarea: str(a.subarea), subareaId: str(a.subareaId), subareas: a.subareaId ? [a.subareaId] : [], unidade: str(a.unidade), tamCamisa: str(dd.tamCamisa), tamCalca: str(dd.tamCalca), tamCalcado: str(dd.tamCalcado), altura: !!a.altura };
+      const f = { id: a.funcionarioId || 'adm-' + tk, nome: str(a.nome), cpf: str(a.cpf || dd.cpf), matricula: str(a.matricula), funcao: str(a.funcao), area: str(a.area), areaId: str(a.areaId), subarea: str(a.subarea), subareaId: str(a.subareaId), subareas: a.subareaId ? [a.subareaId] : [], unidade: str(a.unidade), tamCamisa: str(dd.tamCamisa), tamCalca: str(dd.tamCalca), tamCalcado: str(dd.tamCalcado), altura: !!a.altura };
       await loadPDF(); const P = PDFW(); const modelo = osInto(P, f); P.newPage(); termoEpiInto(P, f);
       P.footer('Admissão · ' + f.nome + ' · documento para assinatura eletrônica · gerado em ' + fmtDT(new Date().toISOString()));
       fim({ b64: P.doc.output('datauristring').split(',')[1], modelo: !!modelo, epis: kitEpisF(f).size });

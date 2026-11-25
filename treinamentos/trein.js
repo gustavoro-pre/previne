@@ -96,6 +96,7 @@ render = function (now) {
   renderPainel(); renderCad(); renderTrein(); tExternos();
   const v = current();
   if (v === 'matriz') tMatriz(); if (v === 'padroes') tPadroes(); if (v === 'cursos') tCursos(); if (v === 'aprov') tAprov();
+  apBadge();
   tAutoCert();
 };
 let tRT = null; const tSched = () => { clearTimeout(tRT); tRT = setTimeout(() => render(), 150); };
@@ -145,6 +146,7 @@ let APSEL = new Set(), AP_HASH = {};
 const apChave = nome => norm(nome).replace(/[^a-z0-9]+/g, '_');
 const euNome = () => str((window.__FB || {}).nome || '');
 async function apHashes(L) { for (const r of L) if (!AP_HASH[r.id] || AP_HASH[r.id].k !== certCanon(r)) AP_HASH[r.id] = { k: certCanon(r), h: await certHash(r) }; }
+function apBadge() { const eu = norm(euNome()); const n = eu ? S.tr.filter(r => certAprovadores(r).some(a => norm(a.nome) === eu && !aprovDe(r, a.nome))).length : 0; const b = $('.tabs button[data-v=aprov]'); if (!b) return; let s = b.querySelector('.bn'); if (!n) { if (s) s.remove(); return; } if (!s) { s = document.createElement('span'); s.className = 'bn'; s.style.cssText = 'background:#c62828;color:#fff;border-radius:999px;font-size:11px;font-weight:700;padding:1px 7px;margin-left:4px'; b.appendChild(s); } s.textContent = n; }
 function apPendentes() {
   const eu = norm(euNome()); const L = []; const outros = {};
   S.tr.forEach(r => certAprovadores(r).forEach(a => { const ap = aprovDe(r, a.nome); const valido = ap && AP_HASH[r.id] && ap.hash === AP_HASH[r.id].h; if (valido) return;

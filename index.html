@@ -171,6 +171,8 @@ table.tb{width:100%;border-collapse:collapse;font-size:13px}
 a.mod:hover{transform:translateY(-1px);box-shadow:0 4px 14px rgba(20,33,61,.12)}
 .mod .mi{width:40px;height:40px;border-radius:10px;display:grid;place-items:center;font-size:20px;background:#fff4d6}
 .mod h3{margin:4px 0 0;font-size:17px;text-transform:none;letter-spacing:0;color:var(--ink,#14213d)}.mod p{margin:0;color:var(--muted);font-size:13px;line-height:1.4}
+.aviso{display:flex;align-items:center;gap:10px;background:#fff4d6;border:1px solid #f2a900;color:#5a3d00;border-radius:12px;padding:12px 14px;margin:10px 0 4px;text-decoration:none;font-weight:600}.aviso .n{background:#c62828;color:#fff;border-radius:999px;min-width:26px;height:26px;display:grid;place-items:center;font-size:14px;padding:0 7px;flex:none}.aviso .go{margin-left:auto;font-size:13px;text-decoration:underline}
+.mod .bn{align-self:flex-start;background:#c62828;color:#fff;border-radius:999px;font-size:12px;font-weight:700;padding:3px 9px}
 .mod.off{opacity:.6}.mod .pf{margin-top:auto;font-size:12px;color:var(--muted)}
 .urow{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:10px 0;border-bottom:1px solid var(--line)}.urow .main{flex:1;min-width:180px}
 </style>
@@ -184,6 +186,7 @@ a.mod:hover{transform:translateY(-1px);box-shadow:0 4px 14px rgba(20,33,61,.12)}
 </div></header>
 <main>
   <div class="hello" id="p-hello"></div>
+  <a id="p-aviso" class="aviso" href="treinamentos/#aprov" hidden></a>
   <p class="note" style="margin:0">Escolha o módulo. Você vê apenas os módulos liberados para o seu usuário.</p>
   <div class="mods" id="p-mods"></div>
   <section id="p-users" hidden>
@@ -230,7 +233,7 @@ const PAPEIS_MOD = {
   documentos: { editor: 'Anexa, revisa e aprova', consulta: 'Consulta e baixa (sem restritos)', nenhum: 'Sem acesso' }
 };
 const DESC_MOD = [['Treinamentos · Gestor', 'Tudo no módulo: tipos, turmas, admissão, externos, áreas, padrões, cursos e acesso do aluno'], ['Treinamentos · TST / RH', 'Turmas, admissão, externos, padrões, cursos, áreas e funcionários'], ['Treinamentos · Instrutor', 'Turmas, padrões (listas e assinaturas) e cursos'], ['Treinamentos · Consulta', 'Vê tudo, não altera'], ['Indicadores', 'Todas as áreas, ou só uma área escolhida'], ['Alocação em OM · Lança', 'Cadastra OMs e equipe fixa, programa preventivas, completa pendências de OM e marca o apontamento'], ['Alocação em OM · Consulta', 'Vê tudo e tira PDF, não altera'], ['Admissão · RH', 'Abre a admissão, envia o link, confere documentos, registra ASO e integração e cadastra o funcionário'], ['Admissão · Consulta', 'Acompanha as admissões, sem ver salário e sem alterar']];
-let AREAS = [];
+let AREAS = [], PEND = 0;
 /* mesmo cálculo do fb.js: perfil efetivo em cada módulo */
 function papelMod(d, id) {
   if (!d) return 'nenhum'; if (d.papel === 'admin') return 'admin'; if (d.papel === 'funcionario') return 'nenhum';
@@ -250,7 +253,7 @@ function renderMods() {
   const F = window.__FB, d = F.perfil;
   $('#p-hello').textContent = 'Olá, ' + str(F.nome).split(' ')[0];
   const L = MODS.filter(m => temModulo(d, m.id));
-  $('#p-mods').innerHTML = (L.length ? L.map(m => `<a class="mod" href="${m.href}"><div class="mi">${m.icone}</div><h3>${esc(m.nome)}</h3><p>${esc(m.desc)}</p><div class="pf">Seu perfil: ${esc(nomeMod(m.id, papelMod(d, m.id)))}</div></a>`).join('') : '<div class="empty">Nenhum módulo liberado para você ainda. Fale com o administrador.</div>')
+  $('#p-mods').innerHTML = (L.length ? L.map(m => `<a class="mod" href="${m.href}"><div class="mi">${m.icone}</div><h3>${esc(m.nome)}</h3>${m.id === 'treinamentos' && PEND ? `<span class="bn">${PEND} aguardando seu de acordo</span>` : ''}<p>${esc(m.desc)}</p><div class="pf">Seu perfil: ${esc(nomeMod(m.id, papelMod(d, m.id)))}</div></a>`).join('') : '<div class="empty">Nenhum módulo liberado para você ainda. Fale com o administrador.</div>')
     + (temModulo(d, 'treinamentos') ? `<a class="mod" href="aluno/" target="_blank" rel="noopener"><div class="mi">👷</div><h3>Portal do aluno</h3><p>Onde o funcionário entra com a matrícula para fazer os cursos on-line e assinar os padrões. Envie este link para a equipe.</p><div class="pf">${esc(new URL('aluno/', location.href).href)}</div></a>` : '');
 }
 function renderUsers() {
@@ -302,6 +305,14 @@ function renderUsers() {
   db.collection('areas').onSnapshot(q => { AREAS = q.docs.map(x => Object.assign({ id: x.id }, x.data())).sort((a, b) => str(a.nome).localeCompare(str(b.nome), 'pt')); renderUsers(); }, () => {});
   renderMods(); renderUsers();
   window.addEventListener('fb-users', renderUsers);
+  /* aviso de de acordo pendente: certificados em que o usuário é instrutor, RT ou TST e ainda não deu o de acordo */
+  const F = window.__FB || {};
+  if (temModulo(F.perfil, 'treinamentos')) db.collection('treinamentos').onSnapshot(q => {
+    const nr = v => str(v).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim().replace(/\s+/g, ' '), eu = nr(F.nome), k = eu.replace(/[^a-z0-9]+/g, '_');
+    PEND = eu ? q.docs.map(x => x.data()).filter(r => [r.instrutor, r.rt, r.tst].some(n => nr(n) === eu) && !((r.aprov || {})[k])).length : 0;
+    const av = $('#p-aviso'); av.hidden = !PEND; av.innerHTML = PEND ? `<span class="n">${PEND}</span><span>${PEND === 1 ? 'Certificado aguardando' : 'Certificados aguardando'} o seu de acordo</span><span class="go">Ver agora</span>` : '';
+    renderMods();
+  }, () => {});
 })();
 </script>
 </body>

@@ -247,7 +247,8 @@ async function criar() {
     if ($('#n-padrao') && $('#n-padrao').checked) db.doc('config/admissao').set(Object.assign({}, D.cfg, { cursos: cur })).catch(() => {});
     let aviso = '';
     if (cur.length) { b.textContent = 'Liberando treinamentos…'; try { await liberarTrein(obj, cur); } catch (er) { aviso = ' Os treinamentos não foram liberados: ' + ((er && er.message) || er) + ' Tente de novo no detalhe.'; } }
-    V.tab = 'and'; render(); detalhe(tk); toast('Admissão aberta. Envie o link ao candidato.' + aviso, aviso ? 'bad' : 'ok');
+    b.textContent = 'Gerando OS e termo de EPI (uns 20 s)…'; try { const m = await prepararOsEpi(obj); if (m.modelo) aviso += ' A OS usou o texto-modelo da função: revise o kit em Ferramentas & EPI e gere de novo no detalhe.'; } catch (er) { aviso += ' A OS e o termo de EPI não foram gerados: ' + ((er && er.message) || er) + ' Gere no detalhe.'; }
+    V.tab = 'and'; render(); detalhe(tk); toast('Admissão aberta: ' + (cur.length ? 'treinamentos liberados, ' : '') + 'OS e termo de EPI prontos para assinar. Envie o link ao candidato.' + aviso, aviso ? 'bad' : 'ok');
   } catch (e) { b.disabled = false; toast('Não foi possível abrir: ' + ((e && e.message) || e), 'bad'); }
 }
 
