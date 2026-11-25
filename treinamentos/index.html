@@ -1042,7 +1042,8 @@ function renderEmp() {
     if (!guardWrite()) return;
     const d = Object.assign({}, S.emp || {}, { nome: $('#em-n').value.trim(), cnpj: $('#em-c').value.trim(), responsavel: $('#em-r').value.trim(), endereco: $('#em-e').value.trim(), tstNome: $('#em-tn').value.trim(), tstRegistro: $('#em-tr').value.trim(), jornadaTreino: num($('#em-j').value) || 8 }, EMP_LOGO || {}, TST_SIG !== undefined ? { tstAssin: TST_SIG } : {}, { instrutorNome: $('#em-in').value.trim(), instrutorQualif: $('#em-iq').value.trim() }, INS_SIG !== undefined ? { instrutorAssin: INS_SIG } : {});
     const b = $('#em-s'); b.disabled = true;
-    try { await db.doc('config/empresa').set(d); document.activeElement && document.activeElement.blur(); toast('Dados da empresa salvos.', 'ok'); } catch (er) { handleErr(er); }
+    const sigs = { tstAssin: str(d.tstAssin), instrutorAssin: str(d.instrutorAssin) }; d.tstAssin = ''; d.instrutorAssin = '';
+    try { await db.doc('config/assinaturas').set(sigs); await db.doc('config/empresa').set(d); document.activeElement && document.activeElement.blur(); toast('Dados da empresa salvos.', 'ok'); } catch (er) { handleErr(er); }
     b.disabled = false;
   };
 }
@@ -2346,7 +2347,7 @@ function openTurma() {
     try {
       for (const [i, p] of TU.parts.entries()) {
         const r = { turma, funcionarioId: p.funcionarioId, nome: p.nome.trim(), matricula: p.matricula, cpf: str(p.cpf), funcao: p.funcao, tipoId: d.t.id, tipoNome: str(d.t.nome), norma: str(d.t.norma), cargaHoraria: d.ch, conteudo: str(d.t.conteudo),
-          inicio: d.inicio, termino: d.termino, validade: addMonths(d.termino, num(d.t.validadeMeses)), local: d.local, instrutor: d.instrutor, instrutorQualif: d.instrutorQualif, rt: d.rt, rtQualif: d.rtQualif, tst: d.tst, tstRegistro: d.tstRegistro, instrutorAssin: str(d.instrutorAssin), tstAssin: str(d.tstAssin),
+          inicio: d.inicio, termino: d.termino, validade: addMonths(d.termino, num(d.t.validadeMeses)), local: d.local, instrutor: d.instrutor, instrutorQualif: d.instrutorQualif, rt: d.rt, rtQualif: d.rtQualif, tst: d.tst, tstRegistro: d.tstRegistro,
           codigo: 'T' + d.termino.replace(/-/g, '').slice(2) + '-' + turma.slice(-4) + '-' + String(i + 1).padStart(2, '0'), criadoEm: new Date().toISOString(), por: S.uid || '' };
         await db.collection('treinamentos').doc().set(r); regs.push(r); await sleep(50);
       }
@@ -2496,7 +2497,7 @@ function certSigs(r) {
   const L = [[r.nome, 'Participante', r.assinAluno && r.assinAluno.img]];
   if (r.tst && norm(r.tst) !== norm(r.instrutor) && norm(r.tst) !== norm(r.rt)) L.push([r.tst, 'Técnico de Segurança do Trabalho' + (r.tstRegistro ? ' · ' + r.tstRegistro : ''), r.tstAssin || e.tstAssin]);
   if (r.rt && norm(r.rt) !== norm(r.instrutor)) L.push([r.rt, 'Responsável Técnico · ' + str(r.rtQualif), norm(r.rt) === norm(r.tst) ? (r.tstAssin || e.tstAssin) : (e.instrutorAssin && norm(r.rt) === norm(e.instrutorNome) ? e.instrutorAssin : '')]);
-  L.push([r.instrutor, (norm(r.rt) === norm(r.instrutor) ? 'Instrutor e Responsável Técnico · ' : 'Instrutor · ') + str(r.instrutorQualif), r.instrutorAssin || (e.instrutorAssin && norm(r.instrutor) === norm(e.instrutorNome) ? e.instrutorAssin : '')]);
+  L.push([r.instrutor, (norm(r.rt) === norm(r.instrutor) ? 'Instrutor e Responsável Técnico · ' : 'Instrutor · ') + str(r.instrutorQualif), r.instrutorAssin || (e.instrutorAssin && norm(r.instrutor) === norm(e.instrutorNome) ? e.instrutorAssin : ((S.cursoSig || {})[r.cursoId] || ''))]);
   return L;
 }
 function certMoldura(doc, W, H, forte) {
@@ -2782,7 +2783,11 @@ show(); renderEpiItens();
   const onLive = snap => { if (!snap.metadata.fromCache) { clearTimeout(slow); setConn(S.canWrite === false ? 'Somente leitura' : 'Online', S.canWrite === false ? 'warn' : 'ok'); } };
   const onErr = e => { clearTimeout(slow); setConn('Erro de conexão', 'err'); console.error(e); Object.keys(S.ready).forEach(k => S.ready[k] = true); render(); };
   const asObj = d => Object.assign({}, d.data() || {}, { id: d.id });
-  db.doc('config/empresa').onSnapshot(d => { S.emp = d.exists ? (d.data() || {}) : {}; sched(); }, e => console.warn(e));
+  let EMP0 = {}, SIG0 = {}; const mergeEmp = () => { S.emp = Object.assign({}, EMP0, { tstAssin: SIG0.tstAssin || EMP0.tstAssin || '', instrutorAssin: SIG0.instrutorAssin || EMP0.instrutorAssin || '' }); sched(); };
+  db.doc('config/empresa').onSnapshot(d => { EMP0 = d.exists ? (d.data() || {}) : {}; mergeEmp(); }, e => console.warn(e));
+  db.doc('config/assinaturas').onSnapshot(d => { SIG0 = d.exists ? (d.data() || {}) : {}; mergeEmp(); }, () => {});
+  if (typeof S.cursoSig === 'undefined') S.cursoSig = {};
+  db.collection('cursos_priv').onSnapshot(q => { S.cursoSig = {}; q.docs.forEach(x => S.cursoSig[x.id] = (x.data() || {}).instrutorAssin || ''); }, () => {});
   db.doc('config/regras').onSnapshot(d => { const r = d.exists ? (d.data() || {}) : {}; S.regras = { epi: r.epi || {}, tipos: r.tipos || {} }; if (!RG.dirty) RG.d = null; sched(); }, e => console.warn(e));
   db.collection('autorizacoes').onSnapshot(s => { S.sol = s.docs.map(asObj); sched(); }, e => console.warn(e));
   db.collection('decisoes').onSnapshot(s => { S.dec = s.docs.map(asObj); sched(); }, e => console.warn(e));

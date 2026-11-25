@@ -118,6 +118,18 @@ function padAss(box) {
   return { vazio: () => pts < 12, img: () => { const o = document.createElement('canvas'); const k = Math.min(1, 600 / cv.width); o.width = Math.round(cv.width * k); o.height = Math.round(cv.height * k); o.getContext('2d').drawImage(cv, 0, 0, o.width, o.height); return o.toDataURL('image/png'); } };
 }
 /* ---------- curso ---------- */
+/* prévia do certificado (sem as assinaturas da empresa), para o funcionário conferir antes de assinar */
+function previaCert(c, m) {
+  const cpf = str(A.f.cpf), ini = str(m.inicioEm || m.liberadoEm || m.concluidoEm).slice(0, 10), fim = str(m.concluidoEm).slice(0, 10);
+  const per = ini && ini !== fim ? `no período de ${fmtD(ini)} a ${fmtD(fim)}` : `em ${fmtD(fim)}`;
+  return `<div style="border:3px double #14213d;outline:1px solid #f2a900;outline-offset:-7px;border-radius:6px;background:#fcfaf4;padding:16px 14px;margin:10px 0;text-align:center">
+    <div style="font-size:11px;font-weight:700;color:#14213d">${esc(str(A.emp.nome))}</div>${A.emp.cnpj ? `<div style="font-size:10px;color:#6b7280">CNPJ ${esc(A.emp.cnpj)}</div>` : ''}
+    <div style="font-family:Georgia,serif;font-size:22px;font-weight:700;color:#14213d;margin-top:8px;letter-spacing:1px">CERTIFICADO</div>
+    <div style="font-size:9px;letter-spacing:3px;color:#b47d00;font-weight:700">DE CONCLUSÃO DE TREINAMENTO</div>
+    <div style="font-family:Georgia,serif;font-style:italic;font-size:18px;font-weight:700;color:#14213d;margin:10px 0 4px;border-bottom:1px solid #f2a900;padding-bottom:4px">${esc(str(A.f.nome))}</div>
+    <p style="font-size:13px;text-align:justify;text-align-last:center;margin:8px 0">${cpf ? 'CPF ' + esc(cpf) + ', ' : ''}concluiu com aproveitamento o treinamento ${esc(c.nome)}, com carga horária de ${num(c.cargaHoraria)} horas, realizado ${per}.</p>
+    <div style="font-size:10px;color:#6b7280">Prévia para conferência · as assinaturas do instrutor e do técnico de segurança são incluídas pela empresa</div></div>`;
+}
 function abrirCurso(mid) {
   const m = A.mats.find(x => x.id === mid); if (!m) return home(); const { c, n, ok } = cursoInfo(m);
   iniciarTimer(m.id); window.scrollTo(0, 0);
@@ -127,8 +139,8 @@ function abrirCurso(mid) {
   app.innerHTML = `<button class="back" id="bk">‹ Início</button><h2>${esc(c.nome)}</h2>${c.descricao ? `<p class="note" style="margin-top:-6px">${esc(c.descricao)}</p>` : ''}
     <div class="card"><dl class="kv"><dt>Progresso</dt><dd>${ok} de ${n} módulo(s)</dd><dt>Carga horária</dt><dd>${num(c.cargaHoraria)}h</dd><dt>Seu tempo de estudo</dt><dd>${horas}h${minH ? ` de ${minH}h exigidas` : ''}</dd>${m.prazo ? `<dt>Prazo</dt><dd>${fmtD(m.prazo)}</dd>` : ''}</dl>
     ${c.pratica ? '<p class="note" style="margin-bottom:0">Este curso tem uma parte prática presencial. Depois da teoria, o instrutor marca a prática e o certificado sai.</p>' : ''}</div>
-    ${m.concluidoEm ? `<div class="card" style="border-color:var(--ok)"><b>✓ Teoria concluída em ${fmtD(m.concluidoEm)}.</b> ${c.pratica && !m.praticaOk ? 'Aguarde a convocação para a prática presencial.' : m.assinCert ? `Certificado assinado em ${fmtD(m.assinCert.em)}. A empresa emite o PDF com a sua assinatura.` : 'Assine o seu certificado abaixo.'}</div>
-      ${!(c.pratica && !m.praticaOk) && !m.assinCert ? `<div class="card"><b>Assinar certificado</b><p class="note">Confirme que participou do treinamento <b>${esc(c.nome)}</b>, com ${num(c.cargaHoraria)}h. Sua assinatura vai no certificado.</p><div id="cert-pad"></div><button class="btn primary big" id="cert-go" style="margin-top:10px">Assinar certificado</button></div>` : ''}` : ''}
+    ${m.concluidoEm ? `<div class="card" style="border-color:var(--ok)"><b>✓ Teoria concluída em ${fmtD(m.concluidoEm)}.</b> ${c.pratica && !m.praticaOk ? 'Aguarde a convocação para a prática presencial.' : m.assinCert ? `Certificado assinado em ${fmtD(m.assinCert.em)}. A empresa inclui as assinaturas do instrutor e do técnico de segurança e arquiva o certificado.` : 'Assine o seu certificado abaixo.'}</div>
+      ${!(c.pratica && !m.praticaOk) && !m.assinCert ? `<div class="card"><b>Assinar certificado</b><p class="note">Confira os dados do seu certificado. Depois da sua assinatura, a empresa inclui as assinaturas do instrutor e do técnico de segurança e arquiva o documento.</p>${previaCert(c, m)}<div id="cert-pad"></div><button class="btn primary big" id="cert-go" style="margin-top:10px">Assinar certificado</button></div>` : ''}` : ''}
     <h3>Módulos</h3>${mods.map((md, i) => { const pr = (m.prog || {})[md.id] || {}; const lib = i === 0 || modOk(m, mods[i - 1]); const vistos = (md.mats || []).filter(x => (pr.vistos || {})[x.id]).length;
       const trav = md.quiz && !pr.ok && num(pr.tent) >= num(md.quiz.tent);
       const st = pr.ok ? `<span class="badge b-ok">Aprovado${pr.nota != null ? ' · ' + num(pr.nota) + '%' : ''}</span>` : trav ? '<span class="badge b-bad">Sem tentativas: fale com o RH</span>' : !lib ? '<span class="badge b-mut">Termine o módulo anterior</span>' : `<span class="badge b-warn">${vistos}/${(md.mats || []).length} materiais</span>`;

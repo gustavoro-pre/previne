@@ -29,6 +29,8 @@ service cloud.firestore {
       allow create: if logado() && request.resource.data.adminUid == request.auth.uid;
     }
     match /config/empresa { allow read: if ativo(); allow write: if tem(['admin', 'gestao']); }
+    // assinaturas do instrutor padrão e do TST: o funcionário (portal do aluno) não lê
+    match /config/assinaturas { allow read: if equipe(); allow write: if tem(['admin', 'gestao']); }
     // nome da empresa para a página do candidato (sem login)
     match /config/publico { allow read: if true; allow write: if tem(['admin', 'gestao']) || admi(['rh']); }
     match /config/admissao { allow read: if admi(['rh', 'consulta']); allow write: if admi(['rh']); }
@@ -91,6 +93,8 @@ service cloud.firestore {
       allow update, delete: if trein(['gestor', 'tst', 'rh']);
     }
     match /cursos/{id}    { allow read: if ativo(); allow write: if trein(['gestor', 'tst', 'rh', 'instrutor']); }
+    // assinatura do instrutor de cada curso: o funcionário não lê
+    match /cursos_priv/{id} { allow read: if equipe(); allow write: if trein(['gestor', 'tst', 'rh', 'instrutor']); }
     match /matriculas/{id} {
       allow read: if equipe() || (aluno() && resource.data.funcionarioId == meuFunc());
       allow write: if trein(['gestor', 'tst', 'rh', 'instrutor']) || admi(['rh']);
