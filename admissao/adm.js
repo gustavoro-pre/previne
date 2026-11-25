@@ -73,6 +73,22 @@ function gerarOsEpi(a) {
     window.addEventListener('message', on); fr.src = new URL('../ferramentas/#gerar-adm=' + a.id, location.href).href; document.body.appendChild(fr);
   });
 }
+function gerarCertPdf(ids) {
+  return new Promise((res, rej) => {
+    const fr = document.createElement('iframe'); fr.style.cssText = 'position:fixed;width:900px;height:700px;left:-10000px;top:0;border:0;opacity:0';
+    const fim = (f, v) => { window.removeEventListener('message', on); clearTimeout(t); fr.remove(); f(v); };
+    const on = ev => { const m = ev.data; if (ev.origin !== location.origin || !m || m.tipo !== 'previne-cert' || m.ids !== ids.join(',')) return; m.erro ? fim(rej, new Error(m.erro)) : fim(res, m); };
+    const t = setTimeout(() => fim(rej, new Error('Demorou demais para gerar. Tente de novo.')), 70000);
+    window.addEventListener('message', on); fr.src = new URL('../ferramentas/#gerar-cert=' + ids.join(','), location.href).href; document.body.appendChild(fr);
+  });
+}
+async function baixarCerts(a, ids, btn) {
+  const t0 = btn.textContent; btn.disabled = true; btn.textContent = 'Gerando…';
+  try { const m = await gerarCertPdf(ids); const bin = atob(m.b64); const u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+    await baixar(`Certificado${ids.length > 1 ? 's' : ''} - ${a.nome}.pdf`, new Blob([u], { type: 'application/pdf' })); }
+  catch (e) { toast(e.message || 'Não foi possível gerar.', 'bad'); }
+  btn.disabled = false; btn.textContent = t0;
+}
 async function prepararOsEpi(a) {
   const m = await gerarOsEpi(a);
   const arq = await ADM.gravar({ b64: m.b64, tipo: 'application/pdf', nome: 'OS e termo de EPI.pdf', q: { ok: true, prob: [] }, thumb: '' }, 'osepi', (id, d) => db.doc(`admissoes/${a.id}/d/${id}`).set({ d }));
@@ -373,8 +389,10 @@ async function treinBox(a, ro) {
     return { c, m, cu, st, fim: m && m.concluidoEm && !(cu.pratica && !m.praticaOk) ? str(m.praticaEm || m.concluidoEm).slice(0, 10) : '' }; }));
   if (!$('#m-trein')) return;
   const alunoUrl = new URL('../aluno/', location.href).href;
-  box.innerHTML = (linhas.length ? linhas.map(l => `<div class="bt" style="padding:5px 0;border-bottom:1px solid var(--line)"><span>${esc(l.c.nome)}</span>${l.st}</div>`).join('') + (tr.senha ? `<p class="note" style="margin:8px 0 0">Portal do aluno: <b>${esc(alunoUrl)}</b> · login: CPF · senha provisória: <b class="code">${esc(tr.senha)}</b>. Isso também aparece no link do candidato.</p>` : '') : '<p class="note" style="margin:0">Nenhum treinamento liberado ainda.</p>')
+  const certs = linhas.filter(l => l.m && l.m.certId).map(l => l.m.certId);
+  box.innerHTML = (linhas.length ? linhas.map(l => `<div class="bt" style="padding:5px 0;border-bottom:1px solid var(--line);gap:8px;align-items:center"><span style="flex:1">${esc(l.c.nome)}</span>${l.st}${l.m && l.m.certId ? `<button class="btn sm ghost" data-cpdf="${esc(l.m.certId)}" type="button">Certificado PDF</button>` : ''}</div>`).join('') + (certs.length > 1 ? `<div class="actions" style="margin-top:6px"><button class="btn sm ghost" id="l-certs" type="button">Todos os certificados (PDF)</button></div>` : '') + (tr.senha ? `<p class="note" style="margin:8px 0 0">Portal do aluno: <b>${esc(alunoUrl)}</b> · login: CPF · senha provisória: <b class="code">${esc(tr.senha)}</b>. Isso também aparece no link do candidato.</p>` : '') : '<p class="note" style="margin:0">Nenhum treinamento liberado ainda.</p>')
     + (ro ? '' : `<details style="margin-top:8px"><summary class="link" style="cursor:pointer">Liberar treinamentos</summary>${cursosPick(new Set(), 'l', (tr.cursos || []).map(c => c.id))}<div class="actions"><button class="btn sm primary" id="l-go">Liberar marcados</button>${tr.senha ? '<button class="btn sm ghost" id="l-senha">Gerar nova senha</button>' : ''}</div></details>`);
+  $$('#m-trein [data-cpdf]').forEach(b => b.onclick = () => baixarCerts(a, [b.dataset.cpdf], b)); const lc = $('#l-certs'); if (lc) lc.onclick = () => baixarCerts(a, certs, lc);
   const go = $('#l-go'); if (go) go.onclick = async () => { const ids = $$('.l-cur').filter(c => c.checked).map(c => c.dataset.cur); if (!ids.length) return toast('Marque ao menos um curso.', 'bad'); go.disabled = true; go.textContent = 'Liberando…';
     try { await liberarTrein(a, ids); toast('Treinamentos liberados.', 'ok'); SUJO = false; detalhe(a.id); } catch (er) { go.disabled = false; go.textContent = 'Liberar marcados'; toast((er && er.message) || 'Não foi possível liberar.', 'bad'); } };
   const ns = $('#l-senha'); if (ns) { let armed = false; ns.onclick = async () => { if (!armed) { armed = true; ns.textContent = 'Toque de novo: a senha antiga deixa de valer'; return; } try { await liberarTrein(a, [], true); toast('Nova senha gerada.', 'ok'); SUJO = false; detalhe(a.id); } catch (er) { toast((er && er.message) || 'Erro.', 'bad'); } }; }

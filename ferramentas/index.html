@@ -2857,7 +2857,7 @@ show(); renderEpiItens();
   db.collection('estoques').onSnapshot(s => { S.est = s.docs.map(asObj); sched(); }, e => console.warn(e));
   db.collection('transferencias').onSnapshot(s => { S.transf = s.docs.map(asObj); sched(); }, e => console.warn(e));
   db.collection('trein_tipos').onSnapshot(s => { S.tt = s.docs.map(asObj); sched(); }, e => console.warn(e));
-  db.collection('treinamentos').onSnapshot(s => { S.tr = s.docs.map(asObj); sched(); }, e => console.warn(e));
+  db.collection('treinamentos').onSnapshot(s => { S.tr = s.docs.map(asObj); S.trOk = true; sched(); }, e => console.warn(e));
   [['ferr', 'ferramentas'], ['func', 'funcionarios'], ['epis', 'epis'], ['kits', 'kits'], ['caut', 'cautelas'], ['ent', 'entregas']].forEach(([k, c]) => {
     db.collection(c).onSnapshot(s => { S[k] = s.docs.map(asObj); S.ready[k] = true; onLive(s); sched(); }, onErr);
   });
@@ -2890,6 +2890,21 @@ function termoEpiInto(P, f) {
       await loadPDF(); const P = PDFW(); const modelo = osInto(P, f); P.newPage(); termoEpiInto(P, f);
       P.footer('Admissão · ' + f.nome + ' · documento para assinatura eletrônica · gerado em ' + fmtDT(new Date().toISOString()));
       fim({ b64: P.doc.output('datauristring').split(',')[1], modelo: !!modelo, epis: kitEpisF(f).size, sigs: (P.sigs || []).filter(s => s.i === 0).map(s => ({ p: s.p, x: s.x, y: s.y, w: s.w })) });
+    } catch (e) { fim({ erro: (e && e.message) || String(e) }); }
+  };
+  tentar();
+})();
+/* certificados pedidos por outro módulo (ex.: Admissão), aberto escondido: devolve o PDF */
+(() => {
+  const m = /[#&]gerar-cert=([A-Za-z0-9,_-]+)/.exec(location.hash); if (!m || window.parent === window) return;
+  const ids = m[1].split(','), t0 = Date.now(); const fim = msg => window.parent.postMessage(Object.assign({ tipo: 'previne-cert', ids: m[1] }, msg), location.origin);
+  const tentar = async () => {
+    if (!(typeof db !== 'undefined' && db && S.trOk && Date.now() - t0 > 1500)) { if (Date.now() - t0 > 45000) return fim({ erro: 'Não carregou os treinamentos a tempo.' }); return setTimeout(tentar, 400); }
+    try {
+      const regs = ids.map(id => S.tr.find(r => r.id === id)).filter(Boolean); if (!regs.length) return fim({ erro: 'Certificado não encontrado.' });
+      await loadPDF(); const rr = await Promise.all(regs.map(async r => Object.assign({}, r, { __hash: await certHash(r) })));
+      const doc = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape' }); certsComLista(doc, rr, false);
+      fim({ b64: doc.output('datauristring').split(',')[1] });
     } catch (e) { fim({ erro: (e && e.message) || String(e) }); }
   };
   tentar();
