@@ -45,4 +45,25 @@ for (const [k, p] of Object.entries(pend)) {
   }
 }
 await estRef.set(novoEst);
+
+// pedidos de EPI ou ferramenta fora do previsto (sem decisão): vão para Administrador e Gerente
+const desdeIso = new Date(Date.now() - 60 * 864e5).toISOString();
+const sols = (await db.collection('autorizacoes').where('em', '>=', desdeIso).get()).docs;
+const decs = sols.length ? await db.getAll(...sols.map(d => db.doc('decisoes/' + d.id))) : [];
+const decididas = new Set(decs.filter(d => d.exists).map(d => d.id));
+const pendAut = sols.filter(d => !decididas.has(d.id));
+const estAutRef = db.doc('push_estado/aut'); const estAut = new Set(((await estAutRef.get()).data() || {}).ids || []);
+const novosAut = pendAut.filter(d => !estAut.has(d.id));
+if (novosAut.length) {
+  const usr = (await db.collection('usuarios').get()).docs.filter(d => ['admin', 'gerente'].includes(d.data().papel) && d.data().ativo !== false).map(d => d.id);
+  const alvo = toks.filter(t => usr.includes(t.uid));
+  const um = novosAut[0].data(); const item = um.kind === 'ferramenta' ? 'ferramenta ' + (um.tipoFerr || '') : 'EPI ' + (um.epiNome || '');
+  const body = novosAut.length === 1 ? `${um.funcionarioNome || 'Funcionário'} (${um.funcao || 'sem função'}) precisa de ${item.trim()}${um.excecao ? ', fora da lista da função' : ''}.` : `${novosAut.length} novos pedidos de EPI ou ferramenta aguardam a sua autorização.`;
+  console.log(`autorizações: ${novosAut.length} nova(s), ${alvo.length} aparelho(s)`);
+  for (const t of alvo) {
+    try { await admin.messaging().send({ token: t.token, webpush: { headers: { Urgency: 'high', TTL: '86400' }, data: { title: 'Autorização pendente', body, url: '/ferramentas/#painel', tag: 'aut' } } }); }
+    catch (e) { const c = e.errorInfo && e.errorInfo.code || e.code || ''; console.log('falha no envio:', c); if (/registration-token-not-registered|invalid-argument|invalid-registration-token/.test(c)) await db.doc('push_tokens/' + t.id).delete().catch(() => {}); }
+  }
+}
+await estAutRef.set({ ids: pendAut.map(d => d.id) });
 console.log('ok');
