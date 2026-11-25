@@ -163,7 +163,7 @@ function abrirModulo(mid, i) {
   const ICO = { pdf: '📄', video: '▶️', texto: '📝', link: '🔗' };
   app.innerHTML = `<button class="back" id="bk">‹ ${esc(c.nome)}</button><h2>${i + 1}. ${esc(md.titulo)}</h2>
     <p class="note" style="margin-top:-6px">Veja todos os materiais. ${md.quiz ? `Depois faça a prova: precisa de ${num(md.quiz.min)}% para passar (${num(md.quiz.tent)} tentativa(s)).` : ''}</p>
-    ${(md.mats || []).map((x, j) => `<button class="item" data-x="${j}"><div class="ico">${ICO[x.tipo] || '📄'}</div><div class="main"><div class="t1">${esc(x.titulo)}</div><div class="t2">${num(x.minMin) ? 'mínimo ' + num(x.minMin) + ' min' : ''}</div></div>${(pr.vistos || {})[x.id] ? '<span class="badge b-ok">Visto</span>' : '<span class="badge b-warn">Ver</span>'}</button>`).join('')}
+    ${(md.mats || []).map((x, j) => `<button class="item" data-x="${j}"><div class="ico">${ICO[x.tipo] || '📄'}</div><div class="main"><div class="t1">${esc(x.titulo)}</div><div class="t2"></div></div>${(pr.vistos || {})[x.id] ? '<span class="badge b-ok">Visto</span>' : '<span class="badge b-warn">Ver</span>'}</button>`).join('')}
     ${pr.ok ? `<div class="card" style="border-color:var(--ok)"><b>✓ Módulo aprovado${pr.nota != null ? ' com ' + num(pr.nota) + '%' : ''}.</b></div>` : md.quiz ? (trav ? '<div class="card" style="border-color:var(--bad)">Você usou todas as tentativas. Fale com o RH para liberar de novo.</div>' : `<button class="btn accent" id="qz" ${todos ? '' : 'disabled'}>${todos ? 'Fazer a prova' : 'Veja todos os materiais para liberar a prova'}</button>${num(pr.tent) ? `<p class="note">Tentativas usadas: ${num(pr.tent)} de ${num(md.quiz.tent)}${pr.nota != null ? ' · última nota ' + num(pr.nota) + '%' : ''}</p>` : ''}`) : ''}`;
   $('#bk').onclick = () => abrirCurso(m.id);
   $$('#app [data-x]').forEach(b => b.onclick = () => abrirMaterial(m.id, i, +b.dataset.x));
@@ -191,7 +191,7 @@ function abrirMaterial(mid, i, j) {
   const m = A.mats.find(x => x.id === mid); const { c } = cursoInfo(m); const md = c.mods[i]; const x = md.mats[j];
   const visto = !!((((m.prog || {})[md.id] || {}).vistos || {})[x.id]);
   iniciarTimer(m.id); window.scrollTo(0, 0);
-  const minS = num(x.minMin) * 60; const t0 = Date.now(); let fim = false, vidOk = x.tipo !== 'video';
+  const minS = 0; /* sem tempo mínimo por material: basta ir até o fim */ const t0 = Date.now(); let fim = false, vidOk = x.tipo !== 'video';
   app.innerHTML = `<button class="back" id="bk">‹ ${esc(md.titulo)}</button><h2>${esc(x.titulo)}</h2><div id="mv"></div>
     <div class="sticky"><button class="btn primary" id="ok" disabled>${visto ? 'Já visto · voltar' : 'Concluí'}</button><p class="note" id="okn" style="text-align:center;margin:6px 0 0"></p></div>`;
   $('#bk').onclick = () => { limpar(); abrirModulo(m.id, i); };
