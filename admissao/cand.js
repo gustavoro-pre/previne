@@ -117,21 +117,22 @@
     const st = ADM.docsSt({ cand: CAND, rev: A.rev });
     const dObr = CAMPOS.filter(c => c[3]); const dOk = dObr.filter(c => str(CAND.dados[c[0]]).trim()).length;
     const tot = dObr.length + st.obr, feito = dOk + st.env;
-    return { st, dOk, dTot: dObr.length, pct: Math.round(feito / tot * 100), completo: dOk === dObr.length && st.env === st.obr && !st.rej.length };
+    return { st, dOk, dTot: dObr.length, pct: Math.round(feito / tot * 100), enviou: dOk === dObr.length && st.env === st.obr, completo: dOk === dObr.length && st.env === st.obr && !st.rej.length };
   }
   function tela() {
     const p = progresso(); const rejs = p.st.rej;
     $('#app').innerHTML = `<div class="card"><h1>${esc(A.nome)}</h1><p class="note">CPF ${esc(ADM.fmtCpf(A.cpf))}${A.funcao ? ' · ' + esc(A.funcao) : ''}</p>
         <div class="bar"><i style="width:${p.pct}%"></i></div><p class="note">${p.pct}% concluído</p>
-        ${p.completo ? `<div class="okbox">Tudo enviado! O RH vai conferir e entra em contato. Você pode fechar esta página.</div>` : ''}
+        ${p.completo ? `<div class="okbox">Documentos enviados! Agora assine a OS e o termo de EPI e faça os treinamentos logo abaixo. O RH vai conferir e entra em contato.</div>` : ''}
         ${rejs.length ? `<div class="badbox"><b>O RH pediu para reenviar:</b> ${rejs.map(s => esc(s.t)).join(', ')}. Veja o motivo no documento.</div>` : ''}</div>
       <div class="card"><div class="sh"><div class="m"><h2>1. Seus dados</h2><p class="note">${p.dOk} de ${p.dTot} campos obrigatórios</p></div><button class="btn ghost" id="c-tdados">${ATIVO === 'dados' ? 'Fechar' : 'Preencher'}</button></div>
         <div id="c-dados" class="${ATIVO === 'dados' ? '' : 'hidden'}"></div></div>
       <div class="card"><h2>2. Documentos</h2><p class="note">Tire foto com o documento inteiro aparecendo, em cima de uma mesa, com boa luz. PDF também vale. Os marcados com * são obrigatórios.</p><div id="c-docs"></div></div>
-      ${(A.trein || {}).cursos && A.trein.cursos.length ? `<div class="card"><h2>3. Treinamentos</h2><p class="note">Você já pode fazer estes treinamentos pelo celular:</p><ul style="margin:6px 0 10px;padding-left:20px">${A.trein.cursos.map(c => `<li>${esc(c.nome)}</li>`).join('')}</ul>
+      ${p.enviou ? '' : `<div class="card" style="opacity:.75"><h2>3. OS de segurança, termo de EPI e treinamentos</h2><p class="note">Liberados aqui assim que você preencher os seus dados e enviar todos os documentos obrigatórios.</p></div>`}
+      ${p.enviou && Object.keys(A.assinar || {}).length ? `<div class="card"><h2>3. OS de segurança, termo de EPI e documentos para assinar</h2><p class="note">Leia cada documento até o fim e assine.</p><div id="c-os"></div></div>` : ''}
+      ${p.enviou && (A.trein || {}).cursos && A.trein.cursos.length ? `<div class="card"><h2>4. Treinamentos</h2><p class="note">Agora faça estes treinamentos pelo celular:</p><ul style="margin:6px 0 10px;padding-left:20px">${A.trein.cursos.map(c => `<li>${esc(c.nome)}</li>`).join('')}</ul>
         <p>Login: <b>seu CPF</b><br>Senha provisória: <b style="font-size:18px;letter-spacing:1px">${esc(A.trein.senha || '')}</b></p><p class="note">No primeiro acesso você cria a sua senha.</p>
-        <a class="btn primary big" href="../aluno/" target="_blank" rel="noopener" style="text-decoration:none">Abrir treinamentos</a></div>` : ''}
-      ${Object.keys(A.assinar || {}).length ? `<div class="card"><h2>4. Documentos para assinar</h2><p class="note">Leia cada documento até o fim e assine.</p><div id="c-os"></div></div>` : ''}`;
+        <a class="btn primary big" href="../aluno/" target="_blank" rel="noopener" style="text-decoration:none">Abrir treinamentos</a></div>` : ''}`;
     $('#c-tdados').onclick = () => { ATIVO = ATIVO === 'dados' ? '' : 'dados'; tela(); };
     if (ATIVO === 'dados') formDados();
     docs(); osBox();
