@@ -4,5 +4,7 @@ window.logoEmp = e => (e && /^data:image\/(png|jpeg);base64,/.test(String(e.logo
 /* aplica o logo padrão no cabeçalho assim que a página abre; um logo cadastrado na empresa substitui depois */
 (function () {
   const ap = () => document.querySelectorAll('header .logo, header #logo').forEach(l => { if (l.classList.contains('img')) return; if (!l.dataset.svg) l.dataset.svg = l.innerHTML; l.classList.add('img'); l.innerHTML = `<img src="${window.LOGO_PADRAO.logo}" alt="Logo">`; });
-  document.readyState === 'loading' ? document.addEventListener('DOMContentLoaded', ap) : ap();
+  const st = document.createElement('style'); st.textContent = '.glogo{background:#fff!important;width:auto!important;min-width:46px;padding:4px 8px}.glogo img,.gbox .logo img{max-height:56px;max-width:120px;display:block}.gbox .logo{background:#fff!important;width:auto!important;padding:4px 8px}.gbox .glogo,.gbox .logo{height:auto!important;margin-left:auto;margin-right:auto}';
+  (document.head || document.documentElement).appendChild(st);
+  ap(); document.addEventListener('DOMContentLoaded', ap);
 })();
