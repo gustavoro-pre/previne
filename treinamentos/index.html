@@ -1333,6 +1333,8 @@ function openEpi(id) {
 /* Funcionários */
 const UCH = [['ativos', 'Ativos'], ['posse', 'Com ferramenta'], ['inativos', 'Inativos']];
 const SITS = ['Trabalhando', 'Afastado', 'Férias'];
+const soDig = v => str(v).replace(/\D/g, '');
+const fmtCpfF = v => { const d = soDig(v); return d.length === 11 ? d.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4') : str(v); };
 const DEM_TIPO = ['Pedido de demissão', 'Dispensa sem justa causa', 'Dispensa por justa causa', 'Término do contrato de experiência', 'Término de contrato por prazo determinado', 'Acordo entre as partes', 'Encerramento de contrato PJ', 'Aposentadoria', 'Falecimento', 'Outro'];
 const DEM_MOT = ['Desempenho', 'Assiduidade (faltas e atrasos)', 'Comportamento e disciplina', 'Descumprimento de normas de segurança', 'Adaptação à função', 'Redução de quadro', 'Fim de contrato ou obra no cliente', 'Proposta de outra empresa', 'Salário e benefícios', 'Mudança de cidade', 'Motivos pessoais ou familiares', 'Saúde', 'Aposentadoria', 'Outro'];
 const TAM_CAMISA = ['PP', 'P', 'M', 'G', 'GG', 'XG', 'EXG', 'XGG', 'G1', 'G2', 'G3', 'G4'];
@@ -1360,6 +1362,7 @@ function openFunc(id) {
   const gasto = ficha.reduce((a, e) => a + num(e.custo) * num(e.qtd), 0);
   openModal(mtop(f ? esc(f.nome) : 'Novo funcionário') + `<div class="card">
     <label for="uf-nome">Nome completo *</label><input id="uf-nome" value="${v('nome')}">
+    <div class="grid3"><div><label for="uf-cpf">CPF</label><input id="uf-cpf" inputmode="numeric" value="${esc(fmtCpfF(v('cpf')))}" placeholder="000.000.000-00"></div></div>
     <div class="grid3"><div><label for="uf-mat">Matrícula</label><input id="uf-mat" value="${v('matricula')}"></div><div><label for="uf-fun">Função</label><input id="uf-fun" list="funs" value="${v('funcao')}" placeholder="Ex.: Eletricista II"></div><div><label for="uf-cg">Cargo (grupo)</label><input id="uf-cg" list="cargos" value="${v('cargo')}" placeholder="Ex.: Eletricista"></div></div>
     <div class="grid3"><div><label for="uf-area">Área</label>${S.areas.length ? `<select id="uf-area"><option value="">—</option>${S.areas.slice().sort((a, b) => str(a.nome).localeCompare(str(b.nome), 'pt')).map(a => `<option value="${esc(a.id)}" ${f && (f.areaId === a.id || (!f.areaId && norm(f.area) === norm(a.nome))) ? 'selected' : ''}>${esc(a.nome)}</option>`).join('')}</select>` : `<input id="uf-area" list="areas" value="${v('area')}">`}</div>
       <div><label for="uf-sub">Sub-área</label><select id="uf-sub"></select></div><div><label for="uf-un">Unidade</label><input id="uf-un" list="unids" value="${v('unidade')}" placeholder="Resende, Barra Mansa…"></div></div>
@@ -1416,10 +1419,12 @@ async function saveFunc(f) {
   if (!guardWrite()) return;
   const nome = $('#uf-nome').value.trim(), matricula = $('#uf-mat').value.trim();
   if (!nome) return toast('Preencha o nome.', 'bad');
+  const cpf = soDig($('#uf-cpf').value); if (cpf && cpf.length !== 11) return toast('CPF deve ter 11 dígitos.', 'bad');
+  if (cpf && S.func.some(x => soDig(x.cpf) === cpf && (!f || x.id !== f.id))) return toast('Já existe funcionário com esse CPF.', 'bad');
   if (matricula && S.func.some(x => norm(x.matricula) === norm(matricula) && (!f || x.id !== f.id))) return toast('Já existe funcionário com essa matrícula.', 'bad');
   const ae = $('#uf-area'); const ar = ae.tagName === 'SELECT' ? S.areas.find(z => z.id === ae.value) : null; const subId = ar ? $('#uf-sub').value : '';
   const subsAnt = Array.isArray(f && f.subareas) ? f.subareas.filter(z => z !== (f.subareaId || '')) : [];
-  const data = { nome, matricula, funcao: $('#uf-fun').value.trim(), cargo: $('#uf-cg').value.trim(), area: ar ? str(ar.nome) : (ae.tagName === 'SELECT' ? '' : ae.value.trim()), areaId: ar ? ar.id : '', subareaId: subId,
+  const data = { nome, matricula, cpf: cpf ? fmtCpfF(cpf) : '', funcao: $('#uf-fun').value.trim(), cargo: $('#uf-cg').value.trim(), area: ar ? str(ar.nome) : (ae.tagName === 'SELECT' ? '' : ae.value.trim()), areaId: ar ? ar.id : '', subareaId: subId,
     subarea: subId ? str(((ar.subs || []).find(z => z.id === subId) || {}).nome) : '', subareas: subId ? [...new Set([subId].concat(subsAnt))] : subsAnt,
     unidade: $('#uf-un').value.trim(), admissao: $('#uf-adm').value, nascimento: $('#uf-nas').value, situacao: $('#uf-sit').value, vinculo: $('#uf-vin').value,
     tamCamisa: $('#uf-tr').value, tamRoupa: $('#uf-tr').value, tamCalca: $('#uf-tca').value, tamCalcado: $('#uf-tc').value, altura: $('#uf-alt').checked, ativo: $('#uf-at').checked };
@@ -1644,15 +1649,15 @@ function openImport(kind) {
 $('#f-imp').onclick = () => openImport('ferr');
 $('#u-imp').onclick = () => openImportFunc();
 /* importação de funcionários: planilha do RH (.xlsx) ou colado do Excel com cabeçalho; atualiza quem já existe pela matrícula */
-const IMPF_COLS = [['matricula', /^matr/], ['nome', /^nome/], ['funcao', /^func/], ['subarea', /^sub/], ['area', /^area/], ['unidade', /^unid/], ['admissao', /admiss/], ['demissao', /demiss|deslig/], ['nascimento', /nasc/], ['situacao', /^situa/], ['cargo', /^cargo/], ['altura', /altura/], ['vinculo', /vincul|^pj|tipo de contrat/], ['tamCamisa', /camis/], ['tamCalcado', /calcado/], ['tamCalca', /calca/]];
-const IMPF_NOMES = { altura: 'Trabalha em altura (sim/não)', vinculo: 'Vínculo (CLT/PJ)', matricula: 'Matrícula', nome: 'Nome', funcao: 'Função', area: 'Área', subarea: 'Sub-área', unidade: 'Unidade', admissao: 'Admissão', demissao: 'Desligamento', nascimento: 'Nascimento', situacao: 'Situação', cargo: 'Cargo', tamCamisa: 'Camisa', tamCalca: 'Calça', tamCalcado: 'Calçado' };
+const IMPF_COLS = [['matricula', /^matr/], ['cpf', /^cpf/], ['nome', /^nome/], ['funcao', /^func/], ['subarea', /^sub/], ['area', /^area/], ['unidade', /^unid/], ['admissao', /admiss/], ['demissao', /demiss|deslig/], ['nascimento', /nasc/], ['situacao', /^situa/], ['cargo', /^cargo/], ['altura', /altura/], ['vinculo', /vincul|^pj|tipo de contrat/], ['tamCamisa', /camis/], ['tamCalcado', /calcado/], ['tamCalca', /calca/]];
+const IMPF_NOMES = { cpf: 'CPF', altura: 'Trabalha em altura (sim/não)', vinculo: 'Vínculo (CLT/PJ)', matricula: 'Matrícula', nome: 'Nome', funcao: 'Função', area: 'Área', subarea: 'Sub-área', unidade: 'Unidade', admissao: 'Admissão', demissao: 'Desligamento', nascimento: 'Nascimento', situacao: 'Situação', cargo: 'Cargo', tamCamisa: 'Camisa', tamCalca: 'Calça', tamCalcado: 'Calçado' };
 const loadXLSX = () => loadScript('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js', () => window.XLSX);
 function impfMapa(head) { const m = {}; head.forEach((h, i) => { const n = norm(h).replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim(); const c = IMPF_COLS.find(([k, re]) => re.test(n) && m[k] == null); if (c) m[c[0]] = i; }); return m; }
 function impfData(v) { if (v == null || v === '') return ''; if (typeof v === 'number' && v > 1000) { const d = new Date(Math.round((v - 25569) * 86400000)); return d.getUTCFullYear() + '-' + z2(d.getUTCMonth() + 1) + '-' + z2(d.getUTCDate()); } if (v instanceof Date) return ymd(v); return parseBR(str(v)); }
 function impfLinha(r, m) {
   const g = k => m[k] == null ? '' : r[m[k]]; const t = k => { const v = g(k); return v == null ? '' : (typeof v === 'number' ? String(Math.round(v)) : str(v).trim()); };
   const sit = norm(t('situacao')); const camisa = (str(t('tamCamisa')).toUpperCase().match(/^[A-Z0-9]+/) || [''])[0];
-  return { matricula: t('matricula'), nome: t('nome').replace(/\s+/g, ' '), funcao: t('funcao'), cargo: t('cargo'), area: t('area'), subarea: t('subarea'), unidade: t('unidade') ? t('unidade').toLowerCase().replace(/(^|\s)\S/g, c => c.toUpperCase()) : '',
+  return { matricula: t('matricula'), cpf: soDig(t('cpf')).length ? fmtCpfF(soDig(t('cpf')).padStart(11, '0')) : '', nome: t('nome').replace(/\s+/g, ' '), funcao: t('funcao'), cargo: t('cargo'), area: t('area'), subarea: t('subarea'), unidade: t('unidade') ? t('unidade').toLowerCase().replace(/(^|\s)\S/g, c => c.toUpperCase()) : '',
     admissao: impfData(g('admissao')), demissao: impfData(g('demissao')), nascimento: impfData(g('nascimento')), situacao: /afast/.test(sit) ? 'Afastado' : /feria/.test(sit) ? 'Férias' : /deslig|demit/.test(sit) ? 'Desligado' : sit ? 'Trabalhando' : '',
     tamCamisa: camisa, tamCalca: t('tamCalca'), tamCalcado: t('tamCalcado'), altura: m.altura == null ? null : /^(s|sim|x|1|true|yes)/.test(norm(t('altura'))), vinculo: m.vinculo == null ? null : (/pj|prest|terceir/.test(norm(t('vinculo'))) ? 'PJ' : 'CLT') };
 }
@@ -1690,7 +1695,7 @@ function openImportFunc() {
       for (const x of L) {
         i++; btn.textContent = `Importando ${i}/${L.length}…`;
         const a = x.area && areasOk ? A[norm(x.area)] : null; const sb = a && x.subarea ? a.subs.find(z => norm(z.nome) === norm(x.subarea)) : null;
-        const d = {}; ['matricula', 'nome', 'funcao', 'cargo', 'unidade', 'admissao', 'nascimento', 'tamCamisa', 'tamCalca', 'tamCalcado'].forEach(k => { if (x[k]) d[k] = x[k]; });
+        const d = {}; ['matricula', 'cpf', 'nome', 'funcao', 'cargo', 'unidade', 'admissao', 'nascimento', 'tamCamisa', 'tamCalca', 'tamCalcado'].forEach(k => { if (x[k]) d[k] = x[k]; });
         if (x.tamCamisa) d.tamRoupa = x.tamCamisa; if (x.altura != null) d.altura = x.altura;
         if (x.situacao === 'Desligado' || x.demissao) { d.ativo = false; if (x.demissao) d.demissao = x.demissao; } else if (x.situacao) d.situacao = x.situacao;
         if (x.area) { d.area = a ? a.nome : x.area; if (a) d.areaId = a.id; d.subarea = sb ? sb.nome : (x.subarea || ''); }
@@ -2318,7 +2323,7 @@ function openTurma() {
   $('#tu-ext').onclick = () => { const n = $('#tu-q').value.trim(); TU.parts.push({ funcionarioId: '', nome: n, matricula: '', funcao: '' }); $('#tu-q').value = ''; drawRes(); drawParts(); const last = $(`#tu-parts [data-pn="${TU.parts.length - 1}"]`); if (last && !n) last.focus(); };
   const pc = $('#tu-parts').parentElement;
   pc.addEventListener('click', e2 => {
-    const a = e2.target.closest('[data-padd]'); if (a) { const f = S.func.find(x => x.id === a.dataset.padd); TU.parts.push({ funcionarioId: f.id, nome: str(f.nome), matricula: str(f.matricula), funcao: str(f.funcao) }); $('#tu-q').value = ''; drawRes(); drawParts(); return; }
+    const a = e2.target.closest('[data-padd]'); if (a) { const f = S.func.find(x => x.id === a.dataset.padd); TU.parts.push({ funcionarioId: f.id, nome: str(f.nome), matricula: str(f.matricula), cpf: str(f.cpf), funcao: str(f.funcao) }); $('#tu-q').value = ''; drawRes(); drawParts(); return; }
     const r = e2.target.closest('[data-prm]'); if (r) { TU.parts.splice(+r.dataset.prm, 1); drawParts(); }
   });
   pc.addEventListener('input', e2 => { const el = e2.target.closest('[data-pn]'); if (el && TU) TU.parts[+el.dataset.pn].nome = el.value; });
@@ -2340,7 +2345,7 @@ function openTurma() {
     const turma = 'TU' + Date.now().toString(36).toUpperCase(); const regs = [];
     try {
       for (const [i, p] of TU.parts.entries()) {
-        const r = { turma, funcionarioId: p.funcionarioId, nome: p.nome.trim(), matricula: p.matricula, funcao: p.funcao, tipoId: d.t.id, tipoNome: str(d.t.nome), norma: str(d.t.norma), cargaHoraria: d.ch, conteudo: str(d.t.conteudo),
+        const r = { turma, funcionarioId: p.funcionarioId, nome: p.nome.trim(), matricula: p.matricula, cpf: str(p.cpf), funcao: p.funcao, tipoId: d.t.id, tipoNome: str(d.t.nome), norma: str(d.t.norma), cargaHoraria: d.ch, conteudo: str(d.t.conteudo),
           inicio: d.inicio, termino: d.termino, validade: addMonths(d.termino, num(d.t.validadeMeses)), local: d.local, instrutor: d.instrutor, instrutorQualif: d.instrutorQualif, rt: d.rt, rtQualif: d.rtQualif, tst: d.tst, tstRegistro: d.tstRegistro, instrutorAssin: str(d.instrutorAssin), tstAssin: str(d.tstAssin),
           codigo: 'T' + d.termino.replace(/-/g, '').slice(2) + '-' + turma.slice(-4) + '-' + String(i + 1).padStart(2, '0'), criadoEm: new Date().toISOString(), por: S.uid || '' };
         await db.collection('treinamentos').doc().set(r); regs.push(r); await sleep(50);
@@ -2444,7 +2449,7 @@ function openPlano(fid) {
     try {
       for (const r of L.sort((a, b) => a.inicio.localeCompare(b.inicio))) {
         i++; const ins = r.instr || d.instrutor, iq = r.iq || d.iq;
-        await db.collection('treinamentos').doc().set({ turma, origem: 'admissao', funcionarioId: f.id, nome: str(f.nome).trim(), matricula: str(f.matricula), funcao: str(f.funcao), tipoId: r.t.id, tipoNome: str(r.t.nome), norma: str(r.t.norma), cargaHoraria: num(r.t.cargaHoraria), conteudo: str(r.t.conteudo),
+        await db.collection('treinamentos').doc().set({ turma, origem: 'admissao', funcionarioId: f.id, nome: str(f.nome).trim(), matricula: str(f.matricula), cpf: str(f.cpf), funcao: str(f.funcao), tipoId: r.t.id, tipoNome: str(r.t.nome), norma: str(r.t.norma), cargaHoraria: num(r.t.cargaHoraria), conteudo: str(r.t.conteudo),
           inicio: r.inicio, termino: r.termino, validade: addMonths(r.termino, num(r.t.validadeMeses)), local: d.local, instrutor: ins, instrutorQualif: iq, rt: d.same ? ins : d.rt, rtQualif: d.same ? iq : d.rq, tst: d.tst, tstRegistro: d.tstR,
           codigo: 'T' + r.termino.replace(/-/g, '').slice(2) + '-' + turma.slice(-4) + '-' + String(i).padStart(2, '0'), criadoEm: new Date().toISOString(), por: S.uid || '' });
         await sleep(50);
@@ -2518,7 +2523,8 @@ function certInto(doc, r, novaPagina) {
   center(str(r.nome), y0 + 31, 26, 'bolditalic', [20, 33, 61], 'times');
   doc.setDrawColor(242, 169, 0); doc.setLineWidth(0.6); doc.line(W / 2 - 75, y0 + 35, W / 2 + 75, y0 + 35);
   const periodo = r.inicio === r.termino ? 'em ' + fmtD(r.termino) : 'no período de ' + fmtD(r.inicio) + ' a ' + fmtD(r.termino);
-  const frase = `${r.matricula ? 'matrícula ' + r.matricula + ', ' : ''}concluiu com aproveitamento o treinamento ${r.tipoNome}${r.norma && !str(r.tipoNome).startsWith(r.norma) ? ', em atendimento à ' + r.norma : ''}, com carga horária de ${num(r.cargaHoraria)} ${num(r.cargaHoraria) === 1 ? 'hora' : 'horas'}, realizado ${periodo}.`;
+  const cpfC = fmtCpfF(r.cpf || (S.func.find(x => x.id === r.funcionarioId) || {}).cpf || '');
+  const frase = `${cpfC ? 'CPF ' + cpfC + ', ' : ''}concluiu com aproveitamento o treinamento ${r.tipoNome}${r.norma && !str(r.tipoNome).startsWith(r.norma) ? ', em atendimento à ' + r.norma : ''}, com carga horária de ${num(r.cargaHoraria)} ${num(r.cargaHoraria) === 1 ? 'hora' : 'horas'}, realizado ${periodo}.`;
   font(12, false, [40, 44, 52]); const ls = doc.splitTextToSize(frase, 210); doc.text(ls, W / 2, y0 + 46, { align: 'center', lineHeightFactor: 1.5 });
   if (r.validade) center('Válido até ' + fmtD(r.validade), y0 + 46 + ls.length * 6.4 + 3, 10, true, [154, 91, 0]);
   const sigs = certSigs(r); const n = sigs.length, sw = n >= 4 ? 56 : 68, gap = n === 2 ? 50 : n === 3 ? 16 : 8, tot = n * sw + (n - 1) * gap; let x = (W - tot) / 2; const yl = 171;

@@ -778,7 +778,7 @@ async function tAutoCert() {
     tCertFeito.add(m.id);
     const termino = str(m.praticaEm || m.concluidoEm).slice(0, 10), inicio = str(m.inicioEm || m.liberadoEm || termino).slice(0, 10); const id = 'ead_' + m.id; const e = S.emp || {}; const pad = c.instrPadrao !== false && !!str(e.instrutorNome);
     try {
-      await db.doc('treinamentos/' + id).set({ turma: 'EAD-' + c.id.slice(0, 6).toUpperCase(), origem: 'ead', cursoId: c.id, funcionarioId: f.id, nome: str(f.nome).trim(), matricula: str(f.matricula), funcao: str(f.funcao), tipoId: t.id, tipoNome: str(t.nome), norma: str(t.norma), cargaHoraria: num(c.cargaHoraria), conteudo: str(t.conteudo),
+      await db.doc('treinamentos/' + id).set({ turma: 'EAD-' + c.id.slice(0, 6).toUpperCase(), origem: 'ead', cursoId: c.id, funcionarioId: f.id, nome: str(f.nome).trim(), matricula: str(f.matricula), cpf: str(f.cpf), funcao: str(f.funcao), tipoId: t.id, tipoNome: str(t.nome), norma: str(t.norma), cargaHoraria: num(c.cargaHoraria), conteudo: str(t.conteudo),
         inicio, termino, validade: addMonths(termino, num(t.validadeMeses)), local: 'Portal do Aluno' + (c.pratica ? ' + prática presencial' : ''), instrutor: pad ? str(e.instrutorNome) : str(c.instrutor), instrutorQualif: pad ? str(e.instrutorQualif) : str(c.instrutorQualif), rt: pad ? str(e.instrutorNome) : str(c.instrutor), rtQualif: pad ? str(e.instrutorQualif) : str(c.instrutorQualif), tst: str(e.tstNome), tstRegistro: str(e.tstRegistro),
         codigo: 'E' + termino.replace(/-/g, '').slice(2) + '-' + m.id.slice(-6).toUpperCase(), criadoEm: new Date().toISOString(), por: S.uid || '',
         assinAluno: m.assinCert || null, instrutorAssin: pad ? str(e.instrutorAssin) : str(c.instrutorAssin), tstAssin: str(e.tstAssin) });
