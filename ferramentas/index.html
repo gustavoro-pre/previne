@@ -2070,11 +2070,13 @@ function PDFW(existente) {
     header(titulo, sub) {
       const e = S.emp || {}; let lx = L; const lg = logoImg();
       if (lg) { const h = 11, w = Math.min(38, h * (num(lg.logoW) || 3) / (num(lg.logoH) || 1)); try { doc.addImage(lg.logo, /jpeg/.test(lg.logo.slice(0, 20)) ? 'JPEG' : 'PNG', L, y - 0.5, w, w * (num(lg.logoH) || 1) / (num(lg.logoW) || 3)); lx = L + w + 4; } catch (_) {} }
-      P.font(11, true, [20, 33, 61]); doc.text(doc.splitTextToSize(str(e.nome) || 'PREVINE INSTALAÇÃO E MANUTENÇÃO ELÉTRICA LTDA', 100 - (lx - L))[0], lx, y + 4);
-      P.font(8, false, [90, 96, 110]); doc.text(doc.splitTextToSize(['CNPJ ' + (e.cnpj || '03.052.261/0001-43'), e.endereco || ''].filter(Boolean).join(' · ') || ' ', 100 - (lx - L))[0], lx, y + 8.5);
+      const nomeE = str(e.nome) || 'PREVINE INSTALAÇÃO E MANUTENÇÃO ELÉTRICA LTDA', larg = 100 - (lx - L); let fsz = 11, extra = 0;
+      P.font(fsz, true, [20, 33, 61]); while (fsz > 8.5 && doc.getTextWidth(nomeE) > larg) { fsz -= 0.5; P.font(fsz, true, [20, 33, 61]); }
+      if (doc.getTextWidth(nomeE) > larg) { const ls = doc.splitTextToSize(nomeE, larg).slice(0, 2); doc.text(ls[0], lx, y + 3); doc.text(ls[1] || '', lx, y + 6.6); extra = 2.6; } else doc.text(nomeE, lx, y + 4);
+      P.font(8, false, [90, 96, 110]); doc.text(doc.splitTextToSize(['CNPJ ' + (e.cnpj || '03.052.261/0001-43'), e.endereco || ''].filter(Boolean).join(' · ') || ' ', larg)[0], lx, y + 8.5 + extra);
       P.font(12.5, true, [20, 33, 61]); doc.text(titulo, R, y + 4, { align: 'right' });
       P.font(8, false, [90, 96, 110]); doc.text(sub, R, y + 8.5, { align: 'right' });
-      y += 12; doc.setDrawColor(242, 169, 0); doc.setLineWidth(0.8); doc.line(L, y, R, y); y += 5;
+      y += 12 + extra; doc.setDrawColor(242, 169, 0); doc.setLineWidth(0.8); doc.line(L, y, R, y); y += 5;
     },
     box(rows) { const h = Math.ceil(rows.length / 2) * 6 + 3; P.need(h); doc.setDrawColor(210); doc.setLineWidth(0.2); doc.rect(L, y, W, h); rows.forEach(([k, v], i) => { const cx = L + 3 + (i % 2) * (W / 2), cy = y + 5 + Math.floor(i / 2) * 6; P.font(7.5, false, [110, 116, 128]); doc.text(k, cx, cy); P.font(9.5, true); doc.text(doc.splitTextToSize(str(v) || '—', W / 2 - 30)[0], cx + 24, cy); }); y += h + 4; },
     sign(labels) { P.need(24); y += 14; const n = labels.length, gap = 10, w = (W - gap * (n - 1)) / n; labels.forEach((l, i) => { const x = L + i * (w + gap); doc.setDrawColor(80); doc.setLineWidth(0.3); doc.line(x, y, x + w, y); P.font(8, false, [60, 66, 80]); doc.text(doc.splitTextToSize(l, w), x + w / 2, y + 4, { align: 'center' }); }); y += 12; },

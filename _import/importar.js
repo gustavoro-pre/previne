@@ -24,7 +24,7 @@ window.importarCursos = async function (log, so, ativar) {
       mods.push({ id: id(), titulo: m.titulo, mats: [{ id: id(), tipo: 'pdf', titulo: 'Apostila do módulo', minMin: m.minMin, url: '', texto: '', arquivoId: ref.id }], quiz: { qs: m.qs, min: 70, tent: 3 } });
     }
     await db.collection('cursos').doc().set({ nome: c.nome, tipoId: t.id, cargaHoraria: c.cargaHoraria, minHoras: 0, prazoDias: 30, pratica: c.pratica, instrutor: '', instrutorQualif: '', descricao: 'Material PREVINE ELÉTRICA. Prova de 5 questões por módulo, nota mínima de 70%.', mods, ativo: !!ativar, criadoEm: agora(), por: 'importação', instrutorAssin: '' });
-    res.push(c.nome + ': criado (' + mods.length + ' módulos, rascunho)');
+    res.push(c.nome + ': criado (' + mods.length + ' módulos, ' + (ativar ? 'ativo' : 'rascunho') + ')');
   }
   log(res.join('\n')); return res;
 };
