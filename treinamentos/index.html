@@ -2151,28 +2151,32 @@ function escolherEntregador(funcs) {
 }
 function fichaInto(P, f, entregador) {
   const doc = P.doc;
-  const { os } = osDa(f.funcao);
-  P.header('FICHA DE CONTROLE DE ENTREGA DE EPI', 'Revisão ' + (str(os.revisao) || '00') + (os.base ? ' – Base: ' + os.base : ' – NR-06'), 'FEPI-' + (str(os.codigo).replace(/^OS-SST-/, '') || norm(f.funcao).replace(/[^a-z0-9]+/g, '-').toUpperCase().slice(0, 24)));
-  P.box([['Nome', f.nome], ['CPF', f.cpf ? fmtCpfF(f.cpf) : '—'], ['Função', f.funcao], ['GHE (PGR)', os.ghe], ['Matrícula', f.matricula], ['Admissão', fmtD(f.admissao)]]);
-  P.section(0, 'Termo de responsabilidade');
-  P.text('Recebi gratuitamente os Equipamentos de Proteção Individual (EPI) descritos abaixo, adequados aos riscos da minha função conforme o PGR, e fui orientado sobre o uso correto, a guarda e a conservação, conforme a NR-06. Comprometo-me a: usá-los apenas para a finalidade a que se destinam; responsabilizar-me pela guarda e conservação; comunicar qualquer dano ou alteração que os torne impróprios para uso; e devolvê-los na troca, na substituição ou no desligamento. Estou ciente de que a recusa injustificada ao uso do EPI constitui ato faltoso (art. 158 da CLT).', { align: 'justify', gap: 2 });
-  Object.keys(ADIC).filter(a => f[a]).forEach(a => { const ks = kitsAdic(f).filter(k => k.adicional === a); const eps = ks.flatMap(k => k.epis || []).map(x => S.epis.find(p => p.id === x.epiId)).filter(Boolean);
-    P.text(ADIC[a].toUpperCase() + ': o funcionário está designado para trabalho em altura. Declaro que recebi' + (eps.length ? ' os EPIs ' + eps.map(p => p.nome + (p.ca ? ' (CA ' + p.ca + ')' : '')).join(', ') : ' os EPIs para trabalho em altura') + ', que fui orientado a inspecioná-los antes de cada uso, a ancorar somente em pontos definidos, a manter ao menos um talabarte conectado nos deslocamentos e a retirar de uso o equipamento que retiver uma queda, e que só executarei trabalho em altura com treinamento NR-35 válido, aptidão no ASO, análise de risco e autorização.', { size: 8.5, color: [60, 66, 80], gap: 2 }); });
-  P.section(0, 'Registro de entregas');
-  const ents = S.ent.filter(e => e.funcionarioId === f.id).sort((a, b) => str(a.data).localeCompare(str(b.data)));
-  const entregues = new Set(ents.map(e => e.epiId));
-  const pend = [...kitEpisF(f).entries()].filter(([id]) => !entregues.has(id)).map(([id, q]) => [S.epis.find(p => p.id === id), q]).filter(x => x[0]);
-  const rows = ents.map(e => ({ q: String(num(e.qtd)).padStart(2, '0'), d: fmtD(e.data), n: str(e.epiNome) + (e.tamanho ? ' · ' + e.tamanho : ''), ca: str(e.ca) + (e.validadeCA && e.validadeCA < str(e.data).slice(0, 10) ? ' (VENCIDO)' : ''), sig: safeImg(e.assinatura) }))
-    .concat(pend.map(([p, q]) => ({ q: String(q).padStart(2, '0'), d: '', n: p.nome, ca: p.ca || '—' })));
-  const vazias = Math.max(3, 14 - rows.length);
-  for (let i = 0; i < vazias; i++) rows.push({ q: '', d: '', n: '', ca: '' });
-  const sigs = rows.map(r => r.sig);
-  P.table([['Qtd.', 13], ['Data da entrega', 20], ['Descrição do EPI', 47], ['C.A.', 15], ['Assinatura do empregado', 33], ['Data da troca / devolução', 20], ['Assinatura', 32]],
-    rows.map(r => [r.q, r.d, r.n, r.ca, '', '', '']), { center: [0, 1, 3], minH: 8.5, noZebra: true, after: (i, yy, h) => { if (sigs[i]) { try { doc.addImage(sigs[i], 'PNG', P.L + 96, yy + 0.5, 31, Math.min(h - 1, 9)); } catch (_) {} } } });
-  P.need(16); P.y += 8;
-  P.font(8.5, true); doc.text('Entregue por:', P.L, P.y); P.font(8.5); doc.text(entregador || '_______________________________________', P.L + 22, P.y);
-  P.font(8.5, true); doc.text('Assinatura:', P.L + 108, P.y); doc.setDrawColor(80); doc.setLineWidth(0.3); doc.line(P.L + 127, P.y + 0.5, P.R, P.y + 0.5);
-  P.y += 6; P.text('Confira a validade do C.A. no momento da entrega.', { size: 7.5, color: [100, 106, 116] });
+  {
+    const { os } = osDa(f.funcao);
+    P.header('FICHA DE CONTROLE DE EPI', 'Revisão ' + (str(os.revisao) || '00') + ' – Registro de fornecimento · NR-06', 'FEPI-' + (str(os.codigo).replace(/^OS-SST-/, '') || norm(f.funcao).replace(/[^a-z0-9]+/g, '-').toUpperCase().slice(0, 24)));
+    P.box([['Funcionário', f.nome], ['Matrícula', f.matricula], ['Função', f.funcao], ['Área', [f.area, f.subarea].filter(Boolean).join(' / ')], ['Unidade', f.unidade], ['Admissão', fmtD(f.admissao)], ['Nº calçado', f.tamCalcado], ['Camisa / calça', [f.tamCamisa || f.tamRoupa, f.tamCalca].filter(Boolean).join(' / ')]]);
+    P.text('Declaro que recebi gratuitamente os Equipamentos de Proteção Individual relacionados abaixo, novos e em perfeito estado, e que fui orientado sobre o uso correto, a guarda, a conservação e a higienização de cada um. Comprometo-me a usá-los apenas para a finalidade a que se destinam, a responsabilizar-me pela sua guarda e conservação, a comunicar qualquer alteração que os torne impróprios para uso e a devolvê-los quando substituídos ou no desligamento. Estou ciente de que a recusa injustificada ao uso do EPI constitui ato faltoso (CLT, art. 158, parágrafo único).', { size: 8.2, color: [60, 66, 80], gap: 3 });
+    Object.keys(ADIC).filter(a => f[a]).forEach(a => { const ks = kitsAdic(f).filter(k => k.adicional === a); const eps = ks.flatMap(k => k.epis || []).map(x => S.epis.find(p => p.id === x.epiId)).filter(Boolean);
+      P.text(ADIC[a].toUpperCase() + ': o funcionário está designado para trabalho em altura. Declaro que recebi' + (eps.length ? ' os EPIs ' + eps.map(p => p.nome + (p.ca ? ' (CA ' + p.ca + ')' : '')).join(', ') : ' os EPIs para trabalho em altura') + ', que fui orientado a inspecioná-los antes de cada uso, a ancorar somente em pontos definidos, a manter ao menos um talabarte conectado nos deslocamentos e a retirar de uso o equipamento que retiver uma queda, e que só executarei trabalho em altura com treinamento NR-35 válido, aptidão no ASO, análise de risco e autorização.', { size: 8.5, color: [60, 66, 80], gap: 2 }); });
+    const cols = [['Data', 20], ['EPI', 58], ['CA', 15], ['Qtd', 9], ['Tam.', 11], ['Motivo', 30], ['Assinatura', 37]];
+    const th = () => { P.need(8); doc.setFillColor(20, 33, 61); doc.rect(P.L, P.y, P.W, 6.5, 'F'); P.font(8, true, [255, 255, 255]); let x = P.L; cols.forEach(([t, w]) => { doc.text(t, x + 1.5, P.y + 4.4); x += w; }); P.y += 6.5; };
+    th();
+    const rows = S.ent.filter(e => e.funcionarioId === f.id).sort((a, b) => str(a.data).localeCompare(str(b.data)));
+    if (!rows.length) { P.text('Nenhuma entrega registrada.', { size: 8.5, color: [120, 120, 120] }); }
+    rows.forEach((e, i) => {
+      const h = 10.5;
+      if (P.need(h)) th();
+      if (i % 2) { doc.setFillColor(247, 248, 250); doc.rect(P.L, P.y, P.W, h, 'F'); }
+      let x = P.L; const vals = [fmtD(e.data), str(e.epiNome), str(e.ca), String(num(e.qtd)), str(e.tamanho), MOT[e.motivo] || str(e.motivo)];
+      vals.forEach((v, j) => { P.font(7.8, false, j === 5 && MOTGRP(e.motivo) === 'evit' ? [179, 38, 30] : [30, 33, 40]); const ls = doc.splitTextToSize(v, cols[j][1] - 2.5).slice(0, 2); doc.text(ls, x + 1.5, P.y + 4.2); x += cols[j][1]; });
+      if (e.validadeCA && e.validadeCA < str(e.data).slice(0, 10)) { P.font(6, true, [179, 38, 30]); doc.text('CA VENCIDO', P.L + 20 + 58 + 1.5, P.y + 8.6); }
+      const sig = safeImg(e.assinatura);
+      if (sig) { try { doc.addImage(sig, 'PNG', x + 2, P.y + 0.6, 30, 9.2); } catch (_) {} }
+      else { doc.setDrawColor(170); doc.setLineWidth(0.2); doc.line(x + 2, P.y + 8, x + cols[6][1] - 2, P.y + 8); }
+      doc.setDrawColor(225); doc.setLineWidth(0.1); doc.line(P.L, P.y + h, P.R, P.y + h); P.y += h;
+    });
+    P.sign([str(f.nome) + ' · Funcionário', 'Responsável pela entrega' + (entregador ? ' · ' + entregador : S.emp && S.emp.responsavel ? ' · ' + S.emp.responsavel : '')]);
+  }
 }
 async function gerarOS(funcs, nome) {
   if (!funcs.length) return toast('Nenhum funcionário nessa função.', 'bad');
