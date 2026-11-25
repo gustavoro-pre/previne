@@ -50,7 +50,9 @@ const waDe = a => { const t = ADM.dig(a.telefone); const msg = `Olá, ${str(a.no
 
 /* ---------- assinaturas no app ---------- */
 /* assinado quando a assinatura do candidato bate com a impressão (SHA-256) do documento que o RH gerou */
-function assinado(a, id) { const s = ((a.cand || {}).assin || {})[id]; const d = id === 'osepi' ? (a.assinar || {}).osepi : ((a.textos || {})[id]); return !!(s && d && s.hash === d.hash); }
+const ehTexto = id => id === 'lgpd' || id === 'carta';
+const tituloDoc = (a, id) => id === 'osepi' ? 'Ordem de Serviço de Segurança e Termo de EPI' : str(((a.assinar || {})[id] || {}).titulo) || 'Documento';
+function assinado(a, id) { const s = ((a.cand || {}).assin || {})[id]; const d = !ehTexto(id) ? (a.assinar || {})[id] : ((a.textos || {})[id]); return !!(s && d && s.hash === d.hash); }
 const empNome = () => str(D.emp.nome) || 'PREVINE Engenharia';
 /* gera (ou refaz) o texto da carta-convite e do termo LGPD com os dados da admissão; o candidato lê e assina */
 async function gerarTextos(a, salario, quais) {
@@ -99,23 +101,23 @@ async function pdfTexto(a, q) {
   (ok ? evid(a, s) : ['Documento ainda não assinado pelo candidato.']).forEach(t => doc.splitTextToSize(t, W).forEach(l => { doc.text(l, L, y); y += 3.8; }));
   baixar(`${q === 'carta' ? 'Carta-convite' : 'Termo LGPD'} - ${a.nome}${ok ? ' (assinado)' : ''}.pdf`, doc.output('blob'));
 }
-async function pdfOsEpi(a) {
-  const arq = (a.assinar || {}).osepi; if (!arq) return; const s = ((a.cand || {}).assin || {}).osepi; const ok = assinado(a, 'osepi');
+async function pdfDoc(a, id) {
+  const arq = (a.assinar || {})[id]; if (!arq) return; const s = ((a.cand || {}).assin || {})[id]; const ok = assinado(a, id); const tit = tituloDoc(a, id);
   try {
-    const blob = await ADM.ler(arq, 'osepi', id => db.doc(`admissoes/${a.id}/d/${id}`).get().then(x => x.exists ? x.data().d : null));
-    if (!ok) return baixar(`OS e termo de EPI - ${a.nome}.pdf`, blob);
+    const blob = await ADM.ler(arq, id, pid => db.doc(`admissoes/${a.id}/d/${pid}`).get().then(x => x.exists ? x.data().d : null));
+    if (!ok) return baixar(`${tit} - ${a.nome}.pdf`, blob);
     await loadPdfLib(); const { PDFDocument, StandardFonts, rgb } = window.PDFLib;
     const pdf = await PDFDocument.load(await blob.arrayBuffer()); const f = await pdf.embedFont(StandardFonts.Helvetica), fb = await pdf.embedFont(StandardFonts.HelveticaBold);
     const lin = `Assinado eletronicamente por ${a.nome} em ${fmtDH(s.em)} · SHA-256 ${s.hash.slice(0, 16)}…`;
     pdf.getPages().forEach(pg => pg.drawText(lin, { x: 42, y: 31, size: 6.5, font: f, color: rgb(0.1, 0.35, 0.2) }));
     const pg = pdf.addPage([595.28, 841.89]); let y = 790;
     pg.drawText('REGISTRO DE ASSINATURA ELETRÔNICA', { x: 50, y, size: 14, font: fb, color: rgb(0.08, 0.13, 0.24) }); y -= 22;
-    pg.drawText('Documento: Ordem de Serviço de Segurança e Termo de Recebimento e Responsabilidade de EPI', { x: 50, y, size: 9.5, font: f }); y -= 30;
+    pg.drawText(('Documento: ' + tit).slice(0, 110), { x: 50, y, size: 9.5, font: f }); y -= 30;
     const png = await pdf.embedPng(s.img); const dim = png.scaleToFit(220, 80); pg.drawImage(png, { x: 50, y: y - dim.height, width: dim.width, height: dim.height }); y -= dim.height + 8;
     pg.drawLine({ start: { x: 50, y }, end: { x: 300, y }, thickness: 0.6, color: rgb(0.3, 0.3, 0.3) }); y -= 13; pg.drawText(`${a.nome} · CPF ${ADM.fmtCpf(a.cpf)}`, { x: 50, y, size: 9.5, font: fb }); y -= 26;
     const quebra = (t, n) => { const w = t.split(' '); const L = []; let l = ''; w.forEach(x => { if ((l + ' ' + x).length > n) { L.push(l); l = x; } else l = l ? l + ' ' + x : x; }); if (l) L.push(l); return L; };
     evid(a, s).forEach(t => quebra(t, 105).forEach(l => { pg.drawText(l, { x: 50, y, size: 8.5, font: f, color: rgb(0.25, 0.27, 0.32) }); y -= 12; }));
-    baixar(`OS e termo de EPI - ${a.nome} (assinado).pdf`, new Blob([await pdf.save()], { type: 'application/pdf' }));
+    baixar(`${tit} - ${a.nome} (assinado).pdf`, new Blob([await pdf.save()], { type: 'application/pdf' }));
   } catch (e) { toast(e.message || 'Não foi possível gerar o PDF.', 'bad'); }
 }
 function assinBox(a, ro) {
@@ -126,11 +128,13 @@ function assinBox(a, ro) {
     ${row('Termo LGPD', sig('lgpd'), (a.textos || {}).lgpd ? '<span class="badge b-warn">Aguardando</span>' : '<span class="badge b-mut">Não gerado</span>', `<button class="btn sm ghost" data-pdft="lgpd">PDF</button>`)}
     ${row('Carta-convite', sig('carta'), (a.textos || {}).carta ? '<span class="badge b-warn">Aguardando</span>' : '<span class="badge b-mut">Não gerada</span>', `<button class="btn sm ghost" data-pdft="carta">PDF</button>`)}
     ${row('OS de segurança e termo de EPI', sig('osepi'), os ? '<span class="badge b-warn">Aguardando</span>' : '<span class="badge b-mut">Não gerado</span>', os ? '<button class="btn sm ghost" id="as-osv">PDF</button>' : '')}
+    ${Object.keys(a.assinar || {}).filter(k => k !== 'osepi').map(k => row(esc(tituloDoc(a, k)), sig(k), '<span class="badge b-warn">Aguardando</span>', `<button class="btn sm ghost" data-pdfd="${esc(k)}">PDF</button>${ro || assinado(a, k) ? '' : `<button class="btn sm danger" data-rmd="${esc(k)}" title="Retirar">×</button>`}`)).join('')}
     ${os && os.modelo ? '<p class="note" style="margin:4px 0 0;color:var(--warn)">A OS usou o texto-modelo da função. Revise em Ferramentas & EPI → Cadastros → Kits e gere de novo.</p>' : ''}
     ${os && !os.epis ? '<p class="note" style="margin:4px 0 0;color:var(--bad)">Nenhum kit de EPI cadastrado para esta função.</p>' : ''}
     ${ro ? '' : `<div class="actions" style="margin-top:8px">${!(a.textos || {}).carta ? '<button class="btn sm primary" id="as-tx">Gerar carta e termo LGPD</button>' : assinado(a, 'carta') ? '' : '<button class="btn sm ghost" id="as-tx">Atualizar carta (salário/textos)</button>'}
       <button class="btn sm ${os ? 'ghost' : 'primary'}" id="as-os">${os ? 'Gerar OS e termo de novo' : 'Gerar OS e termo de EPI para assinar'}</button></div>
-      <p class="note" style="margin:4px 0 0">O candidato assina o termo LGPD e a carta antes de enviar os documentos. A OS e o termo de EPI aparecem para ele assinar quando você gerar.</p>`}</div>`;
+      <div class="omrow" style="display:flex;gap:6px;margin-top:8px"><input id="as-tit" placeholder="Nome do documento (ex.: Contrato de trabalho)" style="flex:1"><button class="btn sm primary" id="as-anx">Anexar PDF para assinar</button></div>
+      <p class="note" style="margin:4px 0 0">O candidato assina o termo LGPD e a carta antes de enviar os documentos. A OS, o termo de EPI e os PDFs que você anexar (contrato de trabalho, acordos, termos) aparecem para ele assinar no link.</p>`}</div>`;
 }
 function rMod() {
   if (!PODE) { $('#body').innerHTML = '<div class="ro-banner">Seu perfil só consulta.</div>'; return; }
@@ -286,7 +290,16 @@ async function detalhe(id, refresh) {
   $('#sheet').scrollTop = y;
   treinBox(a, !!ro);
   $$('[data-pdft]').forEach(b => b.onclick = () => pdfTexto(a, b.dataset.pdft));
-  const osv = $('#as-osv'); if (osv) osv.onclick = () => pdfOsEpi(a);
+  const osv = $('#as-osv'); if (osv) osv.onclick = () => pdfDoc(a, 'osepi');
+  $$('[data-pdfd]').forEach(b => b.onclick = () => pdfDoc(a, b.dataset.pdfd));
+  $$('[data-rmd]').forEach(b => { let armed = false; b.onclick = async () => { if (!armed) { armed = true; b.textContent = 'Retirar?'; return; } const as = Object.assign({}, a.assinar); delete as[b.dataset.rmd]; try { await db.doc('admissoes/' + a.id).update({ assinar: as }); a.assinar = as; SUJO = false; detalhe(a.id); } catch (e) { toast('Não foi possível retirar.', 'bad'); } }; });
+  const anx = $('#as-anx'); if (anx) anx.onclick = () => { const tit = $('#as-tit').value.trim(); if (!tit) return toast('Dê um nome ao documento (ex.: Contrato de trabalho).', 'bad');
+    const i = document.createElement('input'); i.type = 'file'; i.accept = 'application/pdf';
+    i.onchange = async () => { const f = i.files[0]; if (!f) return; if (!/pdf$/i.test(f.type || f.name)) return toast('Envie em PDF.', 'bad'); anx.disabled = true; anx.textContent = 'Enviando…';
+      try { const prep = await ADM.preparar(f); const id = 'doc' + ADM.rand(6); const arq = await ADM.gravar(prep, id, (pid, d) => db.doc(`admissoes/${a.id}/d/${pid}`).set({ d }));
+        arq.hash = await ADM.sha256(prep.b64); arq.titulo = tit; arq.por = MEU; const as = Object.assign({}, a.assinar || {}, { [id]: arq }); await db.doc('admissoes/' + a.id).update({ assinar: as }); a.assinar = as;
+        toast('Documento enviado para o candidato assinar.', 'ok'); SUJO = false; detalhe(a.id); } catch (e) { anx.disabled = false; anx.textContent = 'Anexar PDF para assinar'; toast(e.message || 'Não foi possível anexar.', 'bad'); } };
+    i.click(); };
   const astx = $('#as-tx'); if (astx) astx.onclick = async () => { astx.disabled = true; try { const p = await db.doc('admissoes_priv/' + a.id).get(); await gerarTextos(a, p.exists ? p.data().salario : null, (a.textos || {}).carta ? ['carta'] : ['lgpd', 'carta']); toast('Carta e termo prontos para o candidato assinar.', 'ok'); SUJO = false; detalhe(a.id); } catch (e) { astx.disabled = false; toast('Não foi possível gerar: ' + ((e && e.message) || e), 'bad'); } };
   const asos = $('#as-os'); if (asos) asos.onclick = async () => { asos.disabled = true; asos.textContent = 'Gerando (pode levar uns 20 s)…'; try { const m = await prepararOsEpi(a); toast(m.modelo ? 'Gerado, mas a OS usou o texto-modelo da função.' : 'OS e termo de EPI enviados para o candidato assinar.', m.modelo ? 'bad' : 'ok'); SUJO = false; detalhe(a.id); } catch (e) { asos.disabled = false; asos.textContent = 'Gerar OS e termo de EPI para assinar'; toast(e.message || 'Não foi possível gerar.', 'bad'); } };
   /* OS assinada: preenche a etapa sozinho */

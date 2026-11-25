@@ -42,7 +42,7 @@
       try { localStorage.setItem(chaveCpf(), A.cpf); } catch (e) {} fluxo(); };
   }
   /* ---------- assinatura no app ---------- */
-  const assinadoC = id => { const s = (CAND.assin || {})[id]; const d = id === 'osepi' ? (A.assinar || {}).osepi : (A.textos || {})[id]; return !!(s && d && s.hash === d.hash); };
+  const assinadoC = id => { const s = (CAND.assin || {})[id]; const d = !(id === 'lgpd' || id === 'carta') ? (A.assinar || {})[id] : (A.textos || {})[id]; return !!(s && d && s.hash === d.hash); };
   function pad(box) {
     box.innerHTML = `<div style="position:relative;border:2px dashed #b9c0cb;border-radius:12px;background:#fff;touch-action:none"><canvas style="width:100%;height:170px;display:block;border-radius:12px"></canvas>
       <span style="position:absolute;left:12px;bottom:8px;font-size:12px;color:#8a93a3;pointer-events:none">Assine aqui com o dedo</span></div><div style="text-align:right;margin-top:4px"><button class="btn ghost" type="button" style="padding:6px 12px">Limpar</button></div>`;
@@ -82,27 +82,34 @@
       try { await assinar(q, h, p); toast(carta ? 'Carta assinada. Bem-vindo(a)!' : 'Termo assinado.', 'ok'); window.scrollTo(0, 0); fluxo(); } catch (e) { b.disabled = false; toast(e.message, 'bad'); } };
   }
   /* OS de segurança e termo de EPI (PDF gerado pelo RH) */
-  async function osBox() {
-    const os = (A.assinar || {}).osepi; const box = $('#c-os'); if (!os || !box) return;
-    if (assinadoC('osepi')) { box.innerHTML = `<div class="okbox">Assinado em ${new Date(CAND.assin.osepi.em).toLocaleString('pt-BR')}. Obrigado!</div>`; return; }
-    box.innerHTML = `<p class="note">Leia a Ordem de Serviço de Segurança e o termo de EPI da sua função e assine no final.</p><button class="btn primary big" id="o-ler">Ler e assinar</button>`;
-    $('#o-ler').onclick = async () => {
+  const titC = id => id === 'osepi' ? 'OS de segurança e termo de EPI' : String(((A.assinar || {})[id] || {}).titulo || 'Documento');
+  function osBox() {
+    const ids = Object.keys(A.assinar || {}).sort((x, y) => (x === 'osepi' ? -1 : y === 'osepi' ? 1 : String(A.assinar[x].em).localeCompare(String(A.assinar[y].em))));
+    const lst = $('#c-os'); if (!lst) return;
+    lst.innerHTML = ids.map(id => `<div class="slot ${assinadoC(id) ? 'ok' : ''}"><div class="sh"><div class="m"><b>${esc(titC(id))}</b></div>${assinadoC(id) ? '<span class="st s-ok">Assinado</span>' : '<span class="st s-warn">Assinar</span>'}</div><div id="os-${id}" style="margin-top:8px"></div></div>`).join('');
+    ids.forEach(docBox);
+  }
+  async function docBox(id) {
+    const os = (A.assinar || {})[id]; const box = $('#os-' + id); if (!os || !box) return;
+    if (assinadoC(id)) { box.innerHTML = `<p class="note" style="margin:0">Assinado em ${new Date(CAND.assin[id].em).toLocaleString('pt-BR')}.</p>`; return; }
+    box.innerHTML = `<button class="btn primary big" id="o-ler-${id}">Ler e assinar</button>`;
+    $('#o-ler-' + id).onclick = async () => {
       box.innerHTML = '<p class="note">Abrindo o documento…</p>';
       try {
-        const blob = await ADM.ler(os, 'osepi', id => CAPI.getD(tk, id).then(x => x ? x.d : null));
+        const blob = await ADM.ler(os, id, pid => CAPI.getD(tk, pid).then(x => x ? x.d : null));
         const b64 = await new Promise(r => { const fr = new FileReader(); fr.onload = () => r(String(fr.result).split(',')[1]); fr.readAsDataURL(blob); });
         const h = await ADM.sha256(b64); if (h !== os.hash) throw new Error('O documento não confere. Recarregue a página.');
         await new Promise((res, rej) => { if (window.pdfjsLib) return res(); const s = document.createElement('script'); s.src = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js'; s.onload = res; s.onerror = () => rej(new Error('Sem internet para abrir o PDF.')); document.head.appendChild(s); });
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
         const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(await blob.arrayBuffer()) }).promise;
-        box.innerHTML = `<div id="o-pgs" style="border:1px solid var(--line);border-radius:10px;overflow:hidden"></div>
-          <label style="display:flex;gap:10px;align-items:flex-start;color:var(--ink);font-size:15px;margin-top:14px"><input type="checkbox" id="o-ok" style="width:22px;height:22px;flex:none;margin-top:2px"> Recebi, li e compreendi a Ordem de Serviço e o termo de EPI, e me comprometo a cumpri-los.</label>
-          <label>Sua assinatura</label><div id="o-pad"></div><div style="margin-top:12px"><button class="btn primary big" id="o-go">Assinar</button></div>`;
+        box.innerHTML = `<div id="o-pgs-${id}" style="border:1px solid var(--line);border-radius:10px;overflow:hidden"></div>
+          <label style="display:flex;gap:10px;align-items:flex-start;color:var(--ink);font-size:15px;margin-top:14px"><input type="checkbox" id="o-ok-${id}" style="width:22px;height:22px;flex:none;margin-top:2px"> ${id === 'osepi' ? 'Recebi, li e compreendi a Ordem de Serviço e o termo de EPI, e me comprometo a cumpri-los.' : 'Li e concordo com este documento.'}</label>
+          <label>Sua assinatura</label><div id="o-pad-${id}"></div><div style="margin-top:12px"><button class="btn primary big" id="o-go-${id}">Assinar</button></div>`;
         const W = Math.min(900, box.clientWidth || 360) * (window.devicePixelRatio > 1 ? 2 : 1.4);
-        for (let i = 1; i <= pdf.numPages; i++) { const pg = await pdf.getPage(i); const v0 = pg.getViewport({ scale: 1 }); const vp = pg.getViewport({ scale: W / v0.width }); const cv = document.createElement('canvas'); cv.width = vp.width; cv.height = vp.height; cv.style.cssText = 'width:100%;display:block;border-bottom:1px solid #e2e5ea'; $('#o-pgs').appendChild(cv); await pg.render({ canvasContext: cv.getContext('2d'), viewport: vp }).promise; }
-        const p = pad($('#o-pad'));
-        $('#o-go').onclick = async () => { if (!$('#o-ok').checked) return toast('Marque que leu e compreendeu.', 'bad'); const b = $('#o-go'); b.disabled = true;
-          try { await assinar('osepi', h, p, { v: os.v }); toast('Assinado!', 'ok'); osBox(); } catch (e) { b.disabled = false; toast(e.message, 'bad'); } };
+        for (let i = 1; i <= pdf.numPages; i++) { const pg = await pdf.getPage(i); const v0 = pg.getViewport({ scale: 1 }); const vp = pg.getViewport({ scale: W / v0.width }); const cv = document.createElement('canvas'); cv.width = vp.width; cv.height = vp.height; cv.style.cssText = 'width:100%;display:block;border-bottom:1px solid #e2e5ea'; $('#o-pgs-' + id).appendChild(cv); await pg.render({ canvasContext: cv.getContext('2d'), viewport: vp }).promise; }
+        const p = pad($('#o-pad-' + id));
+        $('#o-go-' + id).onclick = async () => { if (!$('#o-ok-' + id).checked) return toast('Marque que leu e concorda.', 'bad'); const b = $('#o-go-' + id); b.disabled = true;
+          try { await assinar(id, h, p, { v: os.v }); toast('Assinado!', 'ok'); osBox(); } catch (e) { b.disabled = false; toast(e.message, 'bad'); } };
       } catch (e) { box.innerHTML = `<div class="badbox">${esc(e.message || 'Não foi possível abrir.')}</div>`; }
     };
   }
@@ -124,7 +131,7 @@
       ${(A.trein || {}).cursos && A.trein.cursos.length ? `<div class="card"><h2>3. Treinamentos</h2><p class="note">Você já pode fazer estes treinamentos pelo celular:</p><ul style="margin:6px 0 10px;padding-left:20px">${A.trein.cursos.map(c => `<li>${esc(c.nome)}</li>`).join('')}</ul>
         <p>Login: <b>seu CPF</b><br>Senha provisória: <b style="font-size:18px;letter-spacing:1px">${esc(A.trein.senha || '')}</b></p><p class="note">No primeiro acesso você cria a sua senha.</p>
         <a class="btn primary big" href="../aluno/" target="_blank" rel="noopener" style="text-decoration:none">Abrir treinamentos</a></div>` : ''}
-      ${(A.assinar || {}).osepi ? `<div class="card"><h2>4. OS de segurança e termo de EPI</h2><div id="c-os"></div></div>` : ''}`;
+      ${Object.keys(A.assinar || {}).length ? `<div class="card"><h2>4. Documentos para assinar</h2><p class="note">Leia cada documento até o fim e assine.</p><div id="c-os"></div></div>` : ''}`;
     $('#c-tdados').onclick = () => { ATIVO = ATIVO === 'dados' ? '' : 'dados'; tela(); };
     if (ATIVO === 'dados') formDados();
     docs(); osBox();
