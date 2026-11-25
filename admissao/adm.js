@@ -146,11 +146,13 @@ async function detalhe(id, refresh) {
     <div class="etf"><h4>Assinaturas e envio</h4><div class="grid3"><div><label for="e-epi">OS e ficha de EPI assinadas</label><input type="date" id="e-epi" value="${esc((e.epi || {}).data || '')}" ${ro}></div><div><label for="e-adm">Docs admissionais assinados</label><input type="date" id="e-adm" value="${esc((e.admiss || {}).data || '')}" ${ro}></div><div><label for="e-ct">Enviado à contabilidade</label><input type="date" id="e-ct" value="${esc((e.contab || {}).data || '')}" ${ro}></div></div></div>
     <div class="etf"><h4>Justificativa de atraso ${atrasado(a) ? `<span class="badge ${precisaJust(a) ? 'b-bad' : 'b-ok'}">${precisaJust(a) ? 'obrigatória' : 'preenchida'}</span>` : ''}</h4>
       <div class="grid2"><div><label for="e-jm">Motivo</label><select id="e-jm" ${ro}><option value="">—</option>${['Documentos do candidato', 'Agenda do ASO / clínica', 'Agenda da integração (cliente)', 'Treinamentos', 'Candidato desistiu ou sumiu', 'Aprovação interna', 'Outro'].map(m => `<option ${a.justMotivo === m ? 'selected' : ''}>${m}</option>`).join('')}</select></div><div><label for="e-j">Detalhe</label><input id="e-j" value="${esc(a.justificativa || '')}" ${ro} placeholder="${atrasado(a) ? 'Obrigatório: passou de ' + PRAZO + ' dias' : 'Só se passar de ' + PRAZO + ' dias'}"></div></div></div>
-    <label for="e-obs">Observação (só RH)</label><input id="e-obs" value="${esc(a.obs || '')}" ${ro}>
+    <div class="grid2"><div><label for="e-sal">Salário (R$) · só RH vê</label><input id="e-sal" inputmode="decimal" placeholder="Carregando…" disabled></div><div><label for="e-obs">Observação (só RH)</label><input id="e-obs" value="${esc(a.obs || '')}" ${ro}></div></div>
     ${ro ? (a.funcionarioId ? `<p class="note">Cadastrado como funcionário em ${fmtD(a.concluidoEm)}.</p>` : '') : `<div class="actions"><button class="btn primary" id="e-save">Salvar etapas</button><button class="btn accent" id="e-conc">Concluir e cadastrar funcionário</button></div>
       <div class="actions" style="margin-top:6px"><button class="btn sm danger" id="e-canc">Cancelar admissão (desistência)</button></div>`}`);
   $('#sheet').scrollTop = y;
-  db.doc('admissoes_priv/' + id).get().then(s => { const el = $('#m-sal'); if (el) el.textContent = s.exists && s.data().salario != null ? brl(s.data().salario) : '—'; }, () => { const el = $('#m-sal'); if (el) el.textContent = 'restrito'; });
+  db.doc('admissoes_priv/' + id).get().then(s => { const v = s.exists ? s.data().salario : null; const el = $('#m-sal'); if (el) el.textContent = v != null ? brl(v) : 'não informado';
+      const inp = $('#e-sal'); if (inp) { inp.value = v != null ? String(v).replace('.', ',') : ''; inp.dataset.orig = inp.value; inp.placeholder = 'Ex.: 3500,00'; inp.disabled = !!ro; } },
+    () => { const el = $('#m-sal'); if (el) el.textContent = 'restrito'; const inp = $('#e-sal'); if (inp) inp.placeholder = 'Seu perfil não vê salário'; });
   $('#m-x').onclick = fechar;
   const cp = $('#m-copy'); if (cp) cp.onclick = async () => { try { await navigator.clipboard.writeText(linkDe(a)); toast('Link copiado.', 'ok'); } catch (er) { $('#m-link').select(); toast('Selecione e copie o link.'); } };
   const sv = $('#e-save'); if (sv) sv.onclick = () => salvarEtapas(a);
@@ -172,11 +174,17 @@ function lerEtapas(a) {
 async function salvarEtapas(a, silencioso) {
   const e = lerEtapas(a); const u = { etapas: e, justMotivo: $('#e-jm').value, justificativa: $('#e-j').value.trim(), obs: $('#e-obs').value.trim(), atualizadoEm: new Date().toISOString() };
   if (e.integ.realizada && e.integ.realizada < str(a.abertoEm).slice(0, 10)) { toast('A integração não pode ser antes da abertura.', 'bad'); return false; }
+  const si = $('#e-sal'); if (si && !si.disabled && si.value !== si.dataset.orig) {
+    const v = si.value.trim() ? parseFloat(si.value.replace(/\./g, '').replace(',', '.')) : null; if (si.value.trim() && !isFinite(v)) { toast('Salário inválido.', 'bad'); return false; }
+    try { await db.doc('admissoes_priv/' + a.id).set({ salario: v, em: new Date().toISOString(), por: MEU }); si.dataset.orig = si.value; } catch (er) { toast('Não foi possível salvar o salário.', 'bad'); return false; } }
   try { await db.doc('admissoes/' + a.id).update(u); Object.assign(a, u); if (!silencioso) { toast('Etapas salvas.', 'ok'); detalhe(a.id); } return true; } catch (er) { toast('Não foi possível salvar.', 'bad'); return false; }
 }
 async function revisar(a, slot, st, motivo) {
   const rev = Object.assign({}, a.rev || {}); rev[slot] = { st, motivo: motivo || '', em: new Date().toISOString(), por: MEU };
   const u = { rev }; const tmp = Object.assign({}, a, { rev }); const ds = ADM.docsSt(tmp); if (ds.ok === ds.obr && !a.docsOkEm) u.docsOkEm = new Date().toISOString();
+  const si = $('#e-sal'); if (si && !si.disabled && si.value !== si.dataset.orig) {
+    const v = si.value.trim() ? parseFloat(si.value.replace(/\./g, '').replace(',', '.')) : null; if (si.value.trim() && !isFinite(v)) { toast('Salário inválido.', 'bad'); return false; }
+    try { await db.doc('admissoes_priv/' + a.id).set({ salario: v, em: new Date().toISOString(), por: MEU }); si.dataset.orig = si.value; } catch (er) { toast('Não foi possível salvar o salário.', 'bad'); return false; } }
   try { await db.doc('admissoes/' + a.id).update(u); Object.assign(a, u); detalhe(a.id); } catch (er) { toast('Não foi possível salvar.', 'bad'); }
 }
 const getPart = tk => id => db.doc(`admissoes/${tk}/p/${id}`).get().then(s => s.exists ? s.data().d : null);
