@@ -19,7 +19,10 @@ const showGate = html => { gate.innerHTML = `<div class="gbox"><div class="logo"
 const gmsg = (t, bad) => { const m = gate.querySelector('.msg'); if (m) { m.textContent = t; m.className = 'msg' + (bad ? ' bad' : ''); } };
 
 /* ---------- entrada ---------- */
-function telaLogin() {
+/* entrada direta pelo link da admissão: o candidato não digita CPF nem senha */
+function autoLogin() { let a = null; try { a = JSON.parse(localStorage.getItem('alunoAuto') || 'null'); localStorage.removeItem('alunoAuto'); } catch (_) {} if (!a || !a.l || !a.s || Date.now() - a.t > 10 * 60 * 1000) return false; try { sessionStorage.setItem('alunoAutoOk', '1'); } catch (_) {} showGate('<h1>Abrindo os seus treinamentos…</h1><p class="msg"></p>'); API.entrar(a.l, a.s).catch(er => { telaLogin(true); gmsg(er.message || 'Não foi possível entrar.', true); }); return true; }
+function telaLogin(semAuto) {
+  if (!semAuto && autoLogin()) return;
   showGate(`<h1>Meus treinamentos</h1><p class="gsub">Entre com a sua matrícula e a senha.</p>
     <form id="lf"><label for="lm">Matrícula</label><input id="lm" inputmode="text" autocomplete="username" required>
     <label for="ls">Senha</label><input id="ls" type="password" autocomplete="current-password" required>
@@ -47,7 +50,7 @@ function iniciar() {
     if (u.perfil.papel !== 'funcionario') return telaBloq('Esta página é para os funcionários fazerem os cursos. A equipe usa o portal PREVINE. <a href="../">Ir para o portal</a>');
     if (u.perfil.ativo === false) return telaBloq('Seu acesso foi desativado. Fale com o RH.');
     A.uid = u.uid; A.perfil = u.perfil; $('#out').hidden = false;
-    if (u.perfil.trocarSenha) return telaTrocar();
+    if (u.perfil.trocarSenha && !sessionStorage.getItem('alunoAutoOk')) return telaTrocar();
     gate.hidden = true; carregar();
   });
 }

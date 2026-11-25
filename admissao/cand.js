@@ -131,11 +131,12 @@
       ${p.enviou ? '' : `<div class="card" style="opacity:.75"><h2>3. OS de segurança, termo de EPI e treinamentos</h2><p class="note">Liberados aqui assim que você preencher os seus dados e enviar todos os documentos obrigatórios.</p></div>`}
       ${p.enviou && Object.keys(A.assinar || {}).length ? `<div class="card"><h2>3. OS de segurança, termo de EPI e documentos para assinar</h2><p class="note">Leia cada documento até o fim e assine.</p><div id="c-os"></div></div>` : ''}
       ${p.enviou && (A.trein || {}).cursos && A.trein.cursos.length ? `<div class="card"><h2>4. Treinamentos</h2><p class="note">Agora faça estes treinamentos pelo celular:</p><ul style="margin:6px 0 10px;padding-left:20px">${A.trein.cursos.map(c => `<li>${esc(c.nome)}</li>`).join('')}</ul>
-        <p>Login: <b>seu CPF</b><br>Senha provisória: <b style="font-size:18px;letter-spacing:1px">${esc(A.trein.senha || '')}</b></p><p class="note">No primeiro acesso você cria a sua senha.</p>
-        <a class="btn primary big" href="../aluno/" target="_blank" rel="noopener" style="text-decoration:none">Abrir treinamentos</a></div>` : ''}`;
+        <button class="btn primary big" id="c-trein" type="button">Fazer os treinamentos</button>
+        <p class="note" style="margin-top:10px">Entra direto, sem digitar senha. Se algum dia pedir: login <b>seu CPF</b>, senha <b>${esc(A.trein.senha || '')}</b>.</p></div>` : ''}`;
     $('#c-tdados').onclick = () => { ATIVO = ATIVO === 'dados' ? '' : 'dados'; tela(); };
     if (ATIVO === 'dados') formDados();
     docs(); osBox();
+    const ct = $('#c-trein'); if (ct) ct.onclick = () => { try { localStorage.setItem('alunoAuto', JSON.stringify({ l: (A.trein || {}).login || A.cpf, s: (A.trein || {}).senha || '', t: Date.now() })); } catch (_) {} location.href = '../aluno/'; };
   }
   function campo([k, t, tp, obr]) {
     const v = str(CAND.dados[k]); const lab = `<label for="d-${k}">${esc(t)}${obr ? ' *' : ''}</label>`;
