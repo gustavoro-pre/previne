@@ -2118,7 +2118,7 @@ function PDFW(existente) {
       y += 2;
     },
     box(rows) { const h = Math.ceil(rows.length / 2) * 5.6 + 3; P.need(h); doc.setDrawColor(210); doc.setLineWidth(0.2); doc.rect(L, y, W, h); rows.forEach(([k, v], i) => { const cx = L + 3 + (i % 2) * (W / 2), cy = y + 5 + Math.floor(i / 2) * 5.6; P.font(7.5, false, [110, 116, 128]); doc.text(k, cx, cy); const mw = i === rows.length - 1 && rows.length % 2 ? W - 30 : W / 2 - 28; let fz = 9.5; P.font(fz, true); while (fz > 7 && doc.getTextWidth(str(v) || '—') > mw) { fz -= 0.5; P.font(fz, true); } doc.text(doc.splitTextToSize(str(v) || '—', mw + 1)[0], cx + 24, cy); }); y += h + 4; },
-    sign(labels) { P.need(22); y += 12; const n = labels.length, gap = 10, w = (W - gap * (n - 1)) / n; labels.forEach((l, i) => { const x = L + i * (w + gap); doc.setDrawColor(80); doc.setLineWidth(0.3); doc.line(x, y, x + w, y); P.font(8, false, [60, 66, 80]); doc.text(doc.splitTextToSize(l, w), x + w / 2, y + 4, { align: 'center' }); }); y += 12; },
+    sign(labels) { P.need(22); y += 12; const n = labels.length, gap = 10, w = (W - gap * (n - 1)) / n; labels.forEach((l, i) => { const x = L + i * (w + gap); (P.sigs = P.sigs || []).push({ p: doc.getNumberOfPages(), x, y, w, i }); doc.setDrawColor(80); doc.setLineWidth(0.3); doc.line(x, y, x + w, y); P.font(8, false, [60, 66, 80]); doc.text(doc.splitTextToSize(l, w), x + w / 2, y + 4, { align: 'center' }); }); y += 12; },
     footer(txt) { const e = S.emp || {}, n = doc.getNumberOfPages(); for (let i = 1; i <= n; i++) { doc.setPage(i); if (doc.internal.pageSize.getHeight() < 250) continue; doc.setDrawColor(154, 166, 184); doc.setLineWidth(0.3); doc.line(L, 285.5, R, 285.5); P.font(7, false, [100, 106, 116]); doc.text((str(e.nome) || 'PREVINE INSTALAÇÃO E MANUTENÇÃO ELÉTRICA LTDA') + ' – CNPJ ' + (e.cnpj || '03.052.261/0001-43'), L, 289); let cd = ''; Object.keys(P.cods || {}).map(Number).sort((a, b) => a - b).forEach(pg => { if (pg <= i) cd = P.cods[pg]; }); doc.text((cd ? cd + ' – ' : '') + 'Página ' + i + ' de ' + n, R, 289, { align: 'right' }); P.font(6.3, false, [150, 156, 166]); doc.text(txt, L, 292.5); } }
   };
   return P;
@@ -2892,7 +2892,7 @@ function termoEpiInto(P, f) {
       const f = { id: a.funcionarioId || 'adm-' + tk, nome: str(a.nome), cpf: str(a.cpf || dd.cpf), matricula: str(a.matricula), funcao: str(a.funcao), area: str(a.area), areaId: str(a.areaId), subarea: str(a.subarea), subareaId: str(a.subareaId), subareas: a.subareaId ? [a.subareaId] : [], unidade: str(a.unidade), tamCamisa: str(dd.tamCamisa), tamCalca: str(dd.tamCalca), tamCalcado: str(dd.tamCalcado), altura: !!a.altura };
       await loadPDF(); const P = PDFW(); const modelo = osInto(P, f); P.newPage(); termoEpiInto(P, f);
       P.footer('Admissão · ' + f.nome + ' · documento para assinatura eletrônica · gerado em ' + fmtDT(new Date().toISOString()));
-      fim({ b64: P.doc.output('datauristring').split(',')[1], modelo: !!modelo, epis: kitEpisF(f).size });
+      fim({ b64: P.doc.output('datauristring').split(',')[1], modelo: !!modelo, epis: kitEpisF(f).size, sigs: (P.sigs || []).filter(s => s.i === 0).map(s => ({ p: s.p, x: s.x, y: s.y, w: s.w })) });
     } catch (e) { fim({ erro: (e && e.message) || String(e) }); }
   };
   tentar();

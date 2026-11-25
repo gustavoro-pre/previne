@@ -76,7 +76,7 @@ function gerarOsEpi(a) {
 async function prepararOsEpi(a) {
   const m = await gerarOsEpi(a);
   const arq = await ADM.gravar({ b64: m.b64, tipo: 'application/pdf', nome: 'OS e termo de EPI.pdf', q: { ok: true, prob: [] }, thumb: '' }, 'osepi', (id, d) => db.doc(`admissoes/${a.id}/d/${id}`).set({ d }));
-  arq.hash = await ADM.sha256(m.b64); arq.por = MEU; arq.modelo = m.modelo; arq.epis = m.epis;
+  arq.hash = await ADM.sha256(m.b64); arq.por = MEU; arq.modelo = m.modelo; arq.epis = m.epis; arq.sigs = m.sigs || [];
   const as = Object.assign({}, a.assinar || {}, { osepi: arq }); await db.doc('admissoes/' + a.id).update({ assinar: as }); a.assinar = as; return m;
 }
 const loadLib = (src, ok) => new Promise((res, rej) => { if (ok()) return res(); const s = document.createElement('script'); s.src = src; s.onload = () => ok() ? res() : rej(new Error('lib')); s.onerror = () => rej(new Error('Sem internet para carregar o gerador de PDF.')); document.head.appendChild(s); });
@@ -111,11 +111,14 @@ async function pdfDoc(a, id) {
     const pdf = await PDFDocument.load(await blob.arrayBuffer()); const f = await pdf.embedFont(StandardFonts.Helvetica), fb = await pdf.embedFont(StandardFonts.HelveticaBold);
     const lin = `Assinado eletronicamente por ${a.nome} em ${fmtDH(s.em)} · SHA-256 ${s.hash.slice(0, 16)}…`;
     pdf.getPages().forEach(pg => pg.drawText(lin, { x: 42, y: 31, size: 6.5, font: f, color: rgb(0.1, 0.35, 0.2) }));
+    /* assinatura do funcionário também em cada campo de assinatura do documento (OS e termo de EPI) */
+    const png = await pdf.embedPng(s.img); const MM = 72 / 25.4, pgs = pdf.getPages();
+    (arq.sigs || []).forEach(sp => { const pgi = pgs[sp.p - 1]; if (!pgi) return; const H = pgi.getHeight(); const d = png.scaleToFit(sp.w * MM * 0.8, 34); pgi.drawImage(png, { x: sp.x * MM + (sp.w * MM - d.width) / 2, y: H - sp.y * MM + 1, width: d.width, height: d.height }); });
     const pg = pdf.addPage([595.28, 841.89]); let y = 790;
     pg.drawText('REGISTRO DE ASSINATURA ELETRÔNICA', { x: 50, y, size: 14, font: fb, color: rgb(0.08, 0.13, 0.24) }); y -= 18;
     pg.drawText((empNome() + ' · CNPJ ' + empCnpj()).slice(0, 110), { x: 50, y, size: 9, font: f, color: rgb(0.25, 0.27, 0.32) }); y -= 16;
     pg.drawText(('Documento: ' + tit).slice(0, 110), { x: 50, y, size: 9.5, font: f }); y -= 30;
-    const png = await pdf.embedPng(s.img); const dim = png.scaleToFit(220, 80); pg.drawImage(png, { x: 50, y: y - dim.height, width: dim.width, height: dim.height }); y -= dim.height + 8;
+    const dim = png.scaleToFit(220, 80); pg.drawImage(png, { x: 50, y: y - dim.height, width: dim.width, height: dim.height }); y -= dim.height + 8;
     pg.drawLine({ start: { x: 50, y }, end: { x: 300, y }, thickness: 0.6, color: rgb(0.3, 0.3, 0.3) }); y -= 13; pg.drawText(`${a.nome} · CPF ${ADM.fmtCpf(a.cpf)}`, { x: 50, y, size: 9.5, font: fb }); y -= 26;
     const quebra = (t, n) => { const w = t.split(' '); const L = []; let l = ''; w.forEach(x => { if ((l + ' ' + x).length > n) { L.push(l); l = x; } else l = l ? l + ' ' + x : x; }); if (l) L.push(l); return L; };
     evid(a, s).forEach(t => quebra(t, 105).forEach(l => { pg.drawText(l, { x: 50, y, size: 8.5, font: f, color: rgb(0.25, 0.27, 0.32) }); y -= 12; }));
