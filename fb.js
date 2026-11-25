@@ -1,6 +1,6 @@
 /* Camada Firebase: login, perfis, banco (Firestore offline) e downloads.
    Expõe para o app a mesma interface que ele já usava: claude.use('db' | 'user' | 'downloads'). */
-import { FIREBASE_CONFIG } from './firebase-config.js';
+import { FIREBASE_CONFIG, VAPID_KEY } from './firebase-config.js';
 import { initializeApp, deleteApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut, sendPasswordResetEmail, createUserWithEmailAndPassword, setPersistence, browserLocalPersistence } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
 import { initializeFirestore, persistentLocalCache, persistentSingleTabManager, collection, doc, getDoc, getDocs, getDocFromServer, getDocFromCache, setDoc, updateDoc, deleteDoc, onSnapshot, query, where, orderBy, limit, writeBatch, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
@@ -225,7 +225,7 @@ onAuthStateChanged(auth, async u => {
   const pm = papelNoModulo(d);
   if (MOD !== 'portal' && pm === 'nenhum') return telaSemModulo();
   ME = { uid: u.uid, email: u.email, nome: d.nome || u.email, papel: pm };
-  window.__FB = { modulo: MOD, perfil: d, papel: pm, papelGeral: d.papel, uid: u.uid, nome: ME.nome, email: u.email, criarUsuario, criarAluno, reenviarConvite, atualizarUsuario, users: () => USERS, sair: () => signOut(auth).then(() => location.reload()) };
+  window.__FB = { modulo: MOD, perfil: d, papel: pm, papelGeral: d.papel, uid: u.uid, nome: ME.nome, email: u.email, criarUsuario, criarAluno, reenviarConvite, atualizarUsuario, ativarPush, pushStatus, users: () => USERS, sair: () => signOut(auth).then(() => location.reload()) };
   onSnapshot(collection(fs, 'usuarios'), s => { USERS = {}; s.docs.forEach(x => USERS[x.id] = x.data()); const m = USERS[u.uid]; if (m && (m.ativo === false || m.papel !== window.__FB.papelGeral || JSON.stringify(m.modulos || {}) !== JSON.stringify(d.modulos || {}))) location.reload(); window.dispatchEvent(new Event('fb-users')); }, () => {});
   const um = document.getElementById('usermenu'); if (um) { um.hidden = false; um.querySelector('b').textContent = ME.nome.split(' ')[0]; um.onclick = () => { if (confirmSair()) window.__FB.sair(); }; }
   hideGate(); resolveReady();
@@ -236,6 +236,25 @@ function telaErro() {
   document.getElementById('g-retry').onclick = () => location.reload();
 }
 function confirmSair() { const b = document.getElementById('usermenu'); if (b.dataset.armed) return true; b.dataset.armed = '1'; b.querySelector('span').textContent = 'Tocar de novo para sair'; setTimeout(() => { delete b.dataset.armed; b.querySelector('span').textContent = 'Sair'; }, 3000); return false; }
+
+/* ---------- notificações no celular (Firebase Cloud Messaging) ---------- */
+function pushStatus() {
+  if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) return /iPhone|iPad/.test(navigator.userAgent) && !navigator.standalone ? 'instalar' : 'sem-suporte';
+  if (Notification.permission === 'denied') return 'bloqueado';
+  return Notification.permission === 'granted' && localStorage.getItem('pushTok') ? 'ativo' : 'inativo';
+}
+async function ativarPush() {
+  const st = pushStatus(); if (st === 'sem-suporte' || st === 'instalar' || st === 'bloqueado') throw new Error(st);
+  const perm = await Notification.requestPermission(); if (perm !== 'granted') throw new Error('bloqueado');
+  const { getMessaging, getToken, isSupported } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging.js');
+  if (!(await isSupported())) throw new Error('sem-suporte');
+  const reg = await navigator.serviceWorker.register(new URL('./sw.js', import.meta.url), { scope: new URL('./', import.meta.url).pathname }); await navigator.serviceWorker.ready;
+  const tok = await getToken(getMessaging(app), { vapidKey: VAPID_KEY, serviceWorkerRegistration: reg });
+  if (!tok) throw new Error('sem-token');
+  const u = auth.currentUser; const id = tok.replace(/[^A-Za-z0-9_-]/g, '').slice(-140);
+  await setDoc(doc(fs, 'push_tokens', id), { token: tok, uid: u.uid, nome: (window.__FB || {}).nome || '', ua: navigator.userAgent.slice(0, 200), em: new Date().toISOString() });
+  localStorage.setItem('pushTok', id); return 'ativo';
+}
 
 /* ---------- app instalável ---------- */
 if ('serviceWorker' in navigator) navigator.serviceWorker.register(new URL('./sw.js', import.meta.url), { scope: new URL('./', import.meta.url).pathname }).catch(() => {});

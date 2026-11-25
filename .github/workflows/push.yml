@@ -1,0 +1,23 @@
+name: Notificações de de acordo
+on:
+  schedule:
+    - cron: '*/20 9-23 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  push:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Enviar notificações
+        env:
+          FIREBASE_SA: ${{ secrets.FIREBASE_SA }}
+        run: |
+          cd tools
+          npm init -y >/dev/null
+          npm install firebase-admin@12 --no-audit --no-fund >/dev/null
+          node push.mjs

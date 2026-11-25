@@ -8,3 +8,6 @@ export const FIREBASE_CONFIG = {
   messagingSenderId: "395090314900",
   appId: "1:395090314900:web:f084259e902eee7d3fd681"
 };
+
+// Chave pública de notificações (Web Push / FCM). Não é segredo.
+export const VAPID_KEY = 'BJ3rLRACNVgelBa_daP9ESgZRxaCx5XYWnh07V7RqnRyEyyS4EAdBzFdtalm_hLGm98nYPBDXalSOtS62tLQCg0';

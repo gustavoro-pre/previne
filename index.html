@@ -172,6 +172,7 @@ a.mod:hover{transform:translateY(-1px);box-shadow:0 4px 14px rgba(20,33,61,.12)}
 .mod .mi{width:40px;height:40px;border-radius:10px;display:grid;place-items:center;font-size:20px;background:#fff4d6}
 .mod h3{margin:4px 0 0;font-size:17px;text-transform:none;letter-spacing:0;color:var(--ink,#14213d)}.mod p{margin:0;color:var(--muted);font-size:13px;line-height:1.4}
 .aviso{display:flex;align-items:center;gap:10px;background:#fff4d6;border:1px solid #f2a900;color:#5a3d00;border-radius:12px;padding:12px 14px;margin:10px 0 4px;text-decoration:none;font-weight:600}.aviso .n{background:#c62828;color:#fff;border-radius:999px;min-width:26px;height:26px;display:grid;place-items:center;font-size:14px;padding:0 7px;flex:none}.aviso .go{margin-left:auto;font-size:13px;text-decoration:underline}
+.pushbox{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--card,#fff);border:1px solid var(--line);border-radius:12px;padding:10px 14px;margin:8px 0 4px;font-size:14px}.pushbox .m{flex:1;min-width:200px}
 .mod .bn{align-self:flex-start;background:#c62828;color:#fff;border-radius:999px;font-size:12px;font-weight:700;padding:3px 9px}
 .mod.off{opacity:.6}.mod .pf{margin-top:auto;font-size:12px;color:var(--muted)}
 .urow{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:10px 0;border-bottom:1px solid var(--line)}.urow .main{flex:1;min-width:180px}
@@ -187,6 +188,7 @@ a.mod:hover{transform:translateY(-1px);box-shadow:0 4px 14px rgba(20,33,61,.12)}
 <main>
   <div class="hello" id="p-hello"></div>
   <a id="p-aviso" class="aviso" href="treinamentos/#aprov" hidden></a>
+  <div id="p-push" class="pushbox" hidden></div>
   <p class="note" style="margin:0">Escolha o módulo. Você vê apenas os módulos liberados para o seu usuário.</p>
   <div class="mods" id="p-mods"></div>
   <section id="p-users" hidden>
@@ -256,6 +258,15 @@ function renderMods() {
   $('#p-mods').innerHTML = (L.length ? L.map(m => `<a class="mod" href="${m.href}"><div class="mi">${m.icone}</div><h3>${esc(m.nome)}</h3>${m.id === 'treinamentos' && PEND ? `<span class="bn">${PEND} aguardando seu de acordo</span>` : ''}<p>${esc(m.desc)}</p><div class="pf">Seu perfil: ${esc(nomeMod(m.id, papelMod(d, m.id)))}</div></a>`).join('') : '<div class="empty">Nenhum módulo liberado para você ainda. Fale com o administrador.</div>')
     + (temModulo(d, 'treinamentos') ? `<a class="mod" href="aluno/" target="_blank" rel="noopener"><div class="mi">👷</div><h3>Portal do aluno</h3><p>Onde o funcionário entra com a matrícula para fazer os cursos on-line e assinar os padrões. Envie este link para a equipe.</p><div class="pf">${esc(new URL('aluno/', location.href).href)}</div></a>` : '');
 }
+function renderPush() {
+  const F = window.__FB || {}, el = $('#p-push'); if (!el || !F.pushStatus) return; const st = F.pushStatus();
+  if (st === 'sem-suporte') { el.hidden = true; return; } el.hidden = false;
+  el.innerHTML = st === 'ativo' ? '<span>🔔</span><div class="m">Notificações ativas neste aparelho. Você recebe aviso quando houver documento aguardando o seu de acordo.</div>'
+    : st === 'instalar' ? '<span>🔔</span><div class="m">Para receber notificações no iPhone: toque em Compartilhar → <b>Adicionar à Tela de Início</b>, abra o portal pelo ícone e volte aqui.</div>'
+    : st === 'bloqueado' ? '<span>🔕</span><div class="m">As notificações estão bloqueadas para este site. Libere nas configurações do navegador (cadeado ao lado do endereço → Notificações → Permitir) e recarregue.</div>'
+    : '<span>🔔</span><div class="m">Receba aviso no celular quando houver documento aguardando o seu de acordo.</div><button class="btn primary sm" id="p-pushgo" type="button">Ativar notificações</button>';
+  const b = $('#p-pushgo'); if (b) b.onclick = async () => { b.disabled = true; b.textContent = 'Ativando…'; try { await F.ativarPush(); toast('Notificações ativadas neste aparelho.', 'ok'); } catch (e) { toast(({ bloqueado: 'Permissão negada no navegador.', 'sem-suporte': 'Este navegador não aceita notificações.' })[e.message] || 'Não foi possível ativar: ' + (e.message || e), 'bad'); } renderPush(); };
+}
 function renderUsers() {
   const F = window.__FB, d = F.perfil; const souAdm = d.papel === 'admin', souGestao = d.papel === 'gestao';
   $('#p-users').hidden = !(souAdm || souGestao); if ($('#p-users').hidden) return;
@@ -303,7 +314,7 @@ function renderUsers() {
     if (/^data:image\/(png|jpeg);base64,/.test(str(e.logo))) { const l = $('header .logo'); l.classList.add('img'); l.innerHTML = `<img src="${e.logo}" alt="Logo">`; } }, () => {});
   db.collection('funcionarios').limit(1).get().then(() => { const c = $('#conn'); c.textContent = 'Online'; c.className = 'conn ok'; }, () => {});
   db.collection('areas').onSnapshot(q => { AREAS = q.docs.map(x => Object.assign({ id: x.id }, x.data())).sort((a, b) => str(a.nome).localeCompare(str(b.nome), 'pt')); renderUsers(); }, () => {});
-  renderMods(); renderUsers();
+  renderMods(); renderUsers(); renderPush();
   window.addEventListener('fb-users', renderUsers);
   /* aviso de de acordo pendente: certificados em que o usuário é instrutor, RT ou TST e ainda não deu o de acordo */
   const F = window.__FB || {};
