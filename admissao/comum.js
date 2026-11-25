@@ -15,8 +15,13 @@
     { id: 'filhos', t: 'Filhos: certidão, CPF e vacinação', d: 'Filhos menores de 14 anos: certidão e CPF. Menores de 7: cartão de vacina.', obr: false, max: 6 },
     { id: 'banco', t: 'Dados bancários', d: 'Print ou cartão mostrando banco, agência e conta.', obr: false, max: 1 },
     { id: 'cursos', t: 'Certificados de cursos e NRs', d: 'NR-10, NR-35, NR-33, curso técnico, se tiver.', obr: false, max: 8 },
-    { id: 'registro', t: 'Registro profissional (CREA / CFT)', d: 'Só para técnicos e engenheiros.', obr: false, max: 2 }
+    { id: 'registro', t: 'Registro profissional (CREA / CFT)', d: 'Só para técnicos e engenheiros.', obr: false, max: 2 },
+    { id: 'cnpj', t: 'Cartão CNPJ', d: 'Comprovante de inscrição do CNPJ (site da Receita).', obr: true, max: 1, pj: true },
+    { id: 'contrato', t: 'Contrato social ou certificado MEI', d: '', obr: true, max: 4, pj: true }
   ];
+  /* PJ (prestador): pede CNPJ e contrato social; carteira de trabalho e documentos de registro CLT ficam opcionais */
+  const OBR_PJ = ['foto', 'rg', 'residencia', 'cnpj', 'contrato', 'banco'];
+  function slotsDe(a) { const pj = a && a.vinculo === 'PJ'; return SLOTS.filter(s => pj || !s.pj).map(s => pj ? Object.assign({}, s, { obr: OBR_PJ.includes(s.id) }) : s); }
   const PARTE = 700000, MAX_PDF = 8 * 1048576;
   const rand = n => { const a = new Uint8Array(n); crypto.getRandomValues(a); return [...a].map(x => 'abcdefghijkmnpqrstuvwxyz23456789'[x % 32]).join(''); };
   const dig = s => String(s || '').replace(/\D/g, '');
@@ -71,13 +76,13 @@
   /* situação dos documentos: obrigatórios enviados, recusados e conferidos */
   function docsSt(a) {
     const docs = (a.cand && a.cand.docs) || {}, rev = a.rev || {};
-    const obr = SLOTS.filter(s => s.obr); const env = obr.filter(s => (docs[s.id] || []).length);
-    const rej = SLOTS.filter(s => (docs[s.id] || []).length && rev[s.id] && rev[s.id].st === 'rej' && str(rev[s.id].em) >= ultimoEnvio(docs[s.id]));
-    const pendRev = SLOTS.filter(s => (docs[s.id] || []).length && !(rev[s.id] && str(rev[s.id].em) >= ultimoEnvio(docs[s.id])));
+    const SL = slotsDe(a); const obr = SL.filter(s => s.obr); const env = obr.filter(s => (docs[s.id] || []).length);
+    const rej = SL.filter(s => (docs[s.id] || []).length && rev[s.id] && rev[s.id].st === 'rej' && str(rev[s.id].em) >= ultimoEnvio(docs[s.id]));
+    const pendRev = SL.filter(s => (docs[s.id] || []).length && !(rev[s.id] && str(rev[s.id].em) >= ultimoEnvio(docs[s.id])));
     const ok = obr.filter(s => rev[s.id] && rev[s.id].st === 'ok' && str(rev[s.id].em) >= ultimoEnvio(docs[s.id] || []));
     return { obr: obr.length, env: env.length, rej, pendRev, ok: ok.length, faltam: obr.filter(s => !(docs[s.id] || []).length) };
   }
   const str = v => v == null ? '' : String(v);
   const ultimoEnvio = L => (L || []).reduce((m, x) => str(x.em) > m ? str(x.em) : m, '');
-  window.ADM = { SLOTS, rand, dig, cpfOk, fmtCpf, preparar, gravar, ler, docsSt, ultimoEnvio, qualidade };
+  window.ADM = { SLOTS, slotsDe, rand, dig, cpfOk, fmtCpf, preparar, gravar, ler, docsSt, ultimoEnvio, qualidade };
 })();

@@ -12,12 +12,13 @@ const addDays = (n, b) => { const d = b ? new Date(b + 'T12:00:00') : new Date()
 const addMonths = (b, m) => { const d = new Date(b + 'T12:00:00'); d.setMonth(d.getMonth() + m); return ymd(d); };
 const fmtD = s => { s = str(s).slice(0, 10); const p = s.split('-'); return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : '—'; };
 const diasEntre = (a, b) => Math.round((new Date(str(b).slice(0, 10) + 'T12:00:00') - new Date(str(a).slice(0, 10) + 'T12:00:00')) / 864e5);
+const numBR = t => { t = str(t).replace(/[^\d,.]/g, ''); if (!t) return null; t = t.includes(',') ? t.replace(/\./g, '').replace(',', '.') : (/\.\d{3}$/.test(t) ? t.replace(/\./g, '') : t); const v = parseFloat(t); return isFinite(v) ? v : null; };
 const brl = v => (+v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 let tt; const toast = (t, k) => { const e = $('#toast'); e.textContent = t; e.className = 'show ' + (k || ''); clearTimeout(tt); tt = setTimeout(() => e.className = '', 3400); };
 const kpi = (t, n, k, s) => `<div class="kpi ${k || ''}"><div class="n">${n}</div><div class="t">${t}</div>${s ? `<div class="s">${s}</div>` : ''}</div>`;
 const PRAZO = 8;
 
-const D = { adm: [], func: [], areas: [], kits: [] };
+const D = { adm: [], func: [], areas: [], kits: [], cursos: [], cfg: {} };
 const V = { tab: 'and', q: '', per: '180' };
 let db = null, PODE = false, MEU = '';
 
@@ -43,7 +44,7 @@ const pills = a => `<div class="ets">${etapas(a).map(x => `<span class="et ${x.s
 const areaBy = id => D.areas.find(a => a.id === id);
 const funcoes = () => [...new Set(D.func.map(f => str(f.funcao).trim()).concat(D.kits.map(k => str(k.funcao).trim())).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt'));
 const linkDe = a => new URL('enviar.html?c=' + a.id, location.href).href;
-const waDe = a => { const t = ADM.dig(a.telefone); const msg = `Olá, ${str(a.nome).split(' ')[0]}! Aqui é do RH da PREVINE. Para a sua admissão${a.funcao ? ' como ' + a.funcao : ''}, envie seus dados e documentos por este link (leva uns 15 minutos): ${linkDe(a)}`;
+const waDe = a => { const t = ADM.dig(a.telefone); const msg = `Olá, ${str(a.nome).split(' ')[0]}! Aqui é do RH da PREVINE. Para a sua admissão${a.funcao ? ' como ' + a.funcao : ''}, envie seus dados e documentos por este link (leva uns 15 minutos)${(a.trein || {}).cursos && a.trein.cursos.length ? '. No mesmo link estão os treinamentos que você já pode fazer' : ''}: ${linkDe(a)}`;
   return 'https://wa.me/' + (t ? (t.length <= 11 ? '55' + t : t) : '') + '?text=' + encodeURIComponent(msg); };
 
 /* ---------- dados ---------- */
@@ -52,6 +53,8 @@ function ouvir() {
   db.collection('funcionarios').onSnapshot(s => { D.func = s.docs.map(d => Object.assign({}, d.data(), { id: d.id })); }, () => {});
   db.collection('areas').onSnapshot(s => { D.areas = s.docs.map(d => Object.assign({}, d.data(), { id: d.id })).sort((a, b) => str(a.nome).localeCompare(str(b.nome), 'pt')); render(); }, () => {});
   db.collection('kits').onSnapshot(s => { D.kits = s.docs.map(d => d.data()); }, () => {});
+  db.collection('cursos').onSnapshot(s => { D.cursos = s.docs.map(d => Object.assign({}, d.data(), { id: d.id })).filter(c => c.ativo !== false).sort((a, b) => str(a.nome).localeCompare(str(b.nome), 'pt')); render(); }, () => {});
+  db.doc('config/admissao').onSnapshot(s => { D.cfg = s.exists ? s.data() : {}; }, () => {});
 }
 
 /* ---------- telas ---------- */
@@ -63,7 +66,7 @@ function render() {
 function cardAdm(a) {
   const d = diasMob(a), ds = ADM.docsSt(a); const foto = ((a.cand || {}).docs || {}).foto; const th = foto && foto[0] && foto[0].thumb;
   return `<div class="card adm" data-open="${esc(a.id)}"><div style="display:flex;gap:12px;align-items:flex-start">${th ? `<img class="foto" src="${th}" alt="">` : ''}
-    <div style="flex:1;min-width:0"><b>${esc(a.nome)}</b><div class="t2">${esc(a.funcao || '')}${a.area ? ' · ' + esc(a.area) : ''}${a.subarea ? ' → ' + esc(a.subarea) : ''}</div>
+    <div style="flex:1;min-width:0"><b>${esc(a.nome)}</b><div class="t2">${a.vinculo === 'PJ' ? '<span class="badge b-warn">PJ</span> ' : ''}${esc(a.funcao || '')}${a.area ? ' · ' + esc(a.area) : ''}${a.subarea ? ' → ' + esc(a.subarea) : ''}</div>
     <div class="t2">Aberto em ${fmtD(a.abertoEm)}${(a.cand || {}).em ? ' · candidato mexeu em ' + fmtD(a.cand.em) : ' · candidato ainda não abriu o link'}${ds.pendRev.length && a.status === 'aberto' ? ` · <b style="color:var(--info)">${ds.pendRev.length} doc(s) para conferir</b>` : ''}</div></div>
     <div style="text-align:right"><div class="dias ${d > PRAZO ? 'bad' : ''}">${d}d</div><div class="t2">${fimMob(a) ? 'mobilizado' : 'mobilização'}</div>${precisaJust(a) && a.status === 'aberto' ? '<span class="badge b-bad">Justificar</span>' : ''}</div></div>${pills(a)}</div>`;
 }
@@ -89,10 +92,39 @@ function rNova() {
     <div class="grid2"><div><label class="req" for="n-tel">Celular (WhatsApp)</label><input id="n-tel" inputmode="tel" placeholder="(24) 99999-9999"></div><div><label class="req" for="n-fun">Função</label><input id="n-fun" list="n-funl"><datalist id="n-funl">${funcoes().map(f => `<option value="${esc(f)}">`).join('')}</datalist></div></div>
     <div class="grid3"><div><label for="n-sal">Salário (R$)</label><input id="n-sal" inputmode="decimal"></div><div><label class="req" for="n-area">Área</label><select id="n-area">${optAreas('')}</select></div><div><label for="n-sub">Sub-área</label><select id="n-sub">${optSubs('')}</select></div></div>
     <div class="grid3"><div><label for="n-un">Unidade</label><input id="n-un" placeholder="Ex.: Barra Mansa"></div><div><label for="n-int">Previsão de integração</label><input type="date" id="n-int" value="${addDays(PRAZO - 1)}"></div><div><label for="n-alt">Trabalho em altura</label><select id="n-alt"><option value="">Não</option><option value="1">Sim</option></select></div></div>
+    <div class="grid3"><div><label for="n-vin">Vínculo</label><select id="n-vin"><option value="CLT">CLT</option><option value="PJ">PJ (prestador de serviço)</option></select></div></div>
     <label for="n-obs">Observação (só RH)</label><input id="n-obs">
+    <p class="ct" style="margin-top:16px">Treinamentos admissionais (EaD)</p>${cursosPick(new Set(D.cfg.cursos || []), 'n')}
     <div class="actions"><button class="btn primary big" id="n-save">Abrir admissão e gerar link</button></div></div>`;
   $('#n-area').onchange = () => $('#n-sub').innerHTML = optSubs($('#n-area').value);
   $('#n-save').onclick = criar;
+}
+function cursosPick(sel, px, excluir) {
+  const L = D.cursos.filter(c => !(excluir || []).includes(c.id));
+  if (!D.cursos.length) return '<p class="note">Nenhum curso EaD cadastrado ainda. Cadastre em Treinamentos → Cursos EaD; depois eles aparecem aqui.</p>';
+  if (!L.length) return '<p class="note">Todos os cursos já foram liberados.</p>';
+  return `<p class="note" style="margin:0 0 6px">Os marcados são liberados no portal do aluno junto com o link dos documentos. Login: CPF do candidato.</p><div class="pick" style="max-height:220px">${L.map(c => `<label><input type="checkbox" data-cur="${esc(c.id)}" class="${px}-cur" ${sel.has(c.id) ? 'checked' : ''}><span class="main"><b>${esc(c.nome)}</b><div class="t2">${c.cargaHoraria ? c.cargaHoraria + ' h' : ''}${c.pratica ? ' · tem prática presencial' : ''}${c.prazoDias ? ' · prazo ' + c.prazoDias + ' dias' : ''}</div></span></label>`).join('')}</div>
+    ${px === 'n' ? '<label style="display:flex;gap:8px;align-items:center;color:var(--ink)"><input type="checkbox" id="n-padrao" style="width:18px;height:18px"> Usar estes como padrão nas próximas admissões</label>' : ''}`;
+}
+/* funcionário "em admissão" (inativo) para o candidato ter acesso ao portal do aluno antes da contratação */
+async function garantirFunc(a) {
+  let f = D.func.find(x => x.id === a.funcionarioId) || D.func.find(x => ADM.dig(x.cpf) === a.cpf && x.ativo === false);
+  const base = { nome: a.nome, cpf: a.cpf, funcao: a.funcao, area: a.area, areaId: a.areaId, subareaId: a.subareaId || '', subarea: a.subarea || '', subareas: a.subareaId ? [a.subareaId] : [], unidade: a.unidade || '', altura: !!a.altura, vinculo: a.vinculo || 'CLT', admissaoId: a.id };
+  if (f) { await db.doc('funcionarios/' + f.id).update(Object.assign(base, { situacao: 'Em admissão', ativo: false })); return f.id; }
+  const r = db.collection('funcionarios').doc(); await r.set(Object.assign(base, { matricula: '', situacao: 'Em admissão', ativo: false, criadoEm: new Date().toISOString() })); return r.id;
+}
+async function liberarTrein(a, ids, novaSenha) {
+  if (!ids.length && !novaSenha) return;
+  if (!window.__FB || !window.__FB.criarAluno) throw new Error('Liberar treinamentos só funciona no app publicado.');
+  const fid = await garantirFunc(a); const tr = Object.assign({ cursos: [] }, a.trein || {});
+  if (!tr.senha || novaSenha) { const r = await window.__FB.criarAluno({ funcionarioId: fid, nome: a.nome, chave: a.cpf }); tr.senha = r.senha; tr.login = a.cpf; }
+  const hj = hoje();
+  for (const id of ids) { if (tr.cursos.some(c => c.id === id)) continue; const c = D.cursos.find(x => x.id === id); if (!c) continue;
+    await db.doc('matriculas/' + id + '_' + fid).set({ cursoId: id, funcionarioId: fid, nome: a.nome, matricula: '', liberadoEm: hj, prazo: c.prazoDias ? addDays(+c.prazoDias) : '', prog: {}, tempo: 0, por: MEU, admissaoId: a.id });
+    tr.cursos.push({ id, nome: c.nome }); }
+  tr.liberadoEm = tr.liberadoEm || hj;
+  const e = JSON.parse(JSON.stringify(etp(a))); e.trein = Object.assign({}, e.trein); if (!e.trein.enviado && tr.cursos.length) e.trein.enviado = hj;
+  await db.doc('admissoes/' + a.id).update({ trein: tr, funcionarioId: fid, etapas: e }); Object.assign(a, { trein: tr, funcionarioId: fid, etapas: e });
 }
 async function criar() {
   const nome = $('#n-nome').value.trim().replace(/\s+/g, ' '), cpf = ADM.dig($('#n-cpf').value), tel = ADM.dig($('#n-tel').value), funcao = $('#n-fun').value.trim().toUpperCase(), areaId = $('#n-area').value;
@@ -102,13 +134,18 @@ async function criar() {
   const ex = D.func.find(f => ADM.dig(f.cpf) === cpf && f.ativo !== false); if (ex) return toast(`CPF já cadastrado como funcionário ativo: ${ex.nome}.`, 'bad');
   const ar = areaBy(areaId), sid = $('#n-sub').value, sub = ((ar && ar.subs) || []).find(s => s.id === sid);
   const tk = ADM.rand(20); const agora = new Date().toISOString();
-  const a = { nome, cpf, telefone: tel, funcao, areaId, area: ar ? ar.nome : '', subareaId: sid, subarea: sub ? sub.nome : '', unidade: $('#n-un').value.trim(), altura: $('#n-alt').value === '1',
+  const a = { nome, cpf, telefone: tel, funcao, areaId, area: ar ? ar.nome : '', subareaId: sid, subarea: sub ? sub.nome : '', unidade: $('#n-un').value.trim(), altura: $('#n-alt').value === '1', vinculo: $('#n-vin').value,
     status: 'aberto', abertoEm: agora, abertoPor: MEU, etapas: { integ: { agendada: $('#n-int').value } }, rev: {}, cand: { dados: {}, docs: {} }, obs: $('#n-obs').value.trim() };
   const b = $('#n-save'); b.disabled = true;
   try {
     await db.doc('admissoes/' + tk).set(a);
-    const sal = parseFloat(str($('#n-sal').value).replace(/\./g, '').replace(',', '.')); await db.doc('admissoes_priv/' + tk).set({ salario: isFinite(sal) ? sal : null, em: agora });
-    D.adm.push(Object.assign({ id: tk }, a)); V.tab = 'and'; render(); detalhe(tk); toast('Admissão aberta. Envie o link ao candidato.', 'ok');
+    const sal = numBR($('#n-sal').value); await db.doc('admissoes_priv/' + tk).set({ salario: isFinite(sal) ? sal : null, em: agora });
+    const obj = Object.assign({ id: tk }, a); D.adm.push(obj);
+    const cur = $$('.n-cur').filter(c => c.checked).map(c => c.dataset.cur);
+    if ($('#n-padrao') && $('#n-padrao').checked) db.doc('config/admissao').set(Object.assign({}, D.cfg, { cursos: cur })).catch(() => {});
+    let aviso = '';
+    if (cur.length) { b.textContent = 'Liberando treinamentos…'; try { await liberarTrein(obj, cur); } catch (er) { aviso = ' Os treinamentos não foram liberados: ' + ((er && er.message) || er) + ' Tente de novo no detalhe.'; } }
+    V.tab = 'and'; render(); detalhe(tk); toast('Admissão aberta. Envie o link ao candidato.' + aviso, aviso ? 'bad' : 'ok');
   } catch (e) { b.disabled = false; toast('Não foi possível abrir: ' + ((e && e.message) || e), 'bad'); }
 }
 
@@ -125,11 +162,11 @@ async function detalhe(id, refresh) {
   const e = etp(a), c = a.cand || {}, dd = c.dados || {}, docs = c.docs || {}, rev = a.rev || {}, ro = PODE && a.status === 'aberto' ? '' : 'disabled';
   const d = diasMob(a);
   sheet(`<div class="top"><h2>${esc(a.nome)}</h2><button class="x" id="m-x" aria-label="Fechar">×</button></div>
-    <p class="note" style="margin:-4px 0 8px">CPF ${esc(ADM.fmtCpf(a.cpf))} · ${esc(a.funcao)} · ${esc(a.area)}${a.subarea ? ' → ' + esc(a.subarea) : ''}${a.unidade ? ' · ' + esc(a.unidade) : ''}${a.altura ? ' · trabalho em altura' : ''}</p>
+    <p class="note" style="margin:-4px 0 8px">CPF ${esc(ADM.fmtCpf(a.cpf))} · ${esc(a.funcao)} · ${esc(a.area)}${a.subarea ? ' → ' + esc(a.subarea) : ''}${a.unidade ? ' · ' + esc(a.unidade) : ''}${a.altura ? ' · trabalho em altura' : ''}${a.vinculo === 'PJ' ? ' · <b>PJ</b>' : ''}</p>
     <div class="kpis" style="grid-template-columns:repeat(3,1fr)">${kpi('Dias de mobilização', d, d > PRAZO ? 'bad' : 'ok', fimMob(a) ? 'integrado em ' + fmtD(fimMob(a)) : 'desde ' + fmtD(a.abertoEm))}${kpi('Documentos', ADM.docsSt(a).env + '/' + ADM.docsSt(a).obr, ADM.docsSt(a).rej.length ? 'bad' : '')}<div class="kpi"><div class="n" id="m-sal" style="font-size:18px">…</div><div class="t">Salário</div></div></div>
     ${pills(a)}
     ${a.status === 'aberto' ? `<div class="etf"><h4>Link do candidato</h4><div class="linkbox"><input readonly value="${esc(linkDe(a))}" id="m-link"><button class="btn sm ghost" id="m-copy">Copiar</button><a class="btn sm accent" href="${esc(waDe(a))}" target="_blank" rel="noopener" style="text-decoration:none">WhatsApp</a></div></div>` : ''}
-    <h3>Documentos</h3><div class="card" style="padding:4px 12px">${ADM.SLOTS.map(s => { const L = docs[s.id] || []; const r = rev[s.id]; const ult = ADM.ultimoEnvio(L); const atual = r && str(r.em) >= ult;
+    <h3>Documentos</h3><div class="card" style="padding:4px 12px">${ADM.slotsDe(a).map(s => { const L = docs[s.id] || []; const r = rev[s.id]; const ult = ADM.ultimoEnvio(L); const atual = r && str(r.em) >= ult;
       const st = !L.length ? (s.obr ? '<span class="badge b-warn">Falta</span>' : '<span class="badge b-mut">Opcional</span>') : atual && r.st === 'ok' ? '<span class="badge b-ok">Conferido</span>' : atual && r.st === 'rej' ? '<span class="badge b-bad">Recusado</span>' : '<span class="badge b-info">Conferir</span>';
       return `<div class="dslot"><div class="main"><b>${esc(s.t)}</b>${s.obr ? '' : ' <span class="t2">(se tiver)</span>'} ${st}${L.some(f => f.q === 'baixa') ? ' <span class="badge b-warn">qualidade baixa</span>' : ''}
         ${atual && r.st === 'rej' ? `<div class="t2">Motivo: ${esc(r.motivo)}</div>` : ''}
@@ -139,10 +176,11 @@ async function detalhe(id, refresh) {
         ['Endereço', [dd.rua, dd.numero, dd.complemento, dd.bairro, dd.cidade && dd.cidade + '/' + dd.uf, dd.cep].filter(Boolean).join(', ')], ['Escolaridade', dd.escolaridade], ['PIS', dd.pis], ['Banco', [dd.banco, dd.agencia && 'ag. ' + dd.agencia, dd.conta && 'cc ' + dd.conta, dd.pix && 'PIX ' + dd.pix].filter(Boolean).join(' · ')],
         ['Tamanhos', `camisa ${dd.tamCamisa || '—'} · calça ${dd.tamCalca || '—'} · calçado ${dd.tamCalcado || '—'}`], ['Emergência', [dd.emergNome, dd.emergTel].filter(Boolean).join(' · ')], ['Dependentes', dd.dependentes]].filter(x => x[1]).map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join('')}</dl>` : '<p class="note" style="margin:0">O candidato ainda não preencheu os dados.</p>'}</div>
     <h3>Etapas</h3>
-    <div class="etf"><h4>ASO ${(e.aso || {}).data ? '<span class="badge b-ok">feito</span>' : ''}</h4><div class="grid3"><div><label for="e-asoag">Exame marcado para</label><input type="date" id="e-asoag" value="${esc((e.aso || {}).agendado || '')}" ${ro}></div><div><label for="e-aso">Data do ASO</label><input type="date" id="e-aso" value="${esc((e.aso || {}).data || '')}" ${ro}></div><div><label for="e-asov">Validade</label><input type="date" id="e-asov" value="${esc((e.aso || {}).validade || '')}" ${ro}></div></div>
+    <div class="etf"><h4>ASO ${(e.aso || {}).data ? '<span class="badge b-ok">feito</span>' : ''}</h4><div class="grid2"><div><label for="e-asoag">Exame marcado para</label><input type="date" id="e-asoag" value="${esc((e.aso || {}).agendado || '')}" ${ro}></div><div><label for="e-aso">Data do ASO</label><input type="date" id="e-aso" value="${esc((e.aso || {}).data || '')}" ${ro}></div></div>
+      ${(e.aso || {}).data ? `<p class="note" style="margin:6px 0 0">Vence em ${fmtD(addMonths(e.aso.data, 12))} (1 ano, automático).</p>` : ''}
       <div class="grid2"><div><label for="e-asoap">Resultado</label><select id="e-asoap" ${ro}><option value="1" ${(e.aso || {}).apto !== false ? 'selected' : ''}>Apto</option><option value="0" ${(e.aso || {}).apto === false ? 'selected' : ''}>Inapto</option></select></div><div><label>Arquivo do ASO</label>${((e.aso || {}).arq || []).length ? `<div class="thumbs">${e.aso.arq.map((f, i) => `<button data-veraso="${i}">${f.thumb ? `<img src="${f.thumb}" alt="">` : 'PDF'}</button>`).join('')}</div>` : ''}${ro ? '' : '<button class="btn sm ghost" id="e-asof" style="margin-top:4px">Anexar ASO</button>'}</div></div></div>
-    <div class="etf"><h4>Integração</h4><div class="grid3"><div><label for="e-ia">Agendada para</label><input type="date" id="e-ia" value="${esc((e.integ || {}).agendada || '')}" ${ro}></div><div><label for="e-ir">Realizada em</label><input type="date" id="e-ir" value="${esc((e.integ || {}).realizada || '')}" ${ro}></div><div><label for="e-iv">Validade</label><input type="date" id="e-iv" value="${esc((e.integ || {}).validade || '')}" ${ro}></div></div></div>
-    <div class="etf"><h4>Treinamentos admissionais</h4><div class="grid2"><div><label for="e-te">Enviados em</label><input type="date" id="e-te" value="${esc((e.trein || {}).enviado || '')}" ${ro}></div><div><label for="e-tc">Concluídos em</label><input type="date" id="e-tc" value="${esc((e.trein || {}).concluido || '')}" ${ro}></div></div></div>
+    <div class="etf"><h4>Integração</h4><div class="grid2"><div><label for="e-ia">Agendada para</label><input type="date" id="e-ia" value="${esc((e.integ || {}).agendada || '')}" ${ro}></div><div><label for="e-ir">Realizada em</label><input type="date" id="e-ir" value="${esc((e.integ || {}).realizada || '')}" ${ro}></div></div><p class="note" style="margin:6px 0 0">A integração não vence.</p></div>
+    <div class="etf"><h4>Treinamentos admissionais</h4><div id="m-trein"><p class="note">Carregando…</p></div><div class="grid2"><div><label for="e-te">Enviados em</label><input type="date" id="e-te" value="${esc((e.trein || {}).enviado || '')}" ${ro}></div><div><label for="e-tc">Concluídos em</label><input type="date" id="e-tc" value="${esc((e.trein || {}).concluido || '')}" ${ro}></div></div></div>
     <div class="etf"><h4>Assinaturas e envio</h4><div class="grid3"><div><label for="e-epi">OS e ficha de EPI assinadas</label><input type="date" id="e-epi" value="${esc((e.epi || {}).data || '')}" ${ro}></div><div><label for="e-adm">Docs admissionais assinados</label><input type="date" id="e-adm" value="${esc((e.admiss || {}).data || '')}" ${ro}></div><div><label for="e-ct">Enviado à contabilidade</label><input type="date" id="e-ct" value="${esc((e.contab || {}).data || '')}" ${ro}></div></div></div>
     <div class="etf"><h4>Justificativa de atraso ${atrasado(a) ? `<span class="badge ${precisaJust(a) ? 'b-bad' : 'b-ok'}">${precisaJust(a) ? 'obrigatória' : 'preenchida'}</span>` : ''}</h4>
       <div class="grid2"><div><label for="e-jm">Motivo</label><select id="e-jm" ${ro}><option value="">—</option>${['Documentos do candidato', 'Agenda do ASO / clínica', 'Agenda da integração (cliente)', 'Treinamentos', 'Candidato desistiu ou sumiu', 'Aprovação interna', 'Outro'].map(m => `<option ${a.justMotivo === m ? 'selected' : ''}>${m}</option>`).join('')}</select></div><div><label for="e-j">Detalhe</label><input id="e-j" value="${esc(a.justificativa || '')}" ${ro} placeholder="${atrasado(a) ? 'Obrigatório: passou de ' + PRAZO + ' dias' : 'Só se passar de ' + PRAZO + ' dias'}"></div></div></div>
@@ -150,6 +188,7 @@ async function detalhe(id, refresh) {
     ${ro ? (a.funcionarioId ? `<p class="note">Cadastrado como funcionário em ${fmtD(a.concluidoEm)}.</p>` : '') : `<div class="actions"><button class="btn primary" id="e-save">Salvar etapas</button><button class="btn accent" id="e-conc">Concluir e cadastrar funcionário</button></div>
       <div class="actions" style="margin-top:6px"><button class="btn sm danger" id="e-canc">Cancelar admissão (desistência)</button></div>`}`);
   $('#sheet').scrollTop = y;
+  treinBox(a, !!ro);
   db.doc('admissoes_priv/' + id).get().then(s => { const v = s.exists ? s.data().salario : null; const el = $('#m-sal'); if (el) el.textContent = v != null ? brl(v) : 'não informado';
       const inp = $('#e-sal'); if (inp) { inp.value = v != null ? String(v).replace('.', ',') : ''; inp.dataset.orig = inp.value; inp.placeholder = 'Ex.: 3500,00'; inp.disabled = !!ro; } },
     () => { const el = $('#m-sal'); if (el) el.textContent = 'restrito'; const inp = $('#e-sal'); if (inp) inp.placeholder = 'Seu perfil não vê salário'; });
@@ -158,15 +197,17 @@ async function detalhe(id, refresh) {
   const sv = $('#e-save'); if (sv) sv.onclick = () => salvarEtapas(a);
   const cc = $('#e-conc'); if (cc) cc.onclick = () => concluir(a);
   const cn = $('#e-canc'); if (cn) { let armed = false; cn.onclick = async () => { if (!armed) { armed = true; cn.textContent = 'Toque de novo para cancelar (o link deixa de funcionar)'; return; }
-    try { await db.doc('admissoes/' + a.id).update({ status: 'cancelado', canceladoEm: new Date().toISOString(), canceladoPor: MEU }); toast('Admissão cancelada.', 'ok'); fechar(); } catch (er) { toast('Não foi possível cancelar.', 'bad'); } }; }
+    try { await db.doc('admissoes/' + a.id).update({ status: 'cancelado', canceladoEm: new Date().toISOString(), canceladoPor: MEU });
+      if ((a.trein || {}).senha) { try { const l = await db.doc('login/' + a.cpf).get(); if (l.exists && l.data().uid) await db.doc('usuarios/' + l.data().uid).update({ ativo: false }); } catch (er) {} }
+      if (a.funcionarioId) db.doc('funcionarios/' + a.funcionarioId).update({ situacao: 'Desistiu' }).catch(() => {});
+      toast('Admissão cancelada.', 'ok'); fechar(); } catch (er) { toast('Não foi possível cancelar.', 'bad'); } }; }
   const af = $('#e-asof'); if (af) af.onclick = () => anexar(a, 'aso');
-  const ir = $('#e-ir'); if (ir) ir.onchange = () => { if (ir.value && !$('#e-iv').value) $('#e-iv').value = addMonths(ir.value, 12); };
-  const as = $('#e-aso'); if (as) as.onchange = () => { if (as.value && !$('#e-asov').value) $('#e-asov').value = addMonths(as.value, 12); };
 }
 function lerEtapas(a) {
   const e = JSON.parse(JSON.stringify(etp(a)));
-  e.aso = Object.assign({}, e.aso, { agendado: $('#e-asoag').value, data: $('#e-aso').value, validade: $('#e-asov').value, apto: $('#e-asoap').value !== '0' });
-  e.integ = { agendada: $('#e-ia').value, realizada: $('#e-ir').value, validade: $('#e-iv').value };
+  const asoD = $('#e-aso').value;
+  e.aso = Object.assign({}, e.aso, { agendado: $('#e-asoag').value, data: asoD, validade: asoD ? addMonths(asoD, 12) : '', apto: $('#e-asoap').value !== '0' });
+  e.integ = { agendada: $('#e-ia').value, realizada: $('#e-ir').value, validade: '' };
   e.trein = { enviado: $('#e-te').value, concluido: $('#e-tc').value };
   e.epi = { data: $('#e-epi').value }; e.admiss = { data: $('#e-adm').value }; e.contab = { data: $('#e-ct').value };
   return e;
@@ -175,7 +216,7 @@ async function salvarEtapas(a, silencioso) {
   const e = lerEtapas(a); const u = { etapas: e, justMotivo: $('#e-jm').value, justificativa: $('#e-j').value.trim(), obs: $('#e-obs').value.trim(), atualizadoEm: new Date().toISOString() };
   if (e.integ.realizada && e.integ.realizada < str(a.abertoEm).slice(0, 10)) { toast('A integração não pode ser antes da abertura.', 'bad'); return false; }
   const si = $('#e-sal'); if (si && !si.disabled && si.value !== si.dataset.orig) {
-    const v = si.value.trim() ? parseFloat(si.value.replace(/\./g, '').replace(',', '.')) : null; if (si.value.trim() && !isFinite(v)) { toast('Salário inválido.', 'bad'); return false; }
+    const v = numBR(si.value); if (si.value.trim() && v == null) { toast('Salário inválido.', 'bad'); return false; }
     try { await db.doc('admissoes_priv/' + a.id).set({ salario: v, em: new Date().toISOString(), por: MEU }); si.dataset.orig = si.value; } catch (er) { toast('Não foi possível salvar o salário.', 'bad'); return false; } }
   try { await db.doc('admissoes/' + a.id).update(u); Object.assign(a, u); if (!silencioso) { toast('Etapas salvas.', 'ok'); detalhe(a.id); } return true; } catch (er) { toast('Não foi possível salvar.', 'bad'); return false; }
 }
@@ -203,6 +244,24 @@ function anexar(a, slot) {
     } catch (er) { toast(er.message || 'Não foi possível anexar.', 'bad'); } };
   i.click();
 }
+/* treinamentos do candidato: progresso no portal do aluno, liberar mais cursos e nova senha */
+async function treinBox(a, ro) {
+  const box = $('#m-trein'); if (!box) return; const tr = a.trein || { cursos: [] };
+  const linhas = await Promise.all((tr.cursos || []).map(async c => { const cu = D.cursos.find(x => x.id === c.id) || {}; let m = null; try { const s = await db.doc(`matriculas/${c.id}_${a.funcionarioId}`).get(); m = s.exists ? s.data() : null; } catch (er) {}
+    const nm = (cu.mods || []).length; const ok = m ? Object.values(m.prog || {}).filter(p => p && p.ok).length : 0;
+    const st = !m ? '<span class="badge b-mut">—</span>' : m.concluidoEm ? (cu.pratica && !m.praticaOk ? `<span class="badge b-warn">Teoria ok · falta prática</span>` : `<span class="badge b-ok">Concluído ${fmtD(m.concluidoEm)}</span>`) : ok || m.tempo ? `<span class="badge b-info">${nm ? Math.round(ok / nm * 100) : 0}% · ${Math.round((m.tempo || 0) / 60)} min</span>` : '<span class="badge b-mut">Não começou</span>';
+    return { c, m, cu, st, fim: m && m.concluidoEm && !(cu.pratica && !m.praticaOk) ? str(m.praticaEm || m.concluidoEm).slice(0, 10) : '' }; }));
+  if (!$('#m-trein')) return;
+  const alunoUrl = new URL('../aluno/', location.href).href;
+  box.innerHTML = (linhas.length ? linhas.map(l => `<div class="bt" style="padding:5px 0;border-bottom:1px solid var(--line)"><span>${esc(l.c.nome)}</span>${l.st}</div>`).join('') + (tr.senha ? `<p class="note" style="margin:8px 0 0">Portal do aluno: <b>${esc(alunoUrl)}</b> · login: CPF · senha provisória: <b class="code">${esc(tr.senha)}</b>. Isso também aparece no link do candidato.</p>` : '') : '<p class="note" style="margin:0">Nenhum treinamento liberado ainda.</p>')
+    + (ro ? '' : `<details style="margin-top:8px"><summary class="link" style="cursor:pointer">Liberar treinamentos</summary>${cursosPick(new Set(), 'l', (tr.cursos || []).map(c => c.id))}<div class="actions"><button class="btn sm primary" id="l-go">Liberar marcados</button>${tr.senha ? '<button class="btn sm ghost" id="l-senha">Gerar nova senha</button>' : ''}</div></details>`);
+  const go = $('#l-go'); if (go) go.onclick = async () => { const ids = $$('.l-cur').filter(c => c.checked).map(c => c.dataset.cur); if (!ids.length) return toast('Marque ao menos um curso.', 'bad'); go.disabled = true; go.textContent = 'Liberando…';
+    try { await liberarTrein(a, ids); toast('Treinamentos liberados.', 'ok'); SUJO = false; detalhe(a.id); } catch (er) { go.disabled = false; go.textContent = 'Liberar marcados'; toast((er && er.message) || 'Não foi possível liberar.', 'bad'); } };
+  const ns = $('#l-senha'); if (ns) { let armed = false; ns.onclick = async () => { if (!armed) { armed = true; ns.textContent = 'Toque de novo: a senha antiga deixa de valer'; return; } try { await liberarTrein(a, [], true); toast('Nova senha gerada.', 'ok'); SUJO = false; detalhe(a.id); } catch (er) { toast((er && er.message) || 'Erro.', 'bad'); } }; }
+  /* todos concluídos: marca a etapa sozinho */
+  const e = etp(a); if (!ro && linhas.length && linhas.every(l => l.fim) && !(e.trein || {}).concluido) { const ne = JSON.parse(JSON.stringify(e)); ne.trein = Object.assign({}, ne.trein, { concluido: linhas.map(l => l.fim).sort().pop() });
+    try { await db.doc('admissoes/' + a.id).update({ etapas: ne }); a.etapas = ne; const tc = $('#e-tc'); if (tc && !tc.value) tc.value = ne.trein.concluido; } catch (er) {} }
+}
 /* concluir: cria (ou atualiza) o funcionário com os dados do candidato e as datas de ASO e integração */
 async function concluir(a) {
   const e = lerEtapas(a); const dias = diasEntre(a.abertoEm, e.integ.realizada || hoje()); const ds = ADM.docsSt(a);
@@ -210,12 +269,12 @@ async function concluir(a) {
   if (dias > PRAZO && !$('#e-j').value.trim()) return toast(`Mobilização com ${dias} dias: preencha a justificativa de atraso antes de concluir.`, 'bad');
   if (!(await salvarEtapas(a, true))) return;
   SUJO = true; /* tela de conclusão aberta: não redesenhar o detalhe por cima */
-  const dd = (a.cand || {}).dados || {}; const exist = D.func.find(f => ADM.dig(f.cpf) === a.cpf);
+  const dd = (a.cand || {}).dados || {}; const exist = D.func.find(f => f.id === a.funcionarioId) || D.func.find(f => ADM.dig(f.cpf) === a.cpf); const outro = exist && exist.id !== a.funcionarioId && exist.ativo !== false;
   sheet(`<div class="top"><h2>Concluir admissão</h2><button class="x" id="c-x" aria-label="Voltar">×</button></div>
     <p><b>${esc(a.nome)}</b> · ${esc(a.funcao)} · ${dias} dia(s) de mobilização</p>
     ${avisos.length ? `<div class="demo">Atenção: ${esc(avisos.join('; '))}. Dá para concluir assim mesmo e completar depois.</div>` : ''}
-    ${exist ? `<div class="demo">Já existe funcionário com esse CPF (${esc(exist.nome)}, matrícula ${esc(exist.matricula || '—')}). O cadastro dele será atualizado e reativado.</div>` : ''}
-    <div class="grid2"><div><label class="req" for="c-mat">Matrícula</label><input id="c-mat" value="${esc(exist ? exist.matricula || '' : '')}"></div><div><label class="req" for="c-adm">Data de admissão</label><input type="date" id="c-adm" value="${esc(e.integ.realizada || hoje())}"></div></div>
+    ${outro ? `<div class="demo">Já existe funcionário com esse CPF (${esc(exist.nome)}, matrícula ${esc(exist.matricula || '—')}). O cadastro dele será atualizado e reativado.</div>` : ''}
+    <div class="grid2"><div><label class="req" for="c-mat">Matrícula</label><input id="c-mat" value="${esc(exist && ADM.dig(exist.matricula) !== a.cpf ? exist.matricula || '' : '')}"></div><div><label class="req" for="c-adm">Data de admissão</label><input type="date" id="c-adm" value="${esc(e.integ.realizada || hoje())}"></div></div>
     <p class="note">Vai para o cadastro de funcionários: nome, CPF, função, área e sub-área, unidade, nascimento, tamanhos, contato, trabalho em altura, ASO e integração com as validades. Os documentos continuam guardados nesta admissão.</p>
     <div class="actions"><button class="btn primary big" id="c-go">Concluir e cadastrar</button></div>`);
   $('#c-x').onclick = () => detalhe(a.id);
@@ -225,10 +284,12 @@ async function concluir(a) {
     const b = $('#c-go'); b.disabled = true;
     const f = { nome: a.nome, matricula: mat, cpf: a.cpf, funcao: a.funcao, area: a.area, areaId: a.areaId, subareaId: a.subareaId || '', subarea: a.subarea || '', subareas: a.subareaId ? [a.subareaId] : [], unidade: a.unidade || '',
       admissao: adm, nascimento: dd.nascimento || '', situacao: 'Trabalhando', tamCamisa: dd.tamCamisa || '', tamRoupa: dd.tamCamisa || '', tamCalca: dd.tamCalca || '', tamCalcado: dd.tamCalcado || '',
-      telefone: dd.telefone || a.telefone, email: dd.email || '', altura: !!a.altura, ativo: true, admissaoId: a.id,
-      asoData: e.aso.data || '', asoValidade: e.aso.validade || '', integracaoData: e.integ.realizada || '', integracaoValidade: e.integ.validade || '' };
+      telefone: dd.telefone || a.telefone, email: dd.email || '', altura: !!a.altura, vinculo: a.vinculo || 'CLT', ativo: true, admissaoId: a.id,
+      asoData: e.aso.data || '', asoValidade: e.aso.validade || '', integracaoData: e.integ.realizada || '', integracaoValidade: '' };
     try {
       let fid; if (exist) { fid = exist.id; await db.doc('funcionarios/' + fid).update(f); } else { const r = db.collection('funcionarios').doc(); fid = r.id; await r.set(Object.assign({ criadoEm: new Date().toISOString() }, f)); }
+      /* a matrícula passa a valer como login do portal do aluno, além do CPF */
+      if ((a.trein || {}).senha) { try { const l = await db.doc('login/' + a.cpf).get(); const k = norm(mat).replace(/[^a-z0-9]/g, ''); if (l.exists && k && k !== a.cpf) await db.doc('login/' + k).set(Object.assign({}, l.data(), { funcionarioId: fid })); } catch (er) {} }
       await db.doc('admissoes/' + a.id).update({ status: 'concluido', concluidoEm: new Date().toISOString(), concluidoPor: MEU, funcionarioId: fid, matricula: mat, admissao: adm, mobDias: diasEntre(a.abertoEm, e.integ.realizada || hoje()) });
       toast('Admissão concluída e funcionário cadastrado.', 'ok'); fechar();
     } catch (er) { b.disabled = false; toast('Não foi possível concluir: ' + ((er && er.message) || er), 'bad'); }

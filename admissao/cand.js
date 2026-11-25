@@ -55,6 +55,9 @@
         ${rejs.length ? `<div class="badbox"><b>O RH pediu para reenviar:</b> ${rejs.map(s => esc(s.t)).join(', ')}. Veja o motivo no documento.</div>` : ''}</div>
       <div class="card"><div class="sh"><div class="m"><h2>1. Seus dados</h2><p class="note">${p.dOk} de ${p.dTot} campos obrigatórios</p></div><button class="btn ghost" id="c-tdados">${ATIVO === 'dados' ? 'Fechar' : 'Preencher'}</button></div>
         <div id="c-dados" class="${ATIVO === 'dados' ? '' : 'hidden'}"></div></div>
+      ${(A.trein || {}).cursos && A.trein.cursos.length ? `<div class="card"><h2>3. Treinamentos</h2><p class="note">Você já pode fazer estes treinamentos pelo celular:</p><ul style="margin:6px 0 10px;padding-left:20px">${A.trein.cursos.map(c => `<li>${esc(c.nome)}</li>`).join('')}</ul>
+        <p>Login: <b>seu CPF</b><br>Senha provisória: <b style="font-size:18px;letter-spacing:1px">${esc(A.trein.senha || '')}</b></p><p class="note">No primeiro acesso você cria a sua senha.</p>
+        <a class="btn primary big" href="../aluno/" target="_blank" rel="noopener" style="text-decoration:none">Abrir treinamentos</a></div>` : ''}
       <div class="card"><h2>2. Documentos</h2><p class="note">Tire foto com o documento inteiro aparecendo, em cima de uma mesa, com boa luz. PDF também vale. Os marcados com * são obrigatórios.</p><div id="c-docs"></div></div>`;
     $('#c-tdados').onclick = () => { ATIVO = ATIVO === 'dados' ? '' : 'dados'; tela(); };
     if (ATIVO === 'dados') formDados();
@@ -82,7 +85,7 @@
   async function salvarCand() { CAND.em = new Date().toISOString(); const p = progresso(); CAND.completo = p.completo; if (p.completo && !CAND.completoEm) CAND.completoEm = CAND.em; await CAPI.setCand(tk, CAND); }
   function docs() {
     const rev = A.rev || {};
-    $('#c-docs').innerHTML = ADM.SLOTS.map(s => { const L = CAND.docs[s.id] || []; const r = rev[s.id]; const ult = ADM.ultimoEnvio(L);
+    $('#c-docs').innerHTML = ADM.slotsDe(A).map(s => { const L = CAND.docs[s.id] || []; const r = rev[s.id]; const ult = ADM.ultimoEnvio(L);
       const rej = L.length && r && r.st === 'rej' && str(r.em) >= ult; const aprov = L.length && r && r.st === 'ok' && str(r.em) >= ult;
       const st = rej ? '<span class="st s-bad">Reenviar</span>' : aprov ? '<span class="st s-ok">Conferido</span>' : L.length ? '<span class="st s-ok">Enviado</span>' : s.obr ? '<span class="st s-warn">Pendente</span>' : '<span class="st s-mut">Se tiver</span>';
       return `<div class="slot ${rej ? 'rej' : L.length ? 'ok' : ''}" id="s-${s.id}"><div class="sh"><div class="m"><b>${esc(s.t)}${s.obr ? ' *' : ''}</b>${s.d ? `<div class="note">${esc(s.d)}</div>` : ''}</div>${st}</div>
@@ -94,7 +97,7 @@
   }
   function escolher(slot, camera) {
     if (ocupado) return toast('Espere terminar o envio anterior.');
-    const s = ADM.SLOTS.find(x => x.id === slot); const i = document.createElement('input'); i.type = 'file';
+    const s = ADM.slotsDe(A).find(x => x.id === slot); const i = document.createElement('input'); i.type = 'file';
     i.accept = camera ? 'image/*' : 'image/*,application/pdf'; if (camera) i.setAttribute('capture', s.selfie ? 'user' : 'environment');
     i.onchange = () => i.files[0] && enviar(slot, i.files[0]); i.click();
   }

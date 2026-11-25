@@ -28,6 +28,7 @@ service cloud.firestore {
     match /config/empresa { allow read: if ativo(); allow write: if tem(['admin', 'gestao']); }
     // nome da empresa para a página do candidato (sem login)
     match /config/publico { allow read: if true; allow write: if tem(['admin', 'gestao']) || admi(['rh']); }
+    match /config/admissao { allow read: if admi(['rh', 'consulta']); allow write: if admi(['rh']); }
     match /config/regras  { allow read: if equipe(); allow write: if tem(['admin', 'gerente', 'gestao']); }
 
     match /usuarios/{uid} {
@@ -36,19 +37,19 @@ service cloud.firestore {
       // Equipe de treinamentos cria e desativa o acesso de funcionários ao portal do aluno.
       allow create: if tem(['admin'])
         || (tem(['gestao']) && !(request.resource.data.papel in ['admin', 'gerente']))
-        || (trein(['gestor', 'tst', 'rh']) && request.resource.data.papel == 'funcionario')
+        || ((trein(['gestor', 'tst', 'rh']) || admi(['rh'])) && request.resource.data.papel == 'funcionario')
         || (logado() && request.auth.uid == uid && request.resource.data.papel == 'admin'
             && getAfter(/databases/$(database)/documents/config/setup).data.adminUid == uid);
       allow update: if tem(['admin'])
         || (tem(['gestao']) && request.auth.uid != uid
             && !(resource.data.papel in ['admin', 'gerente']) && !(request.resource.data.papel in ['admin', 'gerente']))
-        || (trein(['gestor', 'tst', 'rh']) && resource.data.papel == 'funcionario' && request.resource.data.papel == 'funcionario')
+        || ((trein(['gestor', 'tst', 'rh']) || admi(['rh'])) && resource.data.papel == 'funcionario' && request.resource.data.papel == 'funcionario')
         || (logado() && request.auth.uid == uid && resource.data.papel == 'funcionario'
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['trocarSenha', 'senhaTrocadaEm']));
       allow delete: if tem(['admin']);
     }
     // login do portal do aluno: matrícula → e-mail interno da conta
-    match /login/{chave} { allow read: if true; allow write: if trein(['gestor', 'tst', 'rh']); }
+    match /login/{chave} { allow read: if true; allow write: if trein(['gestor', 'tst', 'rh']) || admi(['rh']); }
 
     // aprovações de exceção: só gerência
     match /decisoes/{id} { allow read: if equipe(); allow write: if tem(['admin', 'gerente']); }
@@ -89,7 +90,7 @@ service cloud.firestore {
     match /cursos/{id}    { allow read: if ativo(); allow write: if trein(['gestor', 'tst', 'rh', 'instrutor']); }
     match /matriculas/{id} {
       allow read: if equipe() || (aluno() && resource.data.funcionarioId == meuFunc());
-      allow write: if trein(['gestor', 'tst', 'rh', 'instrutor']);
+      allow write: if trein(['gestor', 'tst', 'rh', 'instrutor']) || admi(['rh']);
       // o aluno só registra o próprio progresso: não marca prática, não emite certificado
       allow update: if aluno() && resource.data.funcionarioId == meuFunc()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['prog', 'tempo', 'inicioEm', 'concluidoEm']);
