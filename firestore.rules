@@ -12,6 +12,12 @@ service cloud.firestore {
     function meuFunc() { return perfil().funcionarioId; }
     // perfil no módulo Treinamentos (sem perfil definido: Gerente vira gestor, TST e RH continuam)
     function mt() { return perfil().get('modulos', {}).get('treinamentos', ''); }
+    // perfil no módulo Alocação em OM (sem perfil definido: Gerente lança)
+    function ma() { return perfil().get('modulos', {}).get('alocacao', ''); }
+    function aloc(ps) { return equipe() && (perfil().papel in ['admin', 'gestao'] || ma() in ps || (ma() == '' && perfil().papel == 'gerente' && 'adm' in ps)); }
+    // perfil no módulo Admissão (sem perfil definido: RH e Gerente são RH)
+    function mad() { return perfil().get('modulos', {}).get('admissao', ''); }
+    function admi(ps) { return equipe() && (perfil().papel in ['admin', 'gestao'] || mad() in ps || (mad() == '' && perfil().papel in ['rh', 'gerente'] && 'rh' in ps)); }
     function trein(ps) { return equipe() && (perfil().papel in ['admin', 'gestao'] || mt() in ps || (mt() == '' && ((perfil().papel == 'gerente' && 'gestor' in ps) || perfil().papel in ps))); }
 
     // configuração inicial (primeiro administrador): só pode ser criada uma vez
@@ -20,6 +26,8 @@ service cloud.firestore {
       allow create: if logado() && request.resource.data.adminUid == request.auth.uid;
     }
     match /config/empresa { allow read: if ativo(); allow write: if tem(['admin', 'gestao']); }
+    // nome da empresa para a página do candidato (sem login)
+    match /config/publico { allow read: if true; allow write: if tem(['admin', 'gestao']) || admi(['rh']); }
     match /config/regras  { allow read: if equipe(); allow write: if tem(['admin', 'gerente', 'gestao']); }
 
     match /usuarios/{uid} {
@@ -47,7 +55,7 @@ service cloud.firestore {
 
     match /funcionarios/{id} {
       allow read: if equipe() || (aluno() && meuFunc() == id);
-      allow write: if tem(['admin', 'gerente', 'gestao', 'almox', 'tst', 'rh']) || trein(['gestor', 'tst', 'rh']);
+      allow write: if tem(['admin', 'gerente', 'gestao', 'almox', 'tst', 'rh']) || trein(['gestor', 'tst', 'rh']) || admi(['rh']);
     }
     match /trein_tipos/{id}  { allow read: if equipe(); allow write: if tem(['admin', 'gerente', 'gestao', 'tst', 'rh']) || trein(['gestor', 'tst', 'rh']); }
     match /treinamentos/{id} {
@@ -86,6 +94,32 @@ service cloud.firestore {
       allow update: if aluno() && resource.data.funcionarioId == meuFunc()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['prog', 'tempo', 'inicioEm', 'concluidoEm']);
     }
+    // ---------- módulo Alocação em OM ----------
+    match /oms/{id}          { allow read: if aloc(['adm', 'consulta']); allow write: if aloc(['adm']); }
+    match /om_fixa/{id}      { allow read: if aloc(['adm', 'consulta']); allow write: if aloc(['adm']); }
+    match /alocacoes/{id}    { allow read: if aloc(['adm', 'consulta']); allow write: if aloc(['adm']); }
+    match /apontamentos/{id} { allow read: if aloc(['adm', 'consulta']); allow write: if aloc(['adm']); }
+
+    // ---------- módulo Admissão ----------
+    // o candidato não faz login: abre o processo pelo código do link (não dá para listar) e só mexe no campo "cand"
+    match /admissoes/{tk} {
+      allow get: if admi(['rh', 'consulta']) || resource.data.status == 'aberto';
+      allow list: if admi(['rh', 'consulta']);
+      allow create, delete: if admi(['rh']);
+      allow update: if admi(['rh'])
+        || (resource.data.status == 'aberto' && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['cand']));
+      // documentos em partes; o candidato grava enquanto o processo está aberto, só o RH lê
+      match /p/{pid} {
+        allow read: if admi(['rh', 'consulta']);
+        allow create, update: if admi(['rh'])
+          || (get(/databases/$(database)/documents/admissoes/$(tk)).data.status == 'aberto'
+              && request.resource.data.keys().hasOnly(['d']) && request.resource.data.d is string && request.resource.data.d.size() < 760000);
+        allow delete: if admi(['rh']);
+      }
+    }
+    // salário: só o RH
+    match /admissoes_priv/{tk} { allow read, write: if admi(['rh']); }
+
     // anexos (PDFs de padrões, listas, certificados externos, materiais dos cursos), guardados em partes
     // o aluno abre um arquivo pelo código (vem do padrão ou do curso), mas não lista os arquivos
     match /arquivos/{id} {

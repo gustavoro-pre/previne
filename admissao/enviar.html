@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Documentos de admissão · PREVINE</title>
+<meta name="theme-color" content="#14213d">
+<link rel="icon" href="../icon-192.png">
+<style>
+:root{--ink:#14213d;--muted:#5b6474;--line:#e2e5ea;--bg:#f3f4f6;--accent:#f2a900;--ok:#1f7a45;--ok-bg:#e6f4ec;--bad:#b3261e;--bad-bg:#fbe7e5;--warn:#9a5b00;--warn-bg:#fdf1dc;--info:#2a5f9e;--info-bg:#e7eef8}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+header{background:var(--ink);color:#fff;border-bottom:4px solid var(--accent);padding:14px 16px}
+header b{font-size:17px}header div{font-size:13px;opacity:.75}
+main{max-width:640px;margin:0 auto;padding:16px 16px 60px}
+.card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:12px}
+h1{font-size:21px;margin:4px 0 8px}h2{font-size:17px;margin:0 0 6px}
+p{margin:6px 0}.note{font-size:14px;color:var(--muted)}
+label{display:block;font-size:14px;color:var(--muted);margin:12px 0 4px}
+input,select,textarea{width:100%;padding:12px;border:1px solid #cfd4dc;border-radius:10px;font:inherit;background:#fff;color:inherit}
+input:focus,select:focus{outline:none;border-color:var(--ink);box-shadow:0 0 0 3px rgba(20,33,61,.12)}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:0 10px}.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0 10px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:1px solid transparent;border-radius:10px;padding:11px 14px;font:inherit;font-weight:600;cursor:pointer;background:#eceef1;color:var(--ink)}
+.btn.primary{background:var(--ink);color:#fff}.btn.ghost{background:#fff;border-color:#cfd4dc}.btn.big{width:100%;padding:15px}
+.btn:disabled{opacity:.5}
+.bar{height:10px;background:#e3e6eb;border-radius:99px;overflow:hidden;margin:10px 0 4px}.bar i{display:block;height:100%;background:var(--ok);border-radius:99px;transition:width .3s}
+.slot{border:1px solid var(--line);border-radius:12px;padding:12px;margin-top:10px;background:#fff}
+.slot.ok{border-color:#b7dcc5;background:#f6fbf8}.slot.rej{border-color:#efb7b2;background:#fff8f7}
+.st{font-size:13px;font-weight:600;padding:2px 9px;border-radius:99px;white-space:nowrap}
+.s-ok{background:var(--ok-bg);color:var(--ok)}.s-bad{background:var(--bad-bg);color:var(--bad)}.s-warn{background:var(--warn-bg);color:var(--warn)}.s-mut{background:#eceef1;color:var(--muted)}
+.sh{display:flex;gap:8px;align-items:flex-start}.sh .m{flex:1}
+.files{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.file{position:relative;width:76px;height:76px;border:1px solid var(--line);border-radius:8px;background:#fafbfc;display:grid;place-items:center;font-size:12px;color:var(--muted);overflow:hidden}
+.file img{width:100%;height:100%;object-fit:cover}.file button{position:absolute;top:2px;right:2px;width:24px;height:24px;border-radius:50%;border:0;background:rgba(20,33,61,.8);color:#fff;font-size:14px;line-height:1;cursor:pointer}
+.acts{display:flex;gap:8px;margin-top:10px}.acts .btn{flex:1}
+.warnbox{background:var(--warn-bg);color:#6b4300;border-radius:10px;padding:10px 12px;margin-top:8px;font-size:14px}
+.badbox{background:var(--bad-bg);color:var(--bad);border-radius:10px;padding:10px 12px;margin-top:8px;font-size:14px}
+.okbox{background:var(--ok-bg);color:var(--ok);border-radius:12px;padding:14px;font-weight:600}
+.hidden{display:none!important}
+#toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);max-width:92vw;padding:12px 16px;border-radius:10px;background:var(--ink);color:#fff;opacity:0;pointer-events:none;transition:opacity .2s;z-index:9}
+#toast.show{opacity:1}#toast.bad{background:var(--bad)}#toast.ok{background:var(--ok)}
+.sending{font-size:13px;color:var(--info);margin-top:6px}
+</style>
+</head>
+<body>
+<header><b id="emp">PREVINE Engenharia</b><div>Envio de documentos para admissão</div></header>
+<main id="app"><div class="card"><p class="note">Carregando…</p></div></main>
+<div id="toast"></div>
+<script src="comum.js"></script>
+<script type="module" src="capi.js"></script>
+<script src="cand.js"></script>
+</body>
+</html>

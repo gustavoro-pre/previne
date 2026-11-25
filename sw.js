@@ -1,9 +1,9 @@
 /* Guarda o portal e os módulos no aparelho para abrir sem internet. Os dados ficam no cache do Firestore. */
-const V = 'previne-v2';
+const V = 'previne-v4';
 const SHELL = ['./', './index.html', './fb.js', './firebase-config.js', './manifest.webmanifest', './icon-192.png', './icon-512.png',
-  './ferramentas/', './ferramentas/index.html', './treinamentos/', './treinamentos/index.html', './treinamentos/trein.js', './indicadores/', './indicadores/index.html', './indicadores/ind.js'];
+  './ferramentas/', './ferramentas/index.html', './treinamentos/', './treinamentos/index.html', './treinamentos/trein.js', './indicadores/', './indicadores/index.html', './indicadores/ind.js', './alocacao/', './alocacao/index.html', './alocacao/aloc.js', './admissao/', './admissao/index.html', './admissao/adm.js', './admissao/comum.js'];
 const LIBS = /^https:\/\/(www\.gstatic\.com\/firebasejs|cdn\.jsdelivr\.net\/npm|fonts\.(googleapis|gstatic)\.com)\//;
-const MODS = ['ferramentas', 'treinamentos', 'indicadores', 'aluno'];
+const MODS = ['ferramentas', 'treinamentos', 'indicadores', 'alocacao', 'admissao', 'aluno'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(V).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== V).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
 self.addEventListener('fetch', e => {

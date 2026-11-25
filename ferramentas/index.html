@@ -317,7 +317,7 @@ table.tb{width:100%;border-collapse:collapse;font-size:13px}
     <div id="rg-body"></div>
   </div>
   <div id="sub-kits" class="sub" hidden>
-    <div class="head"><h2>Kits padrão</h2><button class="btn primary" id="k-new" type="button">+ Novo kit</button></div>
+    <div class="head"><h2>Kits padrão</h2><button class="btn ghost" id="k-alt" type="button">Adicional de altura</button><button class="btn primary" id="k-new" type="button">+ Novo kit</button></div>
     <p class="note" style="margin-top:0">Um kit por função define os EPIs obrigatórios (com troca periódica) e as ferramentas que vão na cautela.</p>
     <div id="k-list" class="list"></div>
   </div>
@@ -528,6 +528,12 @@ function renderDemo() {
 /* ================= cálculos EPI ================= */
 function ultimas() { const m = {}; for (const e of S.ent) { const k = m[e.funcionarioId] || (m[e.funcionarioId] = {}); if (!k[e.epiId] || str(k[e.epiId].data) < str(e.data)) k[e.epiId] = e; } return m; }
 const kitsDa = funcao => S.kits.filter(k => norm(k.funcao) && norm(k.funcao) === norm(funcao));
+/* adicionais: kits que valem por atividade (ex.: trabalho em altura), somados ao kit da função */
+const ADIC = { altura: 'Trabalho em altura (NR-35)' };
+const kitsAdic = f => S.kits.filter(k => k.adicional && f && f[k.adicional]);
+const kitsPessoa = f => kitsDa(f.funcao).concat(kitsAdic(f));
+function kitEpisF(f) { const m = new Map(); kitsPessoa(f).forEach(k => (Array.isArray(k.epis) ? k.epis : []).forEach(x => { if (x && x.epiId && !m.has(x.epiId)) m.set(x.epiId, num(x.qtd) || 1); })); return m; }
+const obrigPara = (t, f) => (t.obrig || []).includes(str(f.funcao)) || (!!f.altura && /nr-?\s?35/i.test(str(t.norma) + ' ' + str(t.nome)));
 function kitEpis(funcao) { const m = new Map(); kitsDa(funcao).forEach(k => (Array.isArray(k.epis) ? k.epis : []).forEach(x => { if (x && x.epiId && !m.has(x.epiId)) m.set(x.epiId, num(x.qtd) || 1); })); return m; }
 function trocasVencidas() {
   const U = ultimas(), t = todayStr(), out = [];
@@ -536,7 +542,7 @@ function trocasVencidas() {
 }
 function kitsIncompletos() {
   const U = ultimas(), out = [];
-  S.func.filter(f => f.ativo !== false).forEach(f => { const ke = kitEpis(f.funcao); const miss = [...ke.keys()].filter(id => !(U[f.id] || {})[id]); if (miss.length) out.push({ f, miss }); });
+  S.func.filter(f => f.ativo !== false).forEach(f => { const ke = kitEpisF(f); const miss = [...ke.keys()].filter(id => !(U[f.id] || {})[id]); if (miss.length) out.push({ f, miss }); });
   return out;
 }
 
@@ -879,7 +885,7 @@ function renderEpiTop() {
   const f = funcPicker('e', E, () => { E.itens = []; renderEpiTop(); renderEpiItens(); });
   const card = $('#e-kitcard');
   if (!f) { card.hidden = true; } else {
-    const ke = kitEpis(f.funcao); const U = ultimas()[f.id] || {}; const t = todayStr();
+    const ke = kitEpisF(f); const U = ultimas()[f.id] || {}; const t = todayStr();
     card.hidden = !ke.size;
     $('#e-kit').innerHTML = [...ke.keys()].map(id => {
       const p = S.epis.find(x => x.id === id); if (!p) return '';
@@ -932,7 +938,7 @@ $('#e-addpend').onclick = () => {
   const f = S.func.find(x => x.id === E.func); if (!f) return;
   const U = ultimas()[f.id] || {}; const t = todayStr(); let n = 0;
   const bloq = [];
-  [...kitEpis(f.funcao).entries()].forEach(([id, q]) => { const u = U[id]; if ((!u || (str(u.proximaTroca) && u.proximaTroca < t)) && !E.itens.some(i => i.epiId === id)) { const p = S.epis.find(x => x.id === id); if (p && (caState(p) === 'vencido' || epiBloqueio(p, f))) { bloq.push(p.nome); return; } if (p) { addEpi(id); const it = E.itens.find(i => i.epiId === id); if (it) { it.qtd = q; if (u) it.motivo = 'validade'; } n++; } } });
+  [...kitEpisF(f).entries()].forEach(([id, q]) => { const u = U[id]; if ((!u || (str(u.proximaTroca) && u.proximaTroca < t)) && !E.itens.some(i => i.epiId === id)) { const p = S.epis.find(x => x.id === id); if (p && (caState(p) === 'vencido' || epiBloqueio(p, f))) { bloq.push(p.nome); return; } if (p) { addEpi(id); const it = E.itens.find(i => i.epiId === id); if (it) { it.qtd = q; if (u) it.motivo = 'validade'; } n++; } } });
   renderEpiItens();
   if (bloq.length) toast(`${n ? n + ' adicionado(s). ' : ''}Bloqueado (CA vencido ou regra da função): ${bloq.join(', ')}.`, 'bad');
   else toast(n ? `${n} item(ns) pendente(s) adicionado(s).` : 'Nada pendente no kit.', n ? 'ok' : '');
@@ -1327,7 +1333,7 @@ function renderFunc() {
   const L = S.func.filter(f => (uFilter === 'ativos' ? f.ativo !== false : uFilter === 'inativos' ? f.ativo === false : !!pm[f.id]) && (!q || matchFunc(f, q))).sort((a, b) => str(a.nome).localeCompare(str(b.nome), 'pt'));
   $('#u-list').innerHTML = L.length ? L.slice(0, 300).map(f => `<button class="item" data-func="${esc(f.id)}"><div class="main"><div class="t1">${esc(f.nome)}</div>
     <div class="t2">${[f.matricula, f.funcao, [f.area, f.subarea].filter(Boolean).join(' / '), f.unidade].filter(Boolean).map(esc).join(' · ') || '&nbsp;'}</div></div>
-    <div class="side">${f.situacao && f.situacao !== 'Trabalhando' && f.ativo !== false ? `<span class="badge b-warn">${esc(f.situacao)}</span>` : ''}${pm[f.id] ? `<span class="badge b-info">${pm[f.id]} ferr. em posse</span>` : ''}${f.ativo === false ? '<span class="badge b-mut">Inativo</span>' : ''}</div></button>`).join('') : `<div class="empty">${S.func.length ? 'Nada encontrado.' : 'Nenhum funcionário cadastrado.'}</div>`;
+    <div class="side">${f.altura ? '<span class="badge b-info">Altura</span>' : ''}${f.situacao && f.situacao !== 'Trabalhando' && f.ativo !== false ? `<span class="badge b-warn">${esc(f.situacao)}</span>` : ''}${pm[f.id] ? `<span class="badge b-info">${pm[f.id]} ferr. em posse</span>` : ''}${f.ativo === false ? '<span class="badge b-mut">Inativo</span>' : ''}</div></button>`).join('') : `<div class="empty">${S.func.length ? 'Nada encontrado.' : 'Nenhum funcionário cadastrado.'}</div>`;
 }
 $('#u-q').addEventListener('input', renderFunc);
 $('#u-chips').addEventListener('click', e => { const b = e.target.closest('[data-uch]'); if (b) { uFilter = b.dataset.uch; renderFunc(); } });
@@ -1347,6 +1353,7 @@ function openFunc(id) {
     <div class="grid3"><div><label for="uf-adm">Data de admissão</label><input type="date" id="uf-adm" value="${v('admissao')}"></div><div><label for="uf-nas">Data de nascimento</label><input type="date" id="uf-nas" value="${v('nascimento')}"></div><div><label for="uf-sit">Situação</label><select id="uf-sit">${SITS.map(x => `<option ${(f ? str(f.situacao) || 'Trabalhando' : 'Trabalhando') === x ? 'selected' : ''}>${x}</option>`).join('')}</select></div></div>
     <div class="grid3"><div><label for="uf-tr">Tamanho de camisa</label><select id="uf-tr">${opcoesTam(TAM_CAMISA, f ? (f.tamCamisa || f.tamRoupa) : '')}</select></div><div><label for="uf-tca">Tamanho de calça</label><select id="uf-tca">${opcoesTam(TAM_CALCA, f ? f.tamCalca : '')}</select></div><div><label for="uf-tc">Nº do calçado</label><select id="uf-tc">${opcoesTam(TAM_CALCADO, f ? f.tamCalcado : '')}</select></div></div>
     <label style="display:flex;gap:8px;align-items:center;color:inherit;font-size:15px;margin-top:14px"><input type="checkbox" id="uf-at" ${!f || f.ativo !== false ? 'checked' : ''}> Ativo na empresa (desmarque quando for desligado)</label>
+    <label style="display:flex;gap:8px;align-items:center;color:inherit;font-size:15px;margin-top:10px"><input type="checkbox" id="uf-alt" ${f && f.altura ? 'checked' : ''}> Trabalha em altura (NR-35): soma o adicional de altura na OS, na ficha de EPI e nos treinamentos obrigatórios</label>
     <datalist id="funs">${[...new Set(S.func.map(x => x.funcao).concat(S.kits.map(k => k.funcao)).filter(Boolean))].map(c => `<option value="${esc(c)}">`).join('')}</datalist>
     <datalist id="cargos">${[...new Set(S.func.map(x => x.cargo).filter(Boolean))].map(c => `<option value="${esc(c)}">`).join('')}</datalist>
     <datalist id="unids">${[...new Set(['Resende', 'Barra Mansa'].concat(S.func.map(x => x.unidade)).filter(Boolean))].map(c => `<option value="${esc(c)}">`).join('')}</datalist>
@@ -1397,7 +1404,7 @@ async function saveFunc(f) {
   const data = { nome, matricula, funcao: $('#uf-fun').value.trim(), cargo: $('#uf-cg').value.trim(), area: ar ? str(ar.nome) : (ae.tagName === 'SELECT' ? '' : ae.value.trim()), areaId: ar ? ar.id : '', subareaId: subId,
     subarea: subId ? str(((ar.subs || []).find(z => z.id === subId) || {}).nome) : '', subareas: subId ? [...new Set([subId].concat(subsAnt))] : subsAnt,
     unidade: $('#uf-un').value.trim(), admissao: $('#uf-adm').value, nascimento: $('#uf-nas').value, situacao: $('#uf-sit').value,
-    tamCamisa: $('#uf-tr').value, tamRoupa: $('#uf-tr').value, tamCalca: $('#uf-tca').value, tamCalcado: $('#uf-tc').value, ativo: $('#uf-at').checked };
+    tamCamisa: $('#uf-tr').value, tamRoupa: $('#uf-tr').value, tamCalca: $('#uf-tca').value, tamCalcado: $('#uf-tc').value, altura: $('#uf-alt').checked, ativo: $('#uf-at').checked };
   if ($('#uf-zs')) Object.assign(data, { zsStatus: $('#uf-zs').value, zsData: $('#uf-zsd').value, zsLink: $('#uf-zsl').value.trim() });
   const btn = $('#uf-save'); btn.disabled = true;
   try { if (f) await db.doc('funcionarios/' + f.id).update(data); else await db.collection('funcionarios').doc().set(Object.assign({ criadoEm: new Date().toISOString() }, data)); closeModal(); toast('Funcionário salvo.', 'ok'); }
@@ -1410,37 +1417,39 @@ function renderKits() {
   const L = S.kits.slice().sort((a, b) => str(a.nome).localeCompare(str(b.nome), 'pt'));
   $('#k-list').innerHTML = L.length ? L.map(k => {
     const custo = (k.epis || []).reduce((a, x) => { const p = S.epis.find(y => y.id === x.epiId); return a + (p ? num(p.custo) * (num(x.qtd) || 1) : 0); }, 0);
-    const nf = S.func.filter(f => f.ativo !== false && norm(f.funcao) === norm(k.funcao)).length;
-    return `<button class="item" data-kit="${esc(k.id)}"><div class="main"><div class="t1">${esc(k.nome)}</div><div class="t2">Função: ${esc(k.funcao || '—')} · ${nf} funcionário(s)</div><div class="t2">${(k.epis || []).length} EPIs (${brl(custo)} por kit) · ${(k.ferramentas || []).length} ferramentas</div></div></button>`;
+    const nf = S.func.filter(f => f.ativo !== false && (k.adicional ? f[k.adicional] : norm(f.funcao) === norm(k.funcao))).length;
+    return `<button class="item" data-kit="${esc(k.id)}"><div class="main"><div class="t1">${esc(k.nome)}${k.adicional ? ' <span class="badge b-info">Adicional</span>' : ''}</div><div class="t2">${k.adicional ? 'Vale para quem está marcado “' + esc(ADIC[k.adicional]) + '”' : 'Função: ' + esc(k.funcao || '—')} · ${nf} funcionário(s)</div><div class="t2">${(k.epis || []).length} EPIs (${brl(custo)} por kit) · ${(k.ferramentas || []).length} ferramentas</div></div></button>`;
   }).join('') : `<div class="empty">Nenhum kit. Crie um por função (ex.: Eletricista, Mecânico, Soldador).</div>`;
 }
 $('#k-new').onclick = () => openKit(null);
-function openKit(id) {
+$('#k-alt').onclick = () => { const k = S.kits.find(x => x.adicional === 'altura'); openKit(k ? k.id : null, 'altura'); };
+function openKit(id, adicional) {
   const k = id ? S.kits.find(x => x.id === id) : null; if (id && !k) return;
+  const ad = (k && k.adicional) || adicional || '';
   const ke = new Map((k && k.epis || []).map(x => [x.epiId, num(x.qtd) || 1]));
   const kf = new Set((k && k.ferramentas || []).map(norm));
   const tipos = [...new Set(S.ferr.filter(f => f.status !== 'baixada').map(f => f.descricao).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt'));
   (k && k.ferramentas || []).forEach(t => { if (!tipos.some(x => norm(x) === norm(t))) tipos.push(t); });
-  openModal(mtop(k ? 'Kit' : 'Novo kit') + `<div class="card"><div class="grid2"><div><label for="kt-nome">Nome do kit *</label><input id="kt-nome" value="${esc(k ? k.nome : '')}" placeholder="Ex.: Kit Eletricista"></div>
-    <div><label for="kt-fun">Função *</label><input id="kt-fun" list="kfuns" value="${esc(k ? k.funcao : '')}"></div></div>
+  openModal(mtop(ad ? 'Adicional: ' + esc(ADIC[ad]) : k ? 'Kit' : 'Novo kit') + `<div class="card"><div class="grid2"><div><label for="kt-nome">Nome do kit *</label><input id="kt-nome" value="${esc(k ? k.nome : ad ? 'Adicional · ' + ADIC[ad] : '')}" placeholder="Ex.: Kit Eletricista"></div>
+    ${ad ? `<div><p class="note" style="margin-top:28px">Vale para todo funcionário marcado “${esc(ADIC[ad])}” no cadastro, somado ao kit da função dele.</p><input id="kt-fun" type="hidden" value=""></div>` : `<div><label for="kt-fun">Função *</label><input id="kt-fun" list="kfuns" value="${esc(k ? k.funcao : '')}"></div>`}</div>
     <datalist id="kfuns">${[...new Set(S.func.map(x => x.funcao).filter(Boolean))].map(c => `<option value="${esc(c)}">`).join('')}</datalist></div>
     <div class="card"><span class="lbl">EPIs do kit</span>${S.epis.length ? S.epis.slice().sort((a, b) => str(a.nome).localeCompare(str(b.nome), 'pt')).map(p => `<div class="kitrow"><input type="checkbox" data-kep="${esc(p.id)}" ${ke.has(p.id) ? 'checked' : ''} id="kep-${esc(p.id)}"><label for="kep-${esc(p.id)}" class="main" style="margin:0;color:inherit;font-size:14px">${esc(p.nome)} <span class="note">CA ${esc(p.ca)}</span></label><input type="number" min="1" value="${ke.get(p.id) || 1}" data-keq="${esc(p.id)}" style="width:64px;padding:6px 8px" aria-label="Quantidade"></div>`).join('') : '<div class="note">Cadastre EPIs primeiro.</div>'}</div>
     <div class="card"><span class="lbl">Ferramentas do kit</span>${tipos.length ? tipos.map((t, i) => `<div class="kitrow"><input type="checkbox" data-kft="${esc(t)}" id="kft-${i}" ${kf.has(norm(t)) ? 'checked' : ''}><label for="kft-${i}" class="main" style="margin:0;color:inherit;font-size:14px">${esc(t)} <span class="note">${S.ferr.filter(f => norm(f.descricao) === norm(t) && f.status === 'disponivel').length} disponível(is)</span></label></div>`).join('') : '<div class="note">Cadastre ferramentas primeiro.</div>'}</div>
     <div class="card"><div class="head" style="margin:0 0 4px"><span class="lbl" style="margin:0;margin-right:auto">Ordem de Serviço de Segurança (NR-01)</span><button class="btn sm ghost" id="kt-mod" type="button">Preencher com modelo</button></div>
     <p class="note" style="margin-top:0">Texto da OS desta função. Os EPIs obrigatórios entram automaticamente a partir do kit. Separe os itens com ponto e vírgula ou um por linha. Revise com o SESMT conforme o PGR.</p>
     ${OSF.map(([kk, t]) => `<label for="os-${kk}">${t}</label><textarea id="os-${kk}" rows="3">${esc(((k && k.os) || {})[kk] || '')}</textarea>`).join('')}</div>
-    <div class="actions">${k ? `<button class="btn danger" id="kt-del">Excluir</button><button class="btn ghost" id="kt-osall">OS dos ${S.func.filter(f => f.ativo !== false && norm(f.funcao) === norm(k.funcao)).length} funcionários (PDF)</button>` : ''}<button class="btn ghost" data-close>Cancelar</button><button class="btn primary" id="kt-save" ${S.canWrite === false ? 'disabled' : ''}>Salvar</button></div>`);
+    <div class="actions">${k ? `<button class="btn danger" id="kt-del">Excluir</button><button class="btn ghost" id="kt-osall">OS dos ${S.func.filter(f => f.ativo !== false && (k.adicional ? f[k.adicional] : norm(f.funcao) === norm(k.funcao))).length} funcionários (PDF)</button>` : ''}<button class="btn ghost" data-close>Cancelar</button><button class="btn primary" id="kt-save" ${S.canWrite === false ? 'disabled' : ''}>Salvar</button></div>`);
   $('#kt-save').onclick = async () => {
     if (!guardWrite()) return;
-    const nome = $('#kt-nome').value.trim(), funcao = $('#kt-fun').value.trim();
-    if (!nome || !funcao) return toast('Preencha nome e função.', 'bad');
+    const nome = $('#kt-nome').value.trim(), funcao = ad ? '' : $('#kt-fun').value.trim();
+    if (!nome || (!funcao && !ad)) return toast('Preencha nome e função.', 'bad');
     const epis = $$('#sheet [data-kep]:checked').map(c => ({ epiId: c.dataset.kep, qtd: num($(`#sheet [data-keq="${CSS.escape(c.dataset.kep)}"]`).value) || 1 }));
     const ferramentas = $$('#sheet [data-kft]:checked').map(c => c.dataset.kft);
     const os = {}; OSF.forEach(([kk]) => os[kk] = $('#os-' + kk).value.trim());
-    try { if (k) await db.doc('kits/' + k.id).update({ nome, funcao, epis, ferramentas, os }); else await db.collection('kits').doc().set({ nome, funcao, epis, ferramentas, os, criadoEm: new Date().toISOString() }); closeModal(); toast('Kit salvo.', 'ok'); } catch (e) { handleErr(e); }
+    try { if (k) await db.doc('kits/' + k.id).update({ nome, funcao, epis, ferramentas, os, adicional: ad }); else await db.collection('kits').doc().set({ nome, funcao, epis, ferramentas, os, adicional: ad, criadoEm: new Date().toISOString() }); closeModal(); toast('Kit salvo.', 'ok'); } catch (e) { handleErr(e); }
   };
-  $('#kt-mod').onclick = () => { const m = osModelo($('#kt-fun').value); let n = 0; OSF.forEach(([kk]) => { const el = $('#os-' + kk); if (!el.value.trim()) { el.value = m[kk]; n++; } }); toast(n ? 'Modelo aplicado nos campos vazios. Revise antes de salvar.' : 'Os campos já estão preenchidos.', n ? 'ok' : ''); };
-  const oa = $('#kt-osall'); if (oa) oa.onclick = () => gerarOS(S.func.filter(f => f.ativo !== false && norm(f.funcao) === norm(k.funcao)).sort((a, b) => str(a.nome).localeCompare(str(b.nome), 'pt')), 'os_seguranca_' + norm(k.funcao).replace(/[^a-z0-9]+/g, '_') + '.pdf');
+  $('#kt-mod').onclick = () => { const m = ad ? Object.assign({}, osAdic(ad), { emergencia: '' }) : osModelo($('#kt-fun').value); let n = 0; OSF.forEach(([kk]) => { const el = $('#os-' + kk); if (!el.value.trim()) { el.value = m[kk]; n++; } }); toast(n ? 'Modelo aplicado nos campos vazios. Revise antes de salvar.' : 'Os campos já estão preenchidos.', n ? 'ok' : ''); };
+  const oa = $('#kt-osall'); if (oa) oa.onclick = () => gerarOS(S.func.filter(f => f.ativo !== false && (k.adicional ? f[k.adicional] : norm(f.funcao) === norm(k.funcao))).sort((a, b) => str(a.nome).localeCompare(str(b.nome), 'pt')), 'os_seguranca_' + norm(k.funcao).replace(/[^a-z0-9]+/g, '_') + '.pdf');
   const del = $('#kt-del'); if (del) armDelete(del, () => db.doc('kits/' + k.id).delete());
 }
 
@@ -1614,8 +1623,8 @@ function openImport(kind) {
 $('#f-imp').onclick = () => openImport('ferr');
 $('#u-imp').onclick = () => openImportFunc();
 /* importação de funcionários: planilha do RH (.xlsx) ou colado do Excel com cabeçalho; atualiza quem já existe pela matrícula */
-const IMPF_COLS = [['matricula', /^matr/], ['nome', /^nome/], ['funcao', /^func/], ['subarea', /^sub/], ['area', /^area/], ['unidade', /^unid/], ['admissao', /admiss/], ['nascimento', /nasc/], ['situacao', /^situa/], ['cargo', /^cargo/], ['tamCamisa', /camis/], ['tamCalcado', /calcado/], ['tamCalca', /calca/]];
-const IMPF_NOMES = { matricula: 'Matrícula', nome: 'Nome', funcao: 'Função', area: 'Área', subarea: 'Sub-área', unidade: 'Unidade', admissao: 'Admissão', nascimento: 'Nascimento', situacao: 'Situação', cargo: 'Cargo', tamCamisa: 'Camisa', tamCalca: 'Calça', tamCalcado: 'Calçado' };
+const IMPF_COLS = [['matricula', /^matr/], ['nome', /^nome/], ['funcao', /^func/], ['subarea', /^sub/], ['area', /^area/], ['unidade', /^unid/], ['admissao', /admiss/], ['nascimento', /nasc/], ['situacao', /^situa/], ['cargo', /^cargo/], ['altura', /altura/], ['tamCamisa', /camis/], ['tamCalcado', /calcado/], ['tamCalca', /calca/]];
+const IMPF_NOMES = { altura: 'Trabalha em altura (sim/não)', matricula: 'Matrícula', nome: 'Nome', funcao: 'Função', area: 'Área', subarea: 'Sub-área', unidade: 'Unidade', admissao: 'Admissão', nascimento: 'Nascimento', situacao: 'Situação', cargo: 'Cargo', tamCamisa: 'Camisa', tamCalca: 'Calça', tamCalcado: 'Calçado' };
 const loadXLSX = () => loadScript('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js', () => window.XLSX);
 function impfMapa(head) { const m = {}; head.forEach((h, i) => { const n = norm(h).replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim(); const c = IMPF_COLS.find(([k, re]) => re.test(n) && m[k] == null); if (c) m[c[0]] = i; }); return m; }
 function impfData(v) { if (v == null || v === '') return ''; if (typeof v === 'number' && v > 1000) { const d = new Date(Math.round((v - 25569) * 86400000)); return d.getUTCFullYear() + '-' + z2(d.getUTCMonth() + 1) + '-' + z2(d.getUTCDate()); } if (v instanceof Date) return ymd(v); return parseBR(str(v)); }
@@ -1624,7 +1633,7 @@ function impfLinha(r, m) {
   const sit = norm(t('situacao')); const camisa = (str(t('tamCamisa')).toUpperCase().match(/^[A-Z0-9]+/) || [''])[0];
   return { matricula: t('matricula'), nome: t('nome').replace(/\s+/g, ' '), funcao: t('funcao'), cargo: t('cargo'), area: t('area'), subarea: t('subarea'), unidade: t('unidade') ? t('unidade').toLowerCase().replace(/(^|\s)\S/g, c => c.toUpperCase()) : '',
     admissao: impfData(g('admissao')), nascimento: impfData(g('nascimento')), situacao: /afast/.test(sit) ? 'Afastado' : /feria/.test(sit) ? 'Férias' : /deslig|demit/.test(sit) ? 'Desligado' : sit ? 'Trabalhando' : '',
-    tamCamisa: camisa, tamCalca: t('tamCalca'), tamCalcado: t('tamCalcado') };
+    tamCamisa: camisa, tamCalca: t('tamCalca'), tamCalcado: t('tamCalcado'), altura: m.altura == null ? null : /^(s|sim|x|1|true|yes)/.test(norm(t('altura'))) };
 }
 function openImportFunc() {
   openModal(mtop('Importar funcionários') + `<div class="card"><p class="note" style="margin-top:0">Escolha a planilha do RH (.xlsx) <b>ou</b> copie do Excel com a linha de cabeçalho e cole abaixo. Colunas reconhecidas: ${Object.values(IMPF_NOMES).join(', ')}. Quem já existe (mesma matrícula) é <b>atualizado</b>; células vazias não apagam o que já está cadastrado. Áreas e sub-áreas novas são criadas.</p>
@@ -1661,7 +1670,7 @@ function openImportFunc() {
         i++; btn.textContent = `Importando ${i}/${L.length}…`;
         const a = x.area && areasOk ? A[norm(x.area)] : null; const sb = a && x.subarea ? a.subs.find(z => norm(z.nome) === norm(x.subarea)) : null;
         const d = {}; ['matricula', 'nome', 'funcao', 'cargo', 'unidade', 'admissao', 'nascimento', 'tamCamisa', 'tamCalca', 'tamCalcado'].forEach(k => { if (x[k]) d[k] = x[k]; });
-        if (x.tamCamisa) d.tamRoupa = x.tamCamisa;
+        if (x.tamCamisa) d.tamRoupa = x.tamCamisa; if (x.altura != null) d.altura = x.altura;
         if (x.situacao === 'Desligado') d.ativo = false; else if (x.situacao) d.situacao = x.situacao;
         if (x.area) { d.area = a ? a.nome : x.area; if (a) d.areaId = a.id; d.subarea = sb ? sb.nome : (x.subarea || ''); }
         const f = S.func.find(z => x.matricula ? norm(z.matricula) === norm(x.matricula) : norm(z.nome) === norm(x.nome));
@@ -1719,7 +1728,7 @@ function renderRel() {
   const evit = ents.filter(e => MOTGRP(e.motivo) === 'evit'); const gEvit = evit.reduce((a, e) => a + val(e), 0);
   const perdaF = ocs.filter(o => o.tipo !== 'desgaste').reduce((a, o) => a + o.valor, 0);
   const tv = trocasVencidas().filter(x => fOk(x.f)); const ki = kitsIncompletos().filter(x => fOk(x.f));
-  const comKit = funcs.filter(f => kitEpis(f.funcao).size);
+  const comKit = funcs.filter(f => kitEpisF(f).size);
   const naoConf = new Set(tv.map(x => x.f.id).concat(ki.map(x => x.f.id)));
   const conf = comKit.length ? Math.round(100 * comKit.filter(f => !naoConf.has(f.id)).length / comKit.length) : 100;
   $('#rp-kpis').innerHTML = kpi('Gasto com EPI', brl0(gasto), '', ents.length + ' entregas') + kpi('Por mau uso ou perda', brl0(gEvit), gEvit ? 'bad' : '', gasto ? Math.round(100 * gEvit / gasto) + '% do gasto' : '') +
@@ -2027,6 +2036,11 @@ function osModelo(funcao) {
     emergencia: OS_EMERG };
   return { atividades: 'Descrever as atividades da função.', riscos: 'Listar os riscos identificados no PGR para esta função', medidas: 'Listar as medidas preventivas', proibicoes: 'Executar atividade sem os EPIs desta OS', emergencia: OS_EMERG };
 }
+const ALT_MODELO = { atividades: 'Atividades executadas acima de 2 metros do nível inferior, onde haja risco de queda: plataformas, estruturas, telhados, escadas, andaimes, pontes rolantes e cestos aéreos.',
+  riscos: 'Queda de altura; queda de materiais e ferramentas; ancoragem inadequada; trauma de suspensão após queda retida; condições climáticas (vento, chuva, raios); riscos adicionais do local (eletricidade, calor, espaço confinado)',
+  medidas: 'Executar somente com treinamento NR-35 válido, aptidão no ASO e autorização; realizar análise de risco e, nas atividades não rotineiras, emitir permissão de trabalho; priorizar proteção coletiva (guarda-corpo, plataforma, linha de vida); inspecionar cinturão, talabarte, trava-quedas e conectores antes de cada uso; ancorar somente em pontos definidos e acima da cabeça; respeitar a zona livre de queda; manter ao menos um talabarte conectado nos deslocamentos; amarrar ferramentas e isolar a área abaixo; conhecer o plano de resgate antes de subir',
+  proibicoes: 'Subir sem cinturão conectado; ancorar em tubulações, eletrocalhas, guarda-corpos ou estruturas sem resistência conhecida; usar equipamento danificado ou que já reteve uma queda; trabalhar em altura sob mal-estar, tontura ou condições climáticas adversas; trabalhar sozinho sem plano de resgate' };
+function osAdic(a) { const k = S.kits.find(x => x.adicional === a); const o = Object.assign({}, a === 'altura' ? ALT_MODELO : {}); if (k && k.os) Object.keys(k.os).forEach(c => { if (str(k.os[c]).trim()) o[c] = k.os[c]; }); return o; }
 function osDa(funcao) {
   const ks = kitsDa(funcao); const m = osModelo(funcao); const o = {}; let modelo = false;
   OSF.forEach(([k]) => { const v = ks.map(x => (x.os || {})[k]).find(v => str(v).trim()); if (v) o[k] = v; else { o[k] = m[k]; modelo = true; } });
@@ -2078,6 +2092,8 @@ function fichaInto(P, f) {
     P.header('FICHA DE CONTROLE DE EPI', 'Registro de fornecimento · NR-06');
     P.box([['Funcionário', f.nome], ['Matrícula', f.matricula], ['Função', f.funcao], ['Área', [f.area, f.subarea].filter(Boolean).join(' / ')], ['Unidade', f.unidade], ['Admissão', fmtD(f.admissao)], ['Nº calçado', f.tamCalcado], ['Camisa / calça', [f.tamCamisa || f.tamRoupa, f.tamCalca].filter(Boolean).join(' / ')]]);
     P.text('Declaro que recebi gratuitamente os Equipamentos de Proteção Individual relacionados abaixo, novos e em perfeito estado, e que fui orientado sobre o uso correto, a guarda, a conservação e a higienização de cada um. Comprometo-me a usá-los apenas para a finalidade a que se destinam, a responsabilizar-me pela sua guarda e conservação, a comunicar qualquer alteração que os torne impróprios para uso e a devolvê-los quando substituídos ou no desligamento. Estou ciente de que a recusa injustificada ao uso do EPI constitui ato faltoso (CLT, art. 158, parágrafo único).', { size: 8.2, color: [60, 66, 80], gap: 3 });
+    Object.keys(ADIC).filter(a => f[a]).forEach(a => { const ks = kitsAdic(f).filter(k => k.adicional === a); const eps = ks.flatMap(k => k.epis || []).map(x => S.epis.find(p => p.id === x.epiId)).filter(Boolean);
+      P.text(ADIC[a].toUpperCase() + ': o funcionário está designado para trabalho em altura. Declaro que recebi' + (eps.length ? ' os EPIs ' + eps.map(p => p.nome + (p.ca ? ' (CA ' + p.ca + ')' : '')).join(', ') : ' os EPIs para trabalho em altura') + ', que fui orientado a inspecioná-los antes de cada uso, a ancorar somente em pontos definidos, a manter ao menos um talabarte conectado nos deslocamentos e a retirar de uso o equipamento que retiver uma queda, e que só executarei trabalho em altura com treinamento NR-35 válido, aptidão no ASO, análise de risco e autorização.', { size: 8.5, color: [60, 66, 80], gap: 2 }); });
     const cols = [['Data', 20], ['EPI', 58], ['CA', 15], ['Qtd', 9], ['Tam.', 11], ['Motivo', 30], ['Assinatura', 37]];
     const th = () => { P.need(8); doc.setFillColor(20, 33, 61); doc.rect(P.L, P.y, P.W, 6.5, 'F'); P.font(8, true, [255, 255, 255]); let x = P.L; cols.forEach(([t, w]) => { doc.text(t, x + 1.5, P.y + 4.4); x += w; }); P.y += 6.5; };
     th();
@@ -2141,14 +2157,16 @@ function osInto(P, f) {
     P.section(1, 'Descrição das atividades'); P.text(os.atividades);
     P.section(2, 'Riscos da função'); P.bullets(os.riscos);
     P.section(3, 'EPIs obrigatórios');
-    const ke = [...kitEpis(f.funcao).entries()].map(([id, q]) => [S.epis.find(p => p.id === id), q]).filter(x => x[0]);
+    const ke = [...kitEpisF(f).entries()].map(([id, q]) => [S.epis.find(p => p.id === id), q]).filter(x => x[0]);
     if (ke.length) ke.forEach(([p, q]) => P.text(`•  ${p.nome}  —  CA ${p.ca}${num(p.vidaUtilDias) ? '  ·  troca a cada ' + num(p.vidaUtilDias) + ' dias' : ''}${q > 1 ? '  ·  qtd ' + q : ''}`, { size: 9, gap: 0.4 }));
     else P.text('Nenhum kit de EPI cadastrado para esta função.', { color: [179, 38, 30] });
     P.y += 1;
     P.section(4, 'Medidas preventivas'); P.bullets(os.medidas);
     P.section(5, 'É proibido'); P.bullets(os.proibicoes);
-    P.section(6, 'Em caso de acidente ou emergência'); P.bullets(os.emergencia);
-    P.section(7, 'Obrigações do empregado');
+    let sn = 6;
+    Object.keys(ADIC).filter(a => f[a]).forEach(a => { const o = osAdic(a); P.section(sn++, ADIC[a]); P.text(o.atividades, { size: 9 }); P.text('Riscos:', { size: 9, bold: true }); P.bullets(o.riscos); P.text('Medidas preventivas:', { size: 9, bold: true }); P.bullets(o.medidas); P.text('É proibido:', { size: 9, bold: true }); P.bullets(o.proibicoes); });
+    P.section(sn++, 'Em caso de acidente ou emergência'); P.bullets(os.emergencia);
+    P.section(sn++, 'Obrigações do empregado');
     P.bullets('Cumprir as disposições legais e regulamentares de segurança e saúde no trabalho, inclusive esta Ordem de Serviço; usar os EPIs fornecidos e zelar pela sua guarda e conservação; submeter-se aos exames médicos previstos nas NR; colaborar com a empresa na aplicação das NR; comunicar imediatamente situações de risco grave e iminente, podendo interromper a atividade (direito de recusa)');
     P.text('A recusa injustificada ao cumprimento desta Ordem de Serviço ou ao uso dos EPIs constitui ato faltoso, sujeito às penalidades previstas (CLT, art. 158, parágrafo único).', { size: 8.5, bold: true, color: [60, 66, 80], gap: 2 });
     P.text('Declaro que recebi esta Ordem de Serviço, li (ou a ouvi lida) e compreendi seu conteúdo, comprometendo-me a cumpri-la.', { size: 9 });
@@ -2336,7 +2354,7 @@ function openPlano(fid) {
   const f = S.func.find(x => x.id === fid); if (!f) return;
   if (!S.tt.length) { toast('Cadastre os tipos de treinamento primeiro.', 'bad'); return openTipos(); }
   const e = S.emp || {}; const fu = str(f.funcao);
-  const cls = t => (t.obrig || []).includes(fu) ? 'o' : (t.event || []).includes(fu) ? 'e' : 'x';
+  const cls = t => obrigPara(t, f) ? 'o' : (t.event || []).includes(fu) ? 'e' : 'x';
   const tipos = S.tt.slice().sort((a, b) => ({ o: 0, e: 1, x: 2 }[cls(a)] - { o: 0, e: 1, x: 2 }[cls(b)]) || str(a.nome).localeCompare(str(b.nome), 'pt'));
   PL = { f, rows: tipos.map(t => { const u = ultimoTrein(f.id, t); const st = u ? trState(u) : 'none'; return { t, cls: cls(t), on: cls(t) === 'o' && (!u || st === 'vencido'), inicio: '', termino: '', instr: '', iq: '', u }; }) };
   const grp = (c, tit) => { const L = PL.rows.map((r, i) => [r, i]).filter(([r]) => r.cls === c); return L.length ? `<span class="lbl" style="margin-top:10px">${tit}</span>` + L.map(([r, i]) => `<div class="card" style="padding:10px 12px;margin:6px 0" data-pr="${i}">

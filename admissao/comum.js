@@ -1,0 +1,83 @@
+/* Admissão: lista de documentos, conferência de qualidade da foto e envio em partes. Usado pelo RH e pela página do candidato. */
+"use strict";
+(function () {
+  const SLOTS = [
+    { id: 'foto', t: 'Foto de rosto (tipo 3x4)', d: 'De frente, fundo claro, sem boné nem óculos escuros.', obr: true, selfie: true, max: 1 },
+    { id: 'rg', t: 'RG ou CNH (frente e verso)', d: 'Pode mandar a CNH digital em PDF.', obr: true, max: 3 },
+    { id: 'cpf', t: 'CPF', d: 'Só se o número não estiver no RG ou na CNH.', obr: false, max: 2 },
+    { id: 'ctps', t: 'Carteira de trabalho digital', d: 'PDF ou print da Carteira de Trabalho Digital (app), com os dados pessoais e os contratos.', obr: true, max: 4 },
+    { id: 'pis', t: 'PIS / NIS', d: 'Se não aparecer na carteira de trabalho.', obr: false, max: 2 },
+    { id: 'titulo', t: 'Título de eleitor', d: 'Pode ser o e-Título.', obr: true, max: 2 },
+    { id: 'reservista', t: 'Certificado de reservista', d: 'Homens de 18 a 45 anos.', obr: false, max: 2 },
+    { id: 'residencia', t: 'Comprovante de residência', d: 'Conta de luz, água ou telefone dos últimos 3 meses.', obr: true, max: 2 },
+    { id: 'escolaridade', t: 'Comprovante de escolaridade', d: 'Diploma, certificado ou histórico do maior grau concluído.', obr: true, max: 3 },
+    { id: 'certidao', t: 'Certidão de nascimento ou casamento', d: '', obr: true, max: 2 },
+    { id: 'filhos', t: 'Filhos: certidão, CPF e vacinação', d: 'Filhos menores de 14 anos: certidão e CPF. Menores de 7: cartão de vacina.', obr: false, max: 6 },
+    { id: 'banco', t: 'Dados bancários', d: 'Print ou cartão mostrando banco, agência e conta.', obr: false, max: 1 },
+    { id: 'cursos', t: 'Certificados de cursos e NRs', d: 'NR-10, NR-35, NR-33, curso técnico, se tiver.', obr: false, max: 8 },
+    { id: 'registro', t: 'Registro profissional (CREA / CFT)', d: 'Só para técnicos e engenheiros.', obr: false, max: 2 }
+  ];
+  const PARTE = 700000, MAX_PDF = 8 * 1048576;
+  const rand = n => { const a = new Uint8Array(n); crypto.getRandomValues(a); return [...a].map(x => 'abcdefghijkmnpqrstuvwxyz23456789'[x % 32]).join(''); };
+  const dig = s => String(s || '').replace(/\D/g, '');
+  function cpfOk(c) { c = dig(c); if (c.length !== 11 || /^(\d)\1+$/.test(c)) return false; const dv = k => { let s = 0; for (let i = 0; i < k; i++) s += +c[i] * (k + 1 - i); const r = (s * 10) % 11; return r === 10 ? 0 : r; }; return dv(9) === +c[9] && dv(10) === +c[10]; }
+  const fmtCpf = c => { c = dig(c); return c.length === 11 ? c.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4') : c; };
+  const lerURL = f => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = () => rej(r.error); r.readAsDataURL(f); });
+  const carregarImg = url => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('Não foi possível abrir a imagem.')); i.src = url; });
+  /* qualidade da foto: resolução, nitidez (variação do laplaciano) e iluminação */
+  function qualidade(img) {
+    const menor = Math.min(img.width, img.height); const k = Math.min(1, 640 / Math.max(img.width, img.height));
+    const w = Math.max(8, Math.round(img.width * k)), h = Math.max(8, Math.round(img.height * k));
+    const c = document.createElement('canvas'); c.width = w; c.height = h; const x = c.getContext('2d'); x.drawImage(img, 0, 0, w, h);
+    const p = x.getImageData(0, 0, w, h).data; const g = new Float32Array(w * h); let soma = 0;
+    for (let i = 0; i < w * h; i++) { g[i] = 0.299 * p[i * 4] + 0.587 * p[i * 4 + 1] + 0.114 * p[i * 4 + 2]; soma += g[i]; }
+    const media = soma / (w * h); let s1 = 0, s2 = 0, n = 0;
+    for (let y = 1; y < h - 1; y++) for (let xx = 1; xx < w - 1; xx++) { const i = y * w + xx; const l = g[i - 1] + g[i + 1] + g[i - w] + g[i + w] - 4 * g[i]; s1 += l; s2 += l * l; n++; }
+    const nit = n ? s2 / n - (s1 / n) ** 2 : 0;
+    const prob = [];
+    if (menor < 600) prob.push('resolução baixa: aproxime o celular ou use a câmera traseira');
+    if (nit < 60) prob.push('foto tremida ou desfocada');
+    if (media < 55) prob.push('foto escura: procure um lugar mais iluminado');
+    if (media > 235) prob.push('foto muito clara ou com reflexo');
+    return { ok: !prob.length, prob, nit: Math.round(nit), luz: Math.round(media), menor };
+  }
+  /* prepara o arquivo: imagem é reduzida para JPEG e conferida; PDF vai como está */
+  async function preparar(file) {
+    if (!file) throw new Error('Nenhum arquivo.');
+    if (/^image\//.test(file.type) || /\.(jpe?g|png|heic|webp)$/i.test(file.name || '')) {
+      const img = await carregarImg(await lerURL(file)); const q = qualidade(img);
+      const k = Math.min(1, 1800 / Math.max(img.width, img.height)); const c = document.createElement('canvas'); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+      const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); x.drawImage(img, 0, 0, c.width, c.height);
+      const url = c.toDataURL('image/jpeg', 0.82); return { b64: url.slice(url.indexOf(',') + 1), tipo: 'image/jpeg', nome: (file.name || 'foto').replace(/\.[^.]+$/, '') + '.jpg', q, thumb: miniatura(c) };
+    }
+    if (file.type === 'application/pdf' || /\.pdf$/i.test(file.name || '')) {
+      if (file.size > MAX_PDF) throw new Error(`PDF muito grande (${(file.size / 1048576).toFixed(1)} MB). O limite é 8 MB.`);
+      const url = await lerURL(file); return { b64: url.slice(url.indexOf(',') + 1), tipo: 'application/pdf', nome: file.name || 'documento.pdf', q: { ok: true, prob: [] }, thumb: '' };
+    }
+    throw new Error('Envie foto (JPG, PNG) ou PDF.');
+  }
+  function miniatura(c) { const k = 160 / Math.max(c.width, c.height); const m = document.createElement('canvas'); m.width = Math.round(c.width * k); m.height = Math.round(c.height * k); m.getContext('2d').drawImage(c, 0, 0, m.width, m.height); return m.toDataURL('image/jpeg', 0.6); }
+  /* grava em partes: setPart(id, texto) é passado por quem chama (RH ou candidato) */
+  async function gravar(prep, slot, setPart) {
+    const v = rand(6); const partes = Math.max(1, Math.ceil(prep.b64.length / PARTE));
+    for (let i = 0; i < partes; i++) await setPart(`${slot}_${v}_${i}`, prep.b64.slice(i * PARTE, (i + 1) * PARTE));
+    return { v, nome: prep.nome, tipo: prep.tipo, tam: Math.round(prep.b64.length * 0.75), partes, em: new Date().toISOString(), q: prep.q.ok ? 'ok' : 'baixa', prob: prep.q.prob || [], thumb: prep.thumb || '' };
+  }
+  async function ler(arq, slot, getPart) {
+    let b64 = ''; for (let i = 0; i < arq.partes; i++) { const d = await getPart(`${slot}_${arq.v}_${i}`); if (d == null) throw new Error('Arquivo incompleto. Tente de novo em instantes.'); b64 += d; }
+    const bin = atob(b64); const u8 = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+    return new Blob([u8], { type: arq.tipo });
+  }
+  /* situação dos documentos: obrigatórios enviados, recusados e conferidos */
+  function docsSt(a) {
+    const docs = (a.cand && a.cand.docs) || {}, rev = a.rev || {};
+    const obr = SLOTS.filter(s => s.obr); const env = obr.filter(s => (docs[s.id] || []).length);
+    const rej = SLOTS.filter(s => (docs[s.id] || []).length && rev[s.id] && rev[s.id].st === 'rej' && str(rev[s.id].em) >= ultimoEnvio(docs[s.id]));
+    const pendRev = SLOTS.filter(s => (docs[s.id] || []).length && !(rev[s.id] && str(rev[s.id].em) >= ultimoEnvio(docs[s.id])));
+    const ok = obr.filter(s => rev[s.id] && rev[s.id].st === 'ok' && str(rev[s.id].em) >= ultimoEnvio(docs[s.id] || []));
+    return { obr: obr.length, env: env.length, rej, pendRev, ok: ok.length, faltam: obr.filter(s => !(docs[s.id] || []).length) };
+  }
+  const str = v => v == null ? '' : String(v);
+  const ultimoEnvio = L => (L || []).reduce((m, x) => str(x.em) > m ? str(x.em) : m, '');
+  window.ADM = { SLOTS, rand, dig, cpfOk, fmtCpf, preparar, gravar, ler, docsSt, ultimoEnvio, qualidade };
+})();

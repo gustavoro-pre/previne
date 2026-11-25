@@ -191,7 +191,7 @@ function grupos() {
   S.tt.forEach(t => { const k = t.norma ? 'N:' + norm(t.norma) : 'T:' + t.id; if (!m.has(k)) m.set(k, { k, nome: t.norma || t.nome, tipos: [] }); m.get(k).tipos.push(t); });
   return [...m.values()].sort((a, b) => a.nome.localeCompare(b.nome, 'pt', { numeric: true }));
 }
-function obrigatorio(g, f) { return g.tipos.some(t => (t.obrig || []).includes(str(f.funcao))); }
+function obrigatorio(g, f) { return g.tipos.some(t => obrigPara(t, f)); }
 function ultimoDe(fid, gk) {
   const feito = r => str(r.inicio) <= todayStr();
   return S.tr.filter(r => r.funcionarioId === fid && grupoKey(r) === gk).sort((a, b) => (feito(b) - feito(a)) || str(b.termino).localeCompare(str(a.termino)))[0];

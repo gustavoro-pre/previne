@@ -25,7 +25,7 @@ function barras(L, opts) {
 const corPct = p => p >= 90 ? 'var(--ok)' : p >= 70 ? '#c98a00' : 'var(--bad)';
 
 const D = { func: [], tt: [], tr: [], ext: [], areas: [], pad: [], preg: [], cursos: [], mat: [], ferr: [], caut: [], ent: [], est: [], epis: [] };
-const V = { tab: 'trein', area: '', nav: [], per: '180' };
+const V = { tab: 'pes', area: '', nav: [], per: '180', grp: 'area' };
 let db = null, AREA_FIXA = '';
 
 /* ---------- dados ---------- */
@@ -48,7 +48,7 @@ const subNome = sid => { for (const a of D.areas) { const s = (a.subs || []).fin
 function pessoas() { const area = AREA_FIXA || V.area; if (!area) return ativos(); const ids = subsDaArea(area); return ativos().filter(f => subsDe(f).some(s => ids.includes(s))); }
 const grupoKey = r => r.norma ? 'N:' + norm(r.norma) : 'T:' + r.tipoId;
 function grupos() { const m = new Map(); D.tt.forEach(t => { const k = t.norma ? 'N:' + norm(t.norma) : 'T:' + t.id; if (!m.has(k)) m.set(k, { k, nome: t.norma || t.nome, tipos: [] }); m.get(k).tipos.push(t); }); return [...m.values()].sort((a, b) => a.nome.localeCompare(b.nome, 'pt', { numeric: true })); }
-const obrig = (g, f) => g.tipos.some(t => (t.obrig || []).includes(str(f.funcao)));
+const obrig = (g, f) => g.tipos.some(t => (t.obrig || []).includes(str(f.funcao)) || (!!f.altura && /nr-?\s?35/i.test(str(t.norma) + ' ' + str(t.nome))));
 function trState(r) { if (str(r.inicio) > hoje()) return 'agendado'; const v = str(r.validade); if (!v) return 'ok'; if (v < hoje()) return 'vencido'; if (v <= addDays(60)) return 'vence'; return 'ok'; }
 function ultimo(fid, gk) { const feito = r => str(r.inicio) <= hoje(); return D.tr.filter(r => r.funcionarioId === fid && grupoKey(r) === gk).sort((a, b) => (feito(b) - feito(a)) || str(b.termino).localeCompare(str(a.termino)))[0]; }
 function precisa(p, f) { if (!f || f.ativo === false || p.ativo === false || (p.exc || []).includes(f.id)) return false; if ((p.inc || []).includes(f.id)) return true; return (p.subIds || []).some(s => subsDe(f).includes(s)); }
@@ -68,7 +68,43 @@ function render() {
   ar.innerHTML = AREA_FIXA ? `<option>${esc((D.areas.find(a => a.id === AREA_FIXA) || {}).nome || 'Minha área')}</option>` : '<option value="">Todas as áreas</option>' + D.areas.slice().sort((a, b) => str(a.nome).localeCompare(str(b.nome), 'pt')).map(a => `<option value="${esc(a.id)}" ${V.area === a.id ? 'selected' : ''}>${esc(a.nome)}</option>`).join('');
   ar.disabled = !!AREA_FIXA;
   $('#ind-per').hidden = !['ferr', 'epi'].includes(V.tab);
-  ({ trein: tTrein, pad: tPad, ferr: tFerr, epi: tEpi })[V.tab]();
+  ({ pes: tPes, trein: tTrein, pad: tPad, ferr: tFerr, epi: tEpi })[V.tab]();
+}
+/* ---------- pessoas: idade, tempo de casa, distribuição e tamanhos ---------- */
+const anosEntre = (a, b) => { if (!a) return null; const d1 = new Date(str(a).slice(0, 10) + 'T12:00:00'), d2 = b ? new Date(b + 'T12:00:00') : new Date(); if (isNaN(d1)) return null; return (d2 - d1) / (365.25 * 864e5); };
+const media = L => L.length ? L.reduce((a, b) => a + b, 0) / L.length : null;
+const fmtAnos = v => v == null ? '—' : v < 1 ? Math.round(v * 12) + ' meses' : (Math.round(v * 10) / 10).toLocaleString('pt-BR') + ' anos';
+const GRP = { area: ['Área', f => f.area || 'Sem área'], subarea: ['Sub-área', f => [f.area, f.subarea].filter(Boolean).join(' → ') || 'Sem área'], cargo: ['Cargo', f => str(f.cargo).trim() || 'Sem cargo'], funcao: ['Função', f => str(f.funcao).trim() || 'Sem função'], unidade: ['Unidade', f => f.unidade || 'Sem unidade'] };
+function tPes() {
+  const F = pessoas(); const n = F.length;
+  const idades = F.map(f => anosEntre(f.nascimento)).filter(v => v != null && v > 14 && v < 90);
+  const casas = F.map(f => anosEntre(f.admissao)).filter(v => v != null && v >= 0);
+  const af = F.filter(f => f.situacao === 'Afastado').length, fe = F.filter(f => f.situacao === 'Férias').length;
+  const M12 = meses(12); const adm = M12.map(m => F.filter(f => str(f.admissao).slice(0, 7) === m).length);
+  const [gNome, gFn] = GRP[V.grp]; const grupos = {}; F.forEach(f => { const k = gFn(f); (grupos[k] = grupos[k] || []).push(f); });
+  const G = Object.entries(grupos).map(([k, L]) => ({ k, n: L.length, id: media(L.map(f => anosEntre(f.nascimento)).filter(v => v != null && v > 14 && v < 90)), tc: media(L.map(f => anosEntre(f.admissao)).filter(v => v != null && v >= 0)), alt: L.filter(f => f.altura).length })).sort((a, b) => b.n - a.n);
+  const faixa = (L, cortes, nomes) => nomes.map((t, i) => ({ t, v: L.filter(v => v >= cortes[i] && v < cortes[i + 1]).length }));
+  const fxId = faixa(idades, [0, 25, 35, 45, 55, 200], ['Até 24 anos', '25 a 34', '35 a 44', '45 a 54', '55 ou mais']);
+  const fxTc = faixa(casas, [0, 0.25, 1, 2, 5, 10, 200], ['Menos de 3 meses', '3 meses a 1 ano', '1 a 2 anos', '2 a 5 anos', '5 a 10 anos', 'Mais de 10 anos']);
+  const cont = k => { const o = {}; F.forEach(f => { const v = str(f[k] || (k === 'tamCamisa' ? f.tamRoupa : '')).trim(); if (v) o[v] = (o[v] || 0) + 1; }); return o; };
+  const ordTam = ['PP', 'P', 'M', 'G', 'GG', 'XG', 'EXG', 'XGG', 'G1', 'G2', 'G3', 'G4'];
+  const tamL = (o, ord) => Object.entries(o).sort((a, b) => ord ? (ord.indexOf(a[0]) + 99 * (ord.indexOf(a[0]) < 0)) - (ord.indexOf(b[0]) + 99 * (ord.indexOf(b[0]) < 0)) : num(a[0]) - num(b[0])).map(([t, v]) => ({ t, v, cor: 'var(--s3)' }));
+  const semNasc = F.filter(f => !f.nascimento).length, semAdm = F.filter(f => !f.admissao).length, semTam = F.filter(f => !(f.tamCamisa || f.tamRoupa) || !f.tamCalca || !f.tamCalcado).length, semMat = F.filter(f => !f.matricula).length, semArea = F.filter(f => !f.areaId && !f.area).length;
+  const novatos = F.filter(f => { const a = anosEntre(f.admissao); return a != null && a < 0.25; }).length;
+  $('#ind-body').innerHTML = `<div class="kpis">${kpi('Funcionários ativos', n) + kpi('Idade média', idades.length ? fmtAnos(media(idades)) : '—', '', idades.length < n ? `${idades.length} de ${n} com nascimento` : '') + kpi('Tempo de casa médio', fmtAnos(media(casas)), 'info', casas.length < n ? `${casas.length} de ${n} com admissão` : '') + kpi('Admitidos nos últimos 3 meses', novatos, novatos ? 'info' : '') + kpi('Afastados', af, af ? 'warn' : '', fe ? fe + ' de férias' : '') + kpi('Trabalham em altura', F.filter(f => f.altura).length, '', n ? pct(F.filter(f => f.altura).length, n) + '% do total' : '')}</div>
+    <div class="card" style="margin-top:12px"><div class="head" style="margin:0 0 8px"><p class="ct" style="margin:0;margin-right:auto">Por ${gNome.toLowerCase()}</p><select id="pes-grp" style="width:auto;padding:6px 10px">${Object.entries(GRP).map(([k, [t]]) => `<option value="${k}" ${V.grp === k ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
+      <div class="tbwrap" style="margin:0"><table class="tb"><thead><tr><th>${gNome}</th><th class="n">Pessoas</th><th class="n">Idade média</th><th class="n">Tempo de casa médio</th><th class="n">Em altura</th></tr></thead><tbody>${G.map(g => `<tr><td>${esc(g.k)}</td><td class="n">${g.n}</td><td class="n">${fmtAnos(g.id)}</td><td class="n">${fmtAnos(g.tc)}</td><td class="n">${g.alt || ''}</td></tr>`).join('')}</tbody></table></div></div>
+    <div class="rgrid"><div class="card"><p class="ct">Faixa etária</p>${idades.length ? barras(fxId.map(x => ({ t: x.t, v: x.v, cor: 'var(--s1)' }))) : '<div class="empty">Preencha a data de nascimento no cadastro (ou importe a planilha com a coluna NASCIMENTO).</div>'}</div>
+    <div class="card"><p class="ct">Tempo de casa</p>${barras(fxTc.map(x => ({ t: x.t, v: x.v, cor: 'var(--s2)' })))}</div>
+    <div class="card"><p class="ct">Admissões por mês (12 meses)</p>${barras(M12.map((m, i) => ({ t: mesNome(m), v: adm[i] })))}</div>
+    <div class="card"><p class="ct">Por unidade</p>${barras(Object.entries(F.reduce((o, f) => (o[f.unidade || 'Sem unidade'] = (o[f.unidade || 'Sem unidade'] || 0) + 1, o), {})).sort((a, b) => b[1] - a[1]).map(([t, v]) => ({ t, v, s: v + ' · ' + pct(v, n) + '%' })))}</div>
+    <div class="card"><p class="ct">Tamanho de camisa (para compra de uniforme)</p>${barras(tamL(cont('tamCamisa'), ordTam))}</div>
+    <div class="card"><p class="ct">Tamanho de calça</p>${barras(tamL(cont('tamCalca')))}</div>
+    <div class="card"><p class="ct">Número do calçado</p>${barras(tamL(cont('tamCalcado')))}</div>
+    <div class="card"><p class="ct">Cadastro incompleto</p>${barras([{ t: 'Sem data de nascimento', v: semNasc, max: n }, { t: 'Sem tamanhos completos', v: semTam, max: n }, { t: 'Sem admissão', v: semAdm, max: n }, { t: 'Sem área', v: semArea, max: n }, { t: 'Sem matrícula', v: semMat, max: n }].map(x => Object.assign(x, { s: x.v + ' de ' + n, cor: x.v ? 'var(--bad)' : 'var(--ok)' })))}</div></div>
+    <h3>Mais antigos e mais novos de casa</h3><div class="rgrid"><div class="card" style="padding:4px 12px">${F.filter(f => f.admissao).sort((a, b) => str(a.admissao).localeCompare(str(b.admissao))).slice(0, 8).map(f => `<button class="ritem lk" data-pessoa="${esc(f.id)}"><div class="main"><b>${esc(f.nome)}</b><div class="note">${esc(f.funcao || '')} · ${esc(f.area || '')}</div></div><span class="badge b-info">${fmtAnos(anosEntre(f.admissao))}</span></button>`).join('') || '<p class="note">Sem datas de admissão.</p>'}</div>
+    <div class="card" style="padding:4px 12px">${F.filter(f => f.admissao).sort((a, b) => str(b.admissao).localeCompare(str(a.admissao))).slice(0, 8).map(f => `<button class="ritem lk" data-pessoa="${esc(f.id)}"><div class="main"><b>${esc(f.nome)}</b><div class="note">${esc(f.funcao || '')} · admitido em ${fmtD(f.admissao)}</div></div><span class="badge b-mut">${fmtAnos(anosEntre(f.admissao))}</span></button>`).join('')}</div></div>`;
+  $('#pes-grp').onchange = e => { V.grp = e.target.value; tPes(); };
 }
 function tTrein() {
   const F = pessoas(), G = grupos(); let req = 0, ok = 0; const porG = G.map(g => { let r = 0, o = 0; F.forEach(f => { if (!obrig(g, f)) return; r++; const u = ultimo(f.id, g.k); if (u && ['ok', 'vence'].includes(trState(u))) o++; }); req += r; ok += o; return { g, r, o }; }).filter(x => x.r);
@@ -119,7 +155,7 @@ function fichaPessoa(fid) {
   const G = grupos().map(g => ({ g, u: ultimo(f.id, g.k), ob: obrig(g, f) })).filter(x => x.u || x.ob);
   const last = {}; D.ext.filter(x => x.funcionarioId === f.id).forEach(x => { const k = norm(x.tipo); if (!last[k] || str(last[k].termino) < str(x.termino)) last[k] = x; });
   const M = D.mat.filter(m => m.funcionarioId === f.id);
-  return `<div class="card"><b style="font-size:18px">${esc(f.nome)}</b><div class="note">${esc([f.matricula, f.funcao].filter(Boolean).join(' · '))}</div><div style="margin-top:6px">${subsDe(f).map(s => `<span class="badge b-info" style="margin:2px">${esc(subNome(s))}</span>`).join('') || '<span class="note">Sem área</span>'}</div></div>
+  return `<div class="card"><b style="font-size:18px">${esc(f.nome)}</b><div class="note">${esc([f.matricula, f.funcao, f.unidade].filter(Boolean).join(' · '))}${f.nascimento ? ' · ' + Math.floor(anosEntre(f.nascimento)) + ' anos' : ''}${f.admissao ? ' · ' + fmtAnos(anosEntre(f.admissao)) + ' de casa' : ''}${f.situacao && f.situacao !== 'Trabalhando' ? ' · ' + esc(f.situacao) : ''}</div><div style="margin-top:6px">${subsDe(f).map(s => `<span class="badge b-info" style="margin:2px">${esc(subNome(s))}</span>`).join('') || '<span class="note">Sem área</span>'}</div></div>
     <div class="rgrid"><div><h3>Padrões operacionais (${P.filter(x => x.s.st === 'ok').length}/${P.length})</h3><div class="card" style="padding:4px 12px">${P.map(x => `<button class="ritem lk" data-padrao="${esc(x.p.id)}"><div class="main"><b>${esc(x.p.codigo)}</b> ${esc(x.p.titulo)}<div class="note">Rev. ${esc(x.p.rev)}${x.s.r ? ` · assinou rev. ${esc(x.s.r.rev)} em ${fmtD(x.s.r.data)}` : ''}</div></div>${padBadge(x.s.st)}</button>`).join('') || '<p class="note">Nenhum padrão para as áreas desta pessoa.</p>'}</div></div>
     <div><h3>NRs</h3><div class="card" style="padding:4px 12px">${G.map(x => `<div class="ritem"><div class="main"><b>${esc(x.g.nome)}</b>${x.ob ? ' <span class="note">obrigatória</span>' : ''}<div class="note">${x.u ? esc(x.u.tipoNome) + ' · ' + fmtD(x.u.termino) : ''}</div></div>${x.u ? trBadge(x.u) : '<span class="badge b-bad">Falta</span>'}</div>`).join('') || '<p class="note">Nenhuma.</p>'}</div>
     <h3>Externos</h3><div class="card" style="padding:4px 12px">${Object.values(last).map(x => `<div class="ritem"><div class="main"><b>${esc(x.tipo)}</b><div class="note">${esc(x.entidade || '')} · ${fmtD(x.termino)}</div></div>${extSt(x) === 'vencido' ? `<span class="badge b-bad">Vencido ${fmtD(x.validade)}</span>` : extSt(x) === 'vence' ? `<span class="badge b-warn">Vence ${fmtD(x.validade)}</span>` : x.validade ? `<span class="badge b-ok">Até ${fmtD(x.validade)}</span>` : '<span class="badge b-mut">Sem validade</span>'}${x.arquivoId ? ` <button class="btn sm ghost" data-arq="${esc(x.arquivoId)}">Anexo</button>` : ''}</div>`).join('') || '<p class="note">Nenhum.</p>'}</div>
