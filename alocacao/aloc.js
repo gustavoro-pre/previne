@@ -355,7 +355,7 @@ function cab(doc, titulo, sub, emp, land) {
   const W = land ? 297 : 210; doc.setFillColor(20, 33, 61); doc.rect(0, 0, W, 22, 'F'); doc.setFillColor(242, 169, 0); doc.rect(0, 22, W, 1.5, 'F');
   let x = 12; if (/^data:image\/(png|jpeg)/.test(str(emp.logo))) { try { const ra = (+emp.logoW || 2) / (+emp.logoH || 1); const h = 15, w = Math.min(34, h * ra); doc.setFillColor(255, 255, 255); doc.roundedRect(9, 3.5, w + 2, w / ra + 1, 1.5, 1.5, 'F'); doc.addImage(emp.logo, emp.logo.includes('png') ? 'PNG' : 'JPEG', 10, 4, w, w / ra, undefined, 'FAST'); x = w + 16; } catch (e) {} }
   doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.text(titulo, x, 11); doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.text(sub, x, 17);
-  doc.text(emp.nome || 'PREVINE Engenharia', W - 10, 11, { align: 'right' }); doc.setTextColor(20, 33, 61);
+  doc.text(emp.nome || 'PREVINE ELÉTRICA', W - 10, 11, { align: 'right' }); if (emp.cnpj) { doc.setFontSize(8); doc.text('CNPJ ' + emp.cnpj, W - 10, 16, { align: 'right' }); } doc.setTextColor(20, 33, 61);
 }
 function tabela(doc, cols, rows, y, land, emp, titulo, sub) {
   const W = land ? 297 : 210, H = land ? 210 : 297, L = 10; const tw = cols.reduce((s, c) => s + c.w, 0); const k = (W - 20) / tw;

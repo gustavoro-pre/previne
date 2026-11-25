@@ -104,10 +104,11 @@ A contratação se concretiza após a entrega dos documentos, o exame admissiona
 Seja muito bem-vindo(a)! Contamos com você para trabalhar com segurança, qualidade e respeito.
 
 Atenciosamente,
-{empresa}`;
+{empresa}
+CNPJ {cnpj}`;
   const LGPD_PADRAO = `TERMO DE CIÊNCIA E CONSENTIMENTO PARA TRATAMENTO DE DADOS PESSOAIS (Lei nº 13.709/2018 – LGPD)
 
-Eu, {nome}, CPF {cpf}, declaro estar ciente de que a {empresa} ("Empresa"), na condição de controladora, tratará os meus dados pessoais para as finalidades descritas abaixo.
+Eu, {nome}, CPF {cpf}, declaro estar ciente de que a {empresa}, inscrita no CNPJ {cnpj} ("Empresa"), na condição de controladora, tratará os meus dados pessoais para as finalidades descritas abaixo.
 
 1. Dados tratados: dados de identificação e documentos pessoais; endereço e contatos; escolaridade e qualificações; dados de dependentes; dados bancários; fotografia; e dados de saúde ocupacional (exames admissionais e periódicos – ASO).
 
