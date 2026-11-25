@@ -2491,13 +2491,25 @@ function justTexto(doc, partes, x, y, larg, lh, setFont, centralizaUltima) {
     let xx = ultima && centralizaUltima ? x + (larg - ln.w) / 2 : x; ln.ws.forEach(q => { setFont(q.b); doc.text(q.w, xx, y); xx += q.larg + gap; }); y += lh; });
   return y;
 }
+/* ---------- aprovação das assinaturas (de acordo) ---------- */
+/* conteúdo que a aprovação garante: se qualquer dado mudar depois, a aprovação deixa de valer e a assinatura some */
+function certCanon(r) { return ['PREVINE-CERT-v1', r.codigo, r.nome, soDig(r.cpf), r.tipoNome, r.norma, num(r.cargaHoraria), r.inicio, r.termino, r.validade, r.instrutor, r.instrutorQualif, r.rt, r.rtQualif, r.tst, r.tstRegistro, str(r.conteudo).replace(/\s+/g, ' ').trim()].map(str).join('|'); }
+async function sha256Hex(t) { const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(t)); return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, '0')).join(''); }
+const certHash = r => sha256Hex(certCanon(r));
+/* quem precisa dar o de acordo em um certificado */
+function certAprovadores(r) { const L = []; const add = (nome, papel) => { if (str(nome).trim() && !L.some(x => norm(x.nome) === norm(nome))) L.push({ nome: str(nome).trim(), papel }); };
+  add(r.instrutor, norm(r.rt) === norm(r.instrutor) ? 'Instrutor e Responsável Técnico' : 'Instrutor'); if (norm(r.rt) !== norm(r.instrutor)) add(r.rt, 'Responsável Técnico'); add(r.tst, 'Técnico de Segurança do Trabalho'); return L; }
+const aprovDe = (r, nome) => ((r.aprov || {})[norm(nome).replace(/[^a-z0-9]+/g, '_')]) || null;
+/* aprovação válida: existe e o hash confere com os dados atuais (r.__hash é calculado antes de gerar o PDF) */
+const aprovOk = (r, nome) => { const a = aprovDe(r, nome); return !!(a && (!r.__hash || a.hash === r.__hash)); };
 /* desenha um certificado (frente e verso, A4 paisagem) no documento informado */
 function certSigs(r) {
-  const e = S.emp || {};
+  const e = S.emp || {}; const ok = nm => r.__semAprov || aprovOk(r, nm);
+  const sigInstr = nm => r.instrutorAssin || (e.instrutorAssin && norm(nm) === norm(e.instrutorNome) ? e.instrutorAssin : ((S.cursoSig || {})[r.cursoId] || ''));
   const L = [[r.nome, 'Participante', r.assinAluno && r.assinAluno.img]];
-  if (r.tst && norm(r.tst) !== norm(r.instrutor) && norm(r.tst) !== norm(r.rt)) L.push([r.tst, 'Técnico de Segurança do Trabalho' + (r.tstRegistro ? ' · ' + r.tstRegistro : ''), r.tstAssin || e.tstAssin]);
-  if (r.rt && norm(r.rt) !== norm(r.instrutor)) L.push([r.rt, 'Responsável Técnico · ' + str(r.rtQualif), norm(r.rt) === norm(r.tst) ? (r.tstAssin || e.tstAssin) : (e.instrutorAssin && norm(r.rt) === norm(e.instrutorNome) ? e.instrutorAssin : '')]);
-  L.push([r.instrutor, (norm(r.rt) === norm(r.instrutor) ? 'Instrutor e Responsável Técnico · ' : 'Instrutor · ') + str(r.instrutorQualif), r.instrutorAssin || (e.instrutorAssin && norm(r.instrutor) === norm(e.instrutorNome) ? e.instrutorAssin : ((S.cursoSig || {})[r.cursoId] || ''))]);
+  if (r.tst && norm(r.tst) !== norm(r.instrutor) && norm(r.tst) !== norm(r.rt)) L.push([r.tst, 'Técnico de Segurança do Trabalho' + (r.tstRegistro ? ' · ' + r.tstRegistro : ''), ok(r.tst) ? (r.tstAssin || e.tstAssin) : '']);
+  if (r.rt && norm(r.rt) !== norm(r.instrutor)) L.push([r.rt, 'Responsável Técnico · ' + str(r.rtQualif), ok(r.rt) ? (norm(r.rt) === norm(r.tst) ? (r.tstAssin || e.tstAssin) : sigInstr(r.rt)) : '']);
+  L.push([r.instrutor, (norm(r.rt) === norm(r.instrutor) ? 'Instrutor e Responsável Técnico · ' : 'Instrutor · ') + str(r.instrutorQualif), ok(r.instrutor) ? sigInstr(r.instrutor) : '']);
   return L;
 }
 function certMoldura(doc, W, H, forte) {
@@ -2570,14 +2582,15 @@ function certInto(doc, r, novaPagina) {
     y += 3;
   });
   doc.setDrawColor(226, 229, 234); doc.line(20, 176, W - 20, 176);
-  const resp = sigs.slice(1).map(([nm, rol]) => nm + ' · ' + rol);
+  const resp = sigs.slice(1).map(([nm, rol]) => { const a = aprovOk(r, nm) ? aprovDe(r, nm) : null; return nm + ' · ' + rol + (a ? ' · de acordo em ' + fmtDT(a.em) : ' · aguardando de acordo'); });
   font(7.5, false, [90, 96, 110]); resp.forEach((t, i) => doc.text(doc.splitTextToSize(t, W - 40)[0], 20, 181 + i * 4));
-  font(7, false, [130, 136, 146]); doc.text('Certificado nº ' + str(r.codigo), W - 20, 193, { align: 'right' });
+  font(7, false, [130, 136, 146]); doc.text('Certificado nº ' + str(r.codigo) + (r.__hash ? '   ·   código de verificação ' + r.__hash.slice(0, 16).toUpperCase() : ''), W - 20, 193, { align: 'right' });
 }
 async function gerarCertificados(regs, nome) {
   if (regs.some(r => str(r.termino) > todayStr())) { toast('Há treinamento ainda não concluído (término no futuro). O certificado só deve ser emitido após a conclusão.', 'bad'); await sleep(2600); }
   toast('Gerando certificado(s)…');
   try { await loadPDF(); } catch (_) { return toast('Sem conexão para gerar o PDF.', 'bad'); }
+  regs = await Promise.all(regs.map(async r => Object.assign({}, r, { __hash: await certHash(r) })));
   const doc = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape' });
   const grupo = r => (r.turma || r.id) + '|' + r.tipoId;
   certsComLista(doc, regs.slice().sort((a, b) => grupo(a).localeCompare(grupo(b)) || str(a.nome).localeCompare(str(b.nome), 'pt')), false);
@@ -2592,7 +2605,7 @@ function listaInto(P, d, parts) {
   const th = () => { P.need(8); doc.setFillColor(20, 33, 61); doc.rect(P.L, P.y, P.W, 6.5, 'F'); P.font(8, true, [255, 255, 255]); let x = P.L; cols.forEach(([t, w]) => { doc.text(t, x + 1.5, P.y + 4.4); x += w; }); P.y += 6.5; };
   th();
   parts.forEach((p, i) => { if (P.need(11)) th(); let x = P.L; [String(i + 1), p.nome, p.matricula, p.funcao].forEach((v, j) => { P.font(8.5); doc.text(doc.splitTextToSize(str(v), cols[j][1] - 3)[0] || '', x + 1.5, P.y + 6.5); x += cols[j][1]; }); if (/^data:image\/png/.test(str(p.assin))) { try { const pp = doc.getImageProperties(p.assin), q = pp.width / pp.height; let h = 8.5, ww = h * q; if (ww > 38) { ww = 38; h = ww / q; } doc.addImage(p.assin, 'PNG', x + 1, P.y + 0.8, ww, h); } catch (_) {} } doc.setDrawColor(200); doc.setLineWidth(0.15); doc.line(P.L, P.y + 10, P.R, P.y + 10); P.y += 10; });
-  const sg = certSigs({ nome: '', tst: d.tst, tstRegistro: d.tstRegistro, tstAssin: d.tstAssin, rt: d.rt, rtQualif: d.rtQualif, instrutor: d.instrutor, instrutorQualif: d.instrutorQualif, instrutorAssin: d.instrutorAssin }).slice(1);
+  const sg = certSigs({ nome: '', tst: d.tst, tstRegistro: d.tstRegistro, tstAssin: d.tstAssin, rt: d.rt, rtQualif: d.rtQualif, instrutor: d.instrutor, instrutorQualif: d.instrutorQualif, instrutorAssin: d.instrutorAssin, cursoId: d.cursoId, aprov: d.aprov || {} }).slice(1);
   P.need(34); P.y += 24; const n = sg.length, gap = 10, w = (P.W - gap * (n - 1)) / n;
   sg.forEach(([nm, rol, im], i) => { const x = P.L + i * (w + gap); if (/^data:image\/png/.test(str(im))) { try { const pp = doc.getImageProperties(im), q = pp.width / pp.height; let h = 16, ww = h * q; if (ww > w) { ww = w; h = ww / q; } doc.addImage(im, 'PNG', x + w / 2 - ww / 2, P.y - 1 - h, ww, h); } catch (_) {} }
     doc.setDrawColor(80); doc.setLineWidth(0.3); doc.line(x, P.y, x + w, P.y); P.font(8, true, [20, 33, 61]); doc.text(doc.splitTextToSize(str(nm), w)[0], x + w / 2, P.y + 4, { align: 'center' }); P.font(7, false, [90, 96, 110]); doc.text(doc.splitTextToSize(rol, w).slice(0, 2), x + w / 2, P.y + 7.5, { align: 'center' }); });
@@ -2601,7 +2614,7 @@ function listaInto(P, d, parts) {
 /* dados da lista a partir de um registro de treinamento: todos da mesma turma e do mesmo tipo */
 function listaDoRegistro(r) {
   const parts = S.tr.filter(x => x.turma && x.turma === r.turma && x.tipoId === r.tipoId).sort((a, b) => str(a.nome).localeCompare(str(b.nome), 'pt'));
-  return { d: { t: { nome: r.tipoNome, norma: r.norma }, ch: num(r.cargaHoraria), inicio: r.inicio, termino: r.termino, local: r.local, instrutor: str(r.instrutor), instrutorQualif: str(r.instrutorQualif), rt: str(r.rt), tst: str(r.tst), tstRegistro: str(r.tstRegistro), rtQualif: str(r.rtQualif), instrutorAssin: str(r.instrutorAssin), tstAssin: str(r.tstAssin || (S.emp || {}).tstAssin) }, parts: (parts.length ? parts : [r]).map(x => ({ nome: x.nome, matricula: x.matricula, funcao: x.funcao, assin: x.assinAluno && x.assinAluno.img })) };
+  return { d: { t: { nome: r.tipoNome, norma: r.norma }, ch: num(r.cargaHoraria), inicio: r.inicio, termino: r.termino, local: r.local, instrutor: str(r.instrutor), instrutorQualif: str(r.instrutorQualif), rt: str(r.rt), tst: str(r.tst), tstRegistro: str(r.tstRegistro), rtQualif: str(r.rtQualif), instrutorAssin: str(r.instrutorAssin), tstAssin: str(r.tstAssin || (S.emp || {}).tstAssin), cursoId: r.cursoId, aprov: (() => { const P = parts.length ? parts : [r]; const o = {}; certAprovadores(r).forEach(x => { const k = norm(x.nome).replace(/[^a-z0-9]+/g, '_'); if (P.every(p => (p.aprov || {})[k])) o[k] = (P[0].aprov || {})[k]; }); return o; })() }, parts: (parts.length ? parts : [r]).map(x => ({ nome: x.nome, matricula: x.matricula, funcao: x.funcao, assin: x.assinAluno && x.assinAluno.img })) };
 }
 /* certificados de uma lista de registros: frente + verso de cada um; a lista de presença da turma entra logo depois do último certificado daquela turma/tipo */
 function certsComLista(doc, regs, primeiraNova) {

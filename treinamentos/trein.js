@@ -25,13 +25,13 @@ $('.htitle').textContent = 'Treinamentos';
 $('.hsub').textContent = 'NRs, padrões e cursos';
 $('header .logo').innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3a2a00" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10 12 5 2 10l10 5 10-5z"/><path d="M6 12v5c3 2 9 2 12 0v-5"/></svg>';
 $('header .logo').dataset.svg = $('header .logo').innerHTML;
-VIEWS.splice(0, VIEWS.length, 'painel', 'matriz', 'turmas', 'padroes', 'cursos', 'cadastros');
+VIEWS.splice(0, VIEWS.length, 'painel', 'matriz', 'turmas', 'padroes', 'cursos', 'aprov', 'cadastros');
 SUBS.splice(0, SUBS.length, 'funcionarios', 'areas', 'tipos', 'empresa');
 Object.keys(ACESSO).forEach(k => delete ACESSO[k]);
 Object.assign(ACESSO, {
   admin: { views: '*', subs: '*' }, gestao: { views: '*', subs: '*' }, gestor: { views: '*', subs: '*' },
   tst: { views: '*', subs: ['funcionarios', 'areas', 'tipos'] }, rh: { views: '*', subs: ['funcionarios', 'areas', 'tipos'] },
-  instrutor: { views: ['painel', 'matriz', 'turmas', 'padroes', 'cursos', 'cadastros'], subs: ['funcionarios', 'tipos'] },
+  instrutor: { views: ['painel', 'matriz', 'turmas', 'padroes', 'cursos', 'aprov', 'cadastros'], subs: ['funcionarios', 'tipos'] },
   consulta: { views: '*', subs: ['funcionarios', 'areas', 'tipos'] }, none: { views: ['painel'], subs: [] }
 });
 const _guardWrite = guardWrite;
@@ -43,9 +43,10 @@ const IC = {
   turmas: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>',
   padroes: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 15l2 2 4-4"/>',
   cursos: '<rect x="2" y="4" width="20" height="13" rx="2"/><path d="m10 8 5 2.5-5 2.5z"/><path d="M8 21h8"/>',
-  cadastros: '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/>'
+  cadastros: '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/>',
+  aprov: '<path d="M9 12l2 2 4-4"/><path d="M12 3l7 3v5c0 5-3.5 8.5-7 10-3.5-1.5-7-5-7-10V6z"/>'
 };
-const NOMES_V = { painel: 'Painel', matriz: 'Matriz', turmas: 'Turmas', padroes: 'Padrões', cursos: 'Cursos EaD', cadastros: 'Cadastros' };
+const NOMES_V = { painel: 'Painel', matriz: 'Matriz', turmas: 'Turmas', padroes: 'Padrões', cursos: 'Cursos EaD', aprov: 'De acordo', cadastros: 'Cadastros' };
 $('.tabs .in').innerHTML = VIEWS.map(v => `<button data-v="${v}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${IC[v]}</svg>${NOMES_V[v]}</button>`).join('');
 $$('.tabs button').forEach(b => b.onclick = () => go(b.dataset.v));
 
@@ -94,7 +95,7 @@ render = function (now) {
   aplicarPapel(); if (!pode(current())) { location.hash = 'painel'; return; }
   renderPainel(); renderCad(); renderTrein(); tExternos();
   const v = current();
-  if (v === 'matriz') tMatriz(); if (v === 'padroes') tPadroes(); if (v === 'cursos') tCursos();
+  if (v === 'matriz') tMatriz(); if (v === 'padroes') tPadroes(); if (v === 'cursos') tCursos(); if (v === 'aprov') tAprov();
   tAutoCert();
 };
 let tRT = null; const tSched = () => { clearTimeout(tRT); tRT = setTimeout(() => render(), 150); };
@@ -135,6 +136,93 @@ function selFuncs(titulo, marcados, cb, opts) {
   draw();
 }
 
+
+/* ================= De acordo: instrutor, responsável técnico e TST aprovam cada certificado antes de a assinatura sair ================= */
+secao('aprov', `<div class="head"><h2>De acordo nos certificados</h2><button class="btn ghost" id="ap-hist" type="button">Registro de aprovações</button></div>
+  <p class="note" style="margin-top:-4px">A sua assinatura só sai no certificado depois do seu de acordo. Cada de acordo gera um termo (PDF) e uma planilha com o código de verificação (hash SHA-256) de cada certificado, para controle.</p>
+  <div id="ap-body"></div>`);
+let APSEL = new Set(), AP_HASH = {};
+const apChave = nome => norm(nome).replace(/[^a-z0-9]+/g, '_');
+const euNome = () => str((window.__FB || {}).nome || '');
+async function apHashes(L) { for (const r of L) if (!AP_HASH[r.id] || AP_HASH[r.id].k !== certCanon(r)) AP_HASH[r.id] = { k: certCanon(r), h: await certHash(r) }; }
+function apPendentes() {
+  const eu = norm(euNome()); const L = []; const outros = {};
+  S.tr.forEach(r => certAprovadores(r).forEach(a => { const ap = aprovDe(r, a.nome); const valido = ap && AP_HASH[r.id] && ap.hash === AP_HASH[r.id].h; if (valido) return;
+    if (norm(a.nome) === eu) L.push({ r, papel: a.papel, mudou: !!ap }); else outros[a.nome] = (outros[a.nome] || 0) + 1; }));
+  return { L: L.sort((x, y) => str(y.r.termino).localeCompare(str(x.r.termino)) || str(x.r.nome).localeCompare(str(y.r.nome), 'pt')), outros };
+}
+async function tAprov() {
+  await apHashes(S.tr); const { L, outros } = apPendentes(); APSEL = new Set([...APSEL].filter(id => L.some(x => x.r.id === id)));
+  const temAssin = norm(euNome()) === norm((S.emp || {}).instrutorNome) ? !!(S.emp || {}).instrutorAssin : norm(euNome()) === norm((S.emp || {}).tstNome) ? !!(S.emp || {}).tstAssin : true;
+  $('#ap-body').innerHTML = `<div class="card"><p class="ct">Aguardando o seu de acordo (${L.length})</p><p class="cs">Você: <b>${esc(euNome())}</b>. Aparecem aqui os certificados em que você é instrutor, responsável técnico ou TST.</p>
+    ${!temAssin ? '<p class="note" style="color:var(--bad)">Sua imagem de assinatura ainda não está cadastrada em Cadastros → Empresa.</p>' : ''}
+    ${L.length ? `<label style="display:flex;gap:8px;align-items:center;color:inherit;margin:6px 0"><input type="checkbox" id="ap-all"> Selecionar todos</label>
+    <div class="list">${L.map(({ r, papel, mudou }) => `<div class="item" style="cursor:default"><input type="checkbox" data-aps="${esc(r.id)}" ${APSEL.has(r.id) ? 'checked' : ''} style="width:22px;height:22px;flex:none"><div class="main"><div class="t1">${esc(r.nome)}${r.cpf ? ' · CPF ' + esc(r.cpf) : ''}</div><div class="t2">${esc(r.tipoNome)} · ${num(r.cargaHoraria)}h · ${fmtD(r.inicio)}${r.inicio !== r.termino ? ' a ' + fmtD(r.termino) : ''} · ${esc(papel)}</div>${mudou ? '<div class="t2" style="color:var(--warn)">Os dados mudaram depois do seu de acordo anterior: confira de novo.</div>' : ''}${r.assinAluno ? '' : '<div class="t2" style="color:var(--warn)">Participante ainda não assinou.</div>'}</div><button class="btn sm ghost" data-apv="${esc(r.id)}" type="button">Ver</button></div>`).join('')}</div>
+    <div class="actions"><button class="btn primary" id="ap-ok" type="button" ${APSEL.size ? '' : 'disabled'}>Dar de acordo (${APSEL.size})</button></div>` : '<div class="empty">Nada pendente para você.</div>'}</div>
+    ${Object.keys(outros).length ? `<div class="card"><p class="ct">Pendentes com outras pessoas</p>${Object.entries(outros).map(([n, q]) => `<div class="bt" style="padding:4px 0"><span>${esc(n)}</span><b>${q}</b></div>`).join('')}<p class="note">Cada pessoa precisa entrar com o próprio usuário para dar o de acordo. O nome do usuário precisa ser igual ao que sai no certificado.</p></div>` : ''}`;
+  if ($('#ap-all')) $('#ap-all').onchange = e => { APSEL = e.target.checked ? new Set(L.map(x => x.r.id)) : new Set(); tAprov(); };
+  $$('#ap-body [data-aps]').forEach(c => c.onchange = () => { c.checked ? APSEL.add(c.dataset.aps) : APSEL.delete(c.dataset.aps); $('#ap-ok').disabled = !APSEL.size; $('#ap-ok').textContent = `Dar de acordo (${APSEL.size})`; });
+  $$('#ap-body [data-apv]').forEach(b => b.onclick = () => { const r = S.tr.find(x => x.id === b.dataset.apv); if (r) gerarCertificados([r], 'certificado_' + norm(r.nome).replace(/[^a-z0-9]+/g, '_') + '.pdf'); });
+  if ($('#ap-ok')) $('#ap-ok').onclick = () => apConfirmar(L.filter(x => APSEL.has(x.r.id)));
+  $('#ap-hist').onclick = apHistorico;
+}
+function apConfirmar(itens) {
+  if (!itens.length) return;
+  openModal(mtop('Confirmar de acordo') + `<div class="card"><p>Eu, <b>${esc(euNome())}</b>, declaro que conferi e estou de acordo com <b>${itens.length}</b> certificado(s), e autorizo a inclusão da minha assinatura neles.</p>
+    <p class="note">Será registrado: data e hora, seu usuário, o aparelho e o código de verificação (hash SHA-256) de cada certificado. Se algum dado do certificado mudar depois, este de acordo deixa de valer.</p>
+    <div class="list" style="max-height:220px;overflow:auto">${itens.map(({ r }) => `<div class="t2" style="padding:3px 0">${esc(r.nome)} · ${esc(r.tipoNome)}</div>`).join('')}</div></div>
+    <div class="actions"><button class="btn ghost" data-close>Cancelar</button><button class="btn primary" id="ap-go">Confirmo o de acordo</button></div>`);
+  $('#ap-go').onclick = async () => {
+    if (!guardWrite()) return; const b = $('#ap-go'); b.disabled = true; b.textContent = 'Registrando…';
+    try {
+      const em = new Date().toISOString(), ua = navigator.userAgent, uid = (window.__FB || {}).uid || '', nome = euNome(), k = apChave(nome);
+      const lista = [];
+      for (const { r, papel } of itens) { const h = await certHash(r); lista.push({ id: r.id, codigo: str(r.codigo), participante: str(r.nome), cpf: str(r.cpf), treinamento: str(r.tipoNome), carga: num(r.cargaHoraria), inicio: r.inicio, termino: r.termino, validade: str(r.validade), papel, hash: h }); }
+      const hashLote = await sha256Hex(JSON.stringify({ nome, uid, em, itens: lista.map(x => [x.id, x.hash]) }));
+      const lref = db.collection('aprov_lotes').doc(); const lote = { nome, uid, em, ua, qtd: lista.length, itens: lista, hashLote };
+      await lref.set(lote);
+      for (const x of lista) await db.doc('treinamentos/' + x.id).update({ ['aprov.' + k]: { nome, papel: x.papel, uid, em, hash: x.hash, lote: lref.id } });
+      closeModal(); APSEL = new Set(); toast(`De acordo registrado em ${lista.length} certificado(s).`, 'ok');
+      await apTermo(Object.assign({ id: lref.id }, lote)); apPlanilha(Object.assign({ id: lref.id }, lote));
+    } catch (e) { console.warn(e); toast('Não foi possível registrar. Tente de novo.', 'bad'); b.disabled = false; b.textContent = 'Confirmo o de acordo'; }
+  };
+}
+/* termo de aprovação: documento à parte, só para controle */
+async function apTermo(l) {
+  try { await loadPDF(); } catch (_) { return toast('Sem conexão para gerar o PDF.', 'bad'); }
+  const P = PDFW(); const doc = P.doc; const e = S.emp || {};
+  P.header('TERMO DE DE ACORDO', 'Assinatura de certificados de treinamento');
+  P.box([['Responsável', l.nome], ['Data e hora', fmtDT(l.em)], ['Certificados', String(l.qtd)], ['Lote', l.id], ['Usuário', l.uid]]);
+  P.text(`Declaro que conferi os certificados abaixo e estou de acordo com a inclusão da minha assinatura neles. Cada certificado é identificado pelo código de verificação SHA-256 calculado sobre os seus dados (participante, CPF, treinamento, carga horária, período, validade, instrutor, responsável técnico, TST e conteúdo programático). Qualquer alteração posterior nesses dados invalida este de acordo para o certificado alterado.`, { size: 9 });
+  const cols = [['Nº', 8], ['Participante / CPF', 52], ['Treinamento', 50], ['Período', 30], ['Código de verificação', 46]];
+  const th = () => { P.need(8); doc.setFillColor(20, 33, 61); doc.rect(P.L, P.y, P.W, 6.5, 'F'); P.font(7.5, true, [255, 255, 255]); let x = P.L; cols.forEach(([t, w]) => { doc.text(t, x + 1.2, P.y + 4.4); x += w; }); P.y += 6.5; };
+  th();
+  l.itens.forEach((it, i) => { if (P.need(13)) th(); let x = P.L; P.font(7.5);
+    const cel = [[String(i + 1)], [it.participante, it.cpf ? 'CPF ' + it.cpf : ''], doc.splitTextToSize(it.treinamento + ' · ' + it.carga + 'h', 48).slice(0, 2), [fmtD(it.inicio) + (it.inicio !== it.termino ? ' a' : ''), it.inicio !== it.termino ? fmtD(it.termino) : ''], [it.hash.slice(0, 32), it.hash.slice(32)]];
+    cel.forEach((ls, j) => { ls.forEach((t, q) => { P.font(j === 4 ? 6.3 : 7.5, false, j === 4 ? [60, 66, 80] : [30, 33, 40]); doc.text(doc.splitTextToSize(str(t), cols[j][1] - 2)[0] || '', x + 1.2, P.y + 4 + q * 3.6); }); x += cols[j][1]; });
+    doc.setDrawColor(210); doc.setLineWidth(0.15); doc.line(P.L, P.y + 11, P.R, P.y + 11); P.y += 11; });
+  P.y += 4; P.text('Código do lote (SHA-256): ' + l.hashLote, { size: 8 });
+  P.text('Aparelho: ' + str(l.ua).slice(0, 160), { size: 7, color: [110, 116, 128] });
+  P.text('Registro eletrônico nos termos da MP 2.200-2/2001, art. 10, § 2º. Documento de controle interno; não acompanha o certificado entregue ao participante.', { size: 7, color: [110, 116, 128] });
+  const dl = await use('downloads'); if (dl) try { await dl.save({ filename: `Termo de de acordo - ${l.nome} - ${l.em.slice(0, 10)}.pdf`, data: doc.output('blob') }); } catch (_) {}
+}
+function apPlanilha(l) {
+  const cab = ['Lote', 'Responsável', 'Data e hora', 'Papel', 'Código do certificado', 'Participante', 'CPF', 'Treinamento', 'Carga horária', 'Início', 'Término', 'Validade', 'Código de verificação (SHA-256)', 'Código do lote (SHA-256)'];
+  const cel = v => `"${str(v).replace(/"/g, '""')}"`;
+  const linhas = l.itens.map(it => [l.id, l.nome, fmtDT(l.em), it.papel, it.codigo, it.participante, it.cpf, it.treinamento, it.carga, fmtD(it.inicio), fmtD(it.termino), fmtD(it.validade), it.hash, l.hashLote].map(cel).join(';'));
+  const blob = new Blob(['﻿' + [cab.map(cel).join(';')].concat(linhas).join('\r\n')], { type: 'text/csv;charset=utf-8' });
+  use('downloads').then(dl => dl && dl.save({ filename: `De acordo - ${l.nome} - ${l.em.slice(0, 10)}.csv`, data: blob })).catch(() => {});
+}
+async function apHistorico() {
+  let L = []; try { L = (await db.collection('aprov_lotes').get()).docs.map(d => Object.assign({ id: d.id }, d.data())).sort((a, b) => str(b.em).localeCompare(str(a.em))); } catch (e) { return toast('Não foi possível carregar o registro.', 'bad'); }
+  openModal(mtop('Registro de aprovações') + `<div class="card">${L.length ? L.map(l => `<div class="item" style="cursor:default"><div class="main"><div class="t1">${esc(l.nome)} · ${num(l.qtd)} certificado(s)</div><div class="t2">${fmtDT(l.em)} · lote ${esc(l.hashLote.slice(0, 12).toUpperCase())}</div></div><button class="btn sm ghost" data-apt="${esc(l.id)}">Termo</button><button class="btn sm ghost" data-app="${esc(l.id)}">Planilha</button></div>`).join('') : '<div class="empty">Nenhum de acordo registrado ainda.</div>'}
+    ${L.length ? '<div class="actions"><button class="btn ghost" id="ap-all-csv">Planilha com todos</button></div>' : ''}</div>`);
+  $$('[data-apt]').forEach(b => b.onclick = () => apTermo(L.find(x => x.id === b.dataset.apt)));
+  $$('[data-app]').forEach(b => b.onclick = () => apPlanilha(L.find(x => x.id === b.dataset.app)));
+  if ($('#ap-all-csv')) $('#ap-all-csv').onclick = () => { const cab = ['Lote', 'Responsável', 'Data e hora', 'Papel', 'Código do certificado', 'Participante', 'CPF', 'Treinamento', 'Carga horária', 'Início', 'Término', 'Validade', 'Código de verificação (SHA-256)', 'Código do lote (SHA-256)']; const cel = v => `"${str(v).replace(/"/g, '""')}"`;
+    const linhas = []; L.forEach(l => l.itens.forEach(it => linhas.push([l.id, l.nome, fmtDT(l.em), it.papel, it.codigo, it.participante, it.cpf, it.treinamento, it.carga, fmtD(it.inicio), fmtD(it.termino), fmtD(it.validade), it.hash, l.hashLote].map(cel).join(';'))));
+    use('downloads').then(dl => dl && dl.save({ filename: `Registro de de acordo - ${todayStr()}.csv`, data: new Blob(['﻿' + [cab.map(cel).join(';')].concat(linhas).join('\r\n')], { type: 'text/csv;charset=utf-8' }) })).catch(() => {}); };
+}
 /* ================= arquivos (anexos guardados no banco, em partes) ================= */
 const PARTE = 700000, MAX_ARQ = 12 * 1024 * 1024;
 function lerComoDataURL(file) { return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = () => rej(r.error); r.readAsDataURL(file); }); }

@@ -93,6 +93,8 @@ service cloud.firestore {
       allow update, delete: if trein(['gestor', 'tst', 'rh']);
     }
     match /cursos/{id}    { allow read: if ativo(); allow write: if trein(['gestor', 'tst', 'rh', 'instrutor']); }
+    // de acordo nos certificados: registro só de inclusão (não se altera nem se apaga)
+    match /aprov_lotes/{id} { allow read: if equipe(); allow create: if equipe() && request.resource.data.uid == request.auth.uid; }
     // assinatura do instrutor de cada curso: o funcionário não lê
     match /cursos_priv/{id} { allow read: if equipe(); allow write: if trein(['gestor', 'tst', 'rh', 'instrutor']); }
     match /matriculas/{id} {
