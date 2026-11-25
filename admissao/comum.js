@@ -84,5 +84,47 @@
   }
   const str = v => v == null ? '' : String(v);
   const ultimoEnvio = L => (L || []).reduce((m, x) => str(x.em) > m ? str(x.em) : m, '');
-  window.ADM = { SLOTS, slotsDe, rand, dig, cpfOk, fmtCpf, preparar, gravar, ler, docsSt, ultimoEnvio, qualidade };
+
+  /* textos padrão (o RH pode mudar em Admissão → Modelos). Campos entre chaves são trocados pelos dados da admissão. */
+  const CARTA_PADRAO = `Prezado(a) {nome},
+
+Temos a satisfação de informar que você foi aprovado(a) no nosso processo seletivo e convidamos você para fazer parte da equipe da {empresa}.
+
+Dados da proposta:
+Nome completo: {nome}
+CPF: {cpf}
+Função: {funcao}
+Área: {area}
+Local de trabalho: {unidade}
+Remuneração mensal: {salario}
+Vínculo: {vinculo}
+
+A contratação se concretiza após a entrega dos documentos, o exame admissional (ASO) com resultado apto e a integração de segurança. Nos próximos passos você vai enviar seus dados e documentos por este mesmo link, e o RH vai acompanhar você até o primeiro dia de trabalho.
+
+Seja muito bem-vindo(a)! Contamos com você para trabalhar com segurança, qualidade e respeito.
+
+Atenciosamente,
+{empresa}`;
+  const LGPD_PADRAO = `TERMO DE CIÊNCIA E CONSENTIMENTO PARA TRATAMENTO DE DADOS PESSOAIS (Lei nº 13.709/2018 – LGPD)
+
+Eu, {nome}, CPF {cpf}, declaro estar ciente de que a {empresa} ("Empresa"), na condição de controladora, tratará os meus dados pessoais para as finalidades descritas abaixo.
+
+1. Dados tratados: dados de identificação e documentos pessoais; endereço e contatos; escolaridade e qualificações; dados de dependentes; dados bancários; fotografia; e dados de saúde ocupacional (exames admissionais e periódicos – ASO).
+
+2. Finalidades: processo de admissão e registro do contrato; cumprimento de obrigações legais e regulatórias (trabalhistas, previdenciárias, fiscais, eSocial e normas de segurança e saúde no trabalho); folha de pagamento e benefícios; treinamentos, integração e controle de acesso nos clientes onde os serviços serão prestados; e emissão de crachá e documentos de segurança.
+
+3. Compartilhamento: os dados poderão ser compartilhados, somente no necessário, com o escritório de contabilidade, a clínica de medicina do trabalho, órgãos públicos (eSocial, Receita Federal, Ministério do Trabalho), instituições bancárias e de benefícios, e com os clientes da Empresa para fins de integração e liberação de acesso.
+
+4. Guarda: os dados serão mantidos pelo tempo necessário às finalidades acima e pelos prazos exigidos em lei. Os documentos enviados por este link ficam armazenados com acesso restrito ao RH.
+
+5. Direitos: posso, a qualquer momento, pedir confirmação, acesso, correção, anonimização, portabilidade ou eliminação dos dados, bem como informações sobre o compartilhamento, nos termos do art. 18 da LGPD, pelo contato do RH da Empresa. Dados necessários ao cumprimento de obrigação legal ou à execução do contrato de trabalho não dependem de consentimento e serão mantidos enquanto exigido.
+
+6. Declaro que as informações e documentos que vou enviar são verdadeiros e que li e compreendi este termo.`;
+  const moeda = v => (v == null || v === '' || !isFinite(+v)) ? 'a combinar' : (+v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  function preencher(tpl, a, extra) {
+    const vars = Object.assign({ nome: a.nome, cpf: fmtCpf(a.cpf), funcao: a.funcao, area: [a.area, a.subarea].filter(Boolean).join(' / ') || '—', unidade: a.unidade || '—', vinculo: a.vinculo === 'PJ' ? 'PJ (prestação de serviços)' : 'CLT' }, extra || {});
+    return String(tpl || '').replace(/\{(\w+)\}/g, (m, k) => vars[k] != null && vars[k] !== '' ? String(vars[k]) : m === '{salario}' ? 'a combinar' : '—');
+  }
+  async function sha256(txt) { const b = new TextEncoder().encode(txt); const h = await crypto.subtle.digest('SHA-256', b); return [...new Uint8Array(h)].map(x => x.toString(16).padStart(2, '0')).join(''); }
+  window.ADM = { CARTA_PADRAO, LGPD_PADRAO, moeda, preencher, sha256, SLOTS, slotsDe, rand, dig, cpfOk, fmtCpf, preparar, gravar, ler, docsSt, ultimoEnvio, qualidade };
 })();

@@ -30,7 +30,7 @@
     CAPI.empresa().then(e => { if (e && e.nome) $('#emp').textContent = e.nome; });
     CAND = Object.assign({ dados: {}, docs: {} }, A.cand || {}); CAND.dados = CAND.dados || {}; CAND.docs = CAND.docs || {};
     let ok = false; try { ok = localStorage.getItem(chaveCpf()) === A.cpf; } catch (e) {}
-    ok ? tela() : telaCpf();
+    ok ? fluxo() : telaCpf();
   }
   function fim(t) { $('#app').innerHTML = `<div class="card"><h1>Documentos de admissão</h1><p>${esc(t)}</p></div>`; }
   function telaCpf() {
@@ -39,7 +39,72 @@
       <div style="margin-top:14px"><button class="btn primary big" id="c-go">Continuar</button></div>
       <p class="note" style="margin-top:12px">Seus dados são usados só para a sua admissão e ficam guardados com segurança pela empresa (LGPD).</p></div>`;
     $('#c-go').onclick = () => { if (ADM.dig($('#c-cpf').value) !== A.cpf) return toast('CPF não confere com o cadastro do RH. Confira os números.', 'bad');
-      try { localStorage.setItem(chaveCpf(), A.cpf); } catch (e) {} tela(); };
+      try { localStorage.setItem(chaveCpf(), A.cpf); } catch (e) {} fluxo(); };
+  }
+  /* ---------- assinatura no app ---------- */
+  const assinadoC = id => { const s = (CAND.assin || {})[id]; const d = id === 'osepi' ? (A.assinar || {}).osepi : (A.textos || {})[id]; return !!(s && d && s.hash === d.hash); };
+  function pad(box) {
+    box.innerHTML = `<div style="position:relative;border:2px dashed #b9c0cb;border-radius:12px;background:#fff;touch-action:none"><canvas style="width:100%;height:170px;display:block;border-radius:12px"></canvas>
+      <span style="position:absolute;left:12px;bottom:8px;font-size:12px;color:#8a93a3;pointer-events:none">Assine aqui com o dedo</span></div><div style="text-align:right;margin-top:4px"><button class="btn ghost" type="button" style="padding:6px 12px">Limpar</button></div>`;
+    const cv = box.querySelector('canvas'), r = window.devicePixelRatio || 1; cv.width = cv.clientWidth * r; cv.height = 170 * r;
+    const x = cv.getContext('2d'); x.scale(r, r); x.lineWidth = 2.4; x.lineCap = 'round'; x.lineJoin = 'round'; x.strokeStyle = '#14213d';
+    let des = false, pts = 0; const pos = e => { const b = cv.getBoundingClientRect(); return [e.clientX - b.left, e.clientY - b.top]; };
+    cv.onpointerdown = e => { des = true; cv.setPointerCapture(e.pointerId); x.beginPath(); x.moveTo(...pos(e)); };
+    cv.onpointermove = e => { if (!des) return; x.lineTo(...pos(e)); x.stroke(); pts++; };
+    cv.onpointerup = cv.onpointercancel = () => { des = false; };
+    box.querySelector('button').onclick = () => { x.clearRect(0, 0, cv.width, cv.height); pts = 0; };
+    return { vazio: () => pts < 12, img: () => { const o = document.createElement('canvas'); const k = Math.min(1, 600 / cv.width); o.width = Math.round(cv.width * k); o.height = Math.round(cv.height * k); o.getContext('2d').drawImage(cv, 0, 0, o.width, o.height); return o.toDataURL('image/png'); } };
+  }
+  async function assinar(id, hashDoc, p, extra) {
+    if (p.vazio()) throw new Error('Faça a sua assinatura no quadro.');
+    const reg = Object.assign({ img: p.img(), hash: hashDoc, em: new Date().toISOString(), ua: navigator.userAgent, tz: Intl.DateTimeFormat().resolvedOptions().timeZone || '', tela: screen.width + 'x' + screen.height, cpfConfirmado: true }, extra || {});
+    CAND.assin = Object.assign({}, CAND.assin || {}, { [id]: reg }); await salvarCand();
+  }
+  /* termo LGPD e carta-convite vêm antes de tudo */
+  async function fluxo() {
+    for (const q of ['lgpd', 'carta']) { if (!(A.textos || {})[q] || assinadoC(q)) continue; return telaTexto(q); }
+    tela();
+  }
+  async function telaTexto(q) {
+    $('#app').innerHTML = '<div class="card"><p class="note">Carregando…</p></div>';
+    let d; try { d = await CAPI.getD(tk, q); } catch (e) { return fim(e.message); }
+    if (!d) return tela();
+    const h = await ADM.sha256(d.texto); if (h !== A.textos[q].hash) return fim('O documento foi atualizado pelo RH. Recarregue a página.');
+    const carta = q === 'carta';
+    $('#app').innerHTML = `<div class="card"><p class="note">Passo ${carta ? 2 : 1} de 2 antes do envio dos documentos</p><h1>${carta ? 'Carta-convite' : 'Termo de proteção de dados (LGPD)'}</h1>
+      <div style="white-space:pre-wrap;border:1px solid var(--line);border-radius:10px;padding:14px;max-height:${carta ? 'none' : '360px'};overflow:auto;background:#fafbfc;font-size:15px">${esc(d.texto)}</div>
+      <label style="display:flex;gap:10px;align-items:flex-start;color:var(--ink);font-size:15px;margin-top:14px"><input type="checkbox" id="t-ok" style="width:22px;height:22px;flex:none;margin-top:2px"> ${carta ? 'Li a carta-convite e aceito a proposta.' : 'Li e concordo com o termo de tratamento dos meus dados pessoais.'}</label>
+      <label>Sua assinatura</label><div id="t-pad"></div>
+      <div style="margin-top:12px"><button class="btn primary big" id="t-go">${carta ? 'Assinar e aceitar' : 'Assinar e continuar'}</button></div>
+      <p class="note">Registramos a data, a hora e o aparelho da assinatura. Ela tem validade como assinatura eletrônica (MP 2.200-2/2001).</p></div>`;
+    const p = pad($('#t-pad'));
+    $('#t-go').onclick = async () => { if (!$('#t-ok').checked) return toast('Marque que leu e concorda.', 'bad'); const b = $('#t-go'); b.disabled = true;
+      try { await assinar(q, h, p); toast(carta ? 'Carta assinada. Bem-vindo(a)!' : 'Termo assinado.', 'ok'); window.scrollTo(0, 0); fluxo(); } catch (e) { b.disabled = false; toast(e.message, 'bad'); } };
+  }
+  /* OS de segurança e termo de EPI (PDF gerado pelo RH) */
+  async function osBox() {
+    const os = (A.assinar || {}).osepi; const box = $('#c-os'); if (!os || !box) return;
+    if (assinadoC('osepi')) { box.innerHTML = `<div class="okbox">Assinado em ${new Date(CAND.assin.osepi.em).toLocaleString('pt-BR')}. Obrigado!</div>`; return; }
+    box.innerHTML = `<p class="note">Leia a Ordem de Serviço de Segurança e o termo de EPI da sua função e assine no final.</p><button class="btn primary big" id="o-ler">Ler e assinar</button>`;
+    $('#o-ler').onclick = async () => {
+      box.innerHTML = '<p class="note">Abrindo o documento…</p>';
+      try {
+        const blob = await ADM.ler(os, 'osepi', id => CAPI.getD(tk, id).then(x => x ? x.d : null));
+        const b64 = await new Promise(r => { const fr = new FileReader(); fr.onload = () => r(String(fr.result).split(',')[1]); fr.readAsDataURL(blob); });
+        const h = await ADM.sha256(b64); if (h !== os.hash) throw new Error('O documento não confere. Recarregue a página.');
+        await new Promise((res, rej) => { if (window.pdfjsLib) return res(); const s = document.createElement('script'); s.src = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js'; s.onload = res; s.onerror = () => rej(new Error('Sem internet para abrir o PDF.')); document.head.appendChild(s); });
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+        const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(await blob.arrayBuffer()) }).promise;
+        box.innerHTML = `<div id="o-pgs" style="border:1px solid var(--line);border-radius:10px;overflow:hidden"></div>
+          <label style="display:flex;gap:10px;align-items:flex-start;color:var(--ink);font-size:15px;margin-top:14px"><input type="checkbox" id="o-ok" style="width:22px;height:22px;flex:none;margin-top:2px"> Recebi, li e compreendi a Ordem de Serviço e o termo de EPI, e me comprometo a cumpri-los.</label>
+          <label>Sua assinatura</label><div id="o-pad"></div><div style="margin-top:12px"><button class="btn primary big" id="o-go">Assinar</button></div>`;
+        const W = Math.min(900, box.clientWidth || 360) * (window.devicePixelRatio > 1 ? 2 : 1.4);
+        for (let i = 1; i <= pdf.numPages; i++) { const pg = await pdf.getPage(i); const v0 = pg.getViewport({ scale: 1 }); const vp = pg.getViewport({ scale: W / v0.width }); const cv = document.createElement('canvas'); cv.width = vp.width; cv.height = vp.height; cv.style.cssText = 'width:100%;display:block;border-bottom:1px solid #e2e5ea'; $('#o-pgs').appendChild(cv); await pg.render({ canvasContext: cv.getContext('2d'), viewport: vp }).promise; }
+        const p = pad($('#o-pad'));
+        $('#o-go').onclick = async () => { if (!$('#o-ok').checked) return toast('Marque que leu e compreendeu.', 'bad'); const b = $('#o-go'); b.disabled = true;
+          try { await assinar('osepi', h, p, { v: os.v }); toast('Assinado!', 'ok'); osBox(); } catch (e) { b.disabled = false; toast(e.message, 'bad'); } };
+      } catch (e) { box.innerHTML = `<div class="badbox">${esc(e.message || 'Não foi possível abrir.')}</div>`; }
+    };
   }
   function progresso() {
     const st = ADM.docsSt({ cand: CAND, rev: A.rev });
@@ -55,13 +120,14 @@
         ${rejs.length ? `<div class="badbox"><b>O RH pediu para reenviar:</b> ${rejs.map(s => esc(s.t)).join(', ')}. Veja o motivo no documento.</div>` : ''}</div>
       <div class="card"><div class="sh"><div class="m"><h2>1. Seus dados</h2><p class="note">${p.dOk} de ${p.dTot} campos obrigatórios</p></div><button class="btn ghost" id="c-tdados">${ATIVO === 'dados' ? 'Fechar' : 'Preencher'}</button></div>
         <div id="c-dados" class="${ATIVO === 'dados' ? '' : 'hidden'}"></div></div>
+      <div class="card"><h2>2. Documentos</h2><p class="note">Tire foto com o documento inteiro aparecendo, em cima de uma mesa, com boa luz. PDF também vale. Os marcados com * são obrigatórios.</p><div id="c-docs"></div></div>
       ${(A.trein || {}).cursos && A.trein.cursos.length ? `<div class="card"><h2>3. Treinamentos</h2><p class="note">Você já pode fazer estes treinamentos pelo celular:</p><ul style="margin:6px 0 10px;padding-left:20px">${A.trein.cursos.map(c => `<li>${esc(c.nome)}</li>`).join('')}</ul>
         <p>Login: <b>seu CPF</b><br>Senha provisória: <b style="font-size:18px;letter-spacing:1px">${esc(A.trein.senha || '')}</b></p><p class="note">No primeiro acesso você cria a sua senha.</p>
         <a class="btn primary big" href="../aluno/" target="_blank" rel="noopener" style="text-decoration:none">Abrir treinamentos</a></div>` : ''}
-      <div class="card"><h2>2. Documentos</h2><p class="note">Tire foto com o documento inteiro aparecendo, em cima de uma mesa, com boa luz. PDF também vale. Os marcados com * são obrigatórios.</p><div id="c-docs"></div></div>`;
+      ${(A.assinar || {}).osepi ? `<div class="card"><h2>4. OS de segurança e termo de EPI</h2><div id="c-os"></div></div>` : ''}`;
     $('#c-tdados').onclick = () => { ATIVO = ATIVO === 'dados' ? '' : 'dados'; tela(); };
     if (ATIVO === 'dados') formDados();
-    docs();
+    docs(); osBox();
   }
   function campo([k, t, tp, obr]) {
     const v = str(CAND.dados[k]); const lab = `<label for="d-${k}">${esc(t)}${obr ? ' *' : ''}</label>`;

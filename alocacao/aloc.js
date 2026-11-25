@@ -351,6 +351,7 @@ async function exportXls(L) {
 }
 async function empresa() { try { const s = await db.doc('config/empresa').get(); return s.exists ? s.data() : {}; } catch (e) { return {}; } }
 function cab(doc, titulo, sub, emp, land) {
+  emp = window.logoEmp ? window.logoEmp(emp) : emp;
   const W = land ? 297 : 210; doc.setFillColor(20, 33, 61); doc.rect(0, 0, W, 22, 'F'); doc.setFillColor(242, 169, 0); doc.rect(0, 22, W, 1.5, 'F');
   let x = 12; if (/^data:image\/(png|jpeg)/.test(str(emp.logo))) { try { doc.addImage(emp.logo, emp.logo.includes('png') ? 'PNG' : 'JPEG', 10, 4, 28, 14, undefined, 'FAST'); x = 42; } catch (e) {} }
   doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.text(titulo, x, 11); doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.text(sub, x, 17);

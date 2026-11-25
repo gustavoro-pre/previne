@@ -117,6 +117,12 @@ service cloud.firestore {
               && request.resource.data.keys().hasOnly(['d']) && request.resource.data.d is string && request.resource.data.d.size() < 760000);
         allow delete: if admi(['rh']);
       }
+      // documentos para o candidato ler e assinar (carta-convite, termo LGPD, OS e termo de EPI): só o RH grava
+      match /d/{pid} {
+        allow get: if admi(['rh', 'consulta']) || get(/databases/$(database)/documents/admissoes/$(tk)).data.status == 'aberto';
+        allow list: if admi(['rh', 'consulta']);
+        allow write: if admi(['rh']);
+      }
     }
     // salário: só o RH
     match /admissoes_priv/{tk} { allow read, write: if admi(['rh']); }

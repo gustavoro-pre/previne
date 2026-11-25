@@ -348,6 +348,7 @@ table.tb{width:100%;border-collapse:collapse;font-size:13px}
 <div id="toast"></div>
 <div id="gate"><div class="gbox"><p class="gsub">Carregando…</p></div></div>
 
+<script src="../logo.js"></script>
 <script>
 window.__FBMODE = true; window.__MODULO = 'treinamentos';
 window.claude = { use: n => new Promise(r => { const go = () => window.__fbUse ? r(window.__fbUse(n)) : setTimeout(go, 50); go(); }) };
@@ -980,7 +981,7 @@ $('#e-submit').onclick = async () => {
 
 /* ================= cadastros ================= */
 function renderCad() { renderFerr(); renderEpis(); renderFunc(); renderKits(); renderEmp(); renderTrein(); renderEstoques(); if (sub === 'regras') renderRegras(); if (sub === 'usuarios') renderUsuarios(); }
-function logoImg() { const e = S.emp || {}; return /^data:image\/(png|jpeg);base64,/.test(str(e.logo)) ? e : null; }
+function logoImg() { const e = S.emp || {}; if (/^data:image\/(png|jpeg);base64,/.test(str(e.logo))) return e; return window.logoEmp ? window.logoEmp(e) : null; }
 function aplicarLogo() {
   const el = document.querySelector('header .logo'); if (!el) return;
   if (!el.dataset.svg) el.dataset.svg = el.innerHTML;
@@ -2696,6 +2697,38 @@ show(); renderEpiItens();
   [['ferr', 'ferramentas'], ['func', 'funcionarios'], ['epis', 'epis'], ['kits', 'kits'], ['caut', 'cautelas'], ['ent', 'entregas']].forEach(([k, c]) => {
     db.collection(c).onSnapshot(s => { S[k] = s.docs.map(asObj); S.ready[k] = true; onLive(s); sched(); }, onErr);
   });
+})();
+
+/* ================= admissão: OS + termo de EPI para assinatura no app =================
+   O módulo Admissão abre esta página escondida (iframe) com #gerar-adm=<código> e recebe o PDF pronto,
+   gerado com os mesmos kits, EPIs e textos de OS cadastrados aqui. */
+function termoEpiInto(P, f) {
+  P.header('TERMO DE EPI', 'Recebimento e responsabilidade · NR-06');
+  P.box([['Funcionário', f.nome], ['Matrícula', f.matricula || 'a definir'], ['Função', f.funcao], ['Área', [f.area, f.subarea].filter(Boolean).join(' / ')], ['Unidade', f.unidade], ['Nº calçado', f.tamCalcado], ['Camisa / calça', [f.tamCamisa, f.tamCalca].filter(Boolean).join(' / ')], ['Data', fmtD(todayStr())]]);
+  P.text('Declaro que fui informado de que a empresa me fornecerá gratuitamente os Equipamentos de Proteção Individual adequados aos riscos da minha função, relacionados abaixo, e que fui orientado sobre o uso correto, a guarda, a conservação e a higienização de cada um. Comprometo-me a usá-los apenas para a finalidade a que se destinam, a responsabilizar-me pela sua guarda e conservação, a comunicar qualquer alteração que os torne impróprios para uso e a cumprir as determinações sobre o uso adequado (NR-06, item 6.7.1; CLT, art. 158).', { size: 9, gap: 3 });
+  P.section(1, 'EPIs da função');
+  const ke = [...kitEpisF(f).entries()].map(([id, q]) => [S.epis.find(p => p.id === id), q]).filter(x => x[0]);
+  if (ke.length) ke.forEach(([p, q]) => P.text(`•  ${p.nome}  —  CA ${p.ca || 'sem CA'}${num(p.vidaUtilDias) ? '  ·  troca a cada ' + num(p.vidaUtilDias) + ' dias' : ''}${q > 1 ? '  ·  qtd ' + q : ''}`, { size: 9, gap: 0.4 }));
+  else P.text('Nenhum kit de EPI cadastrado para esta função (Cadastros → Kits).', { color: [179, 38, 30] });
+  if (f.altura) { P.section(2, 'Trabalho em altura'); P.text('Estou designado para trabalho em altura. Fui orientado a inspecionar cinturão, talabarte, trava-quedas e conectores antes de cada uso, a ancorar somente em pontos aprovados e a não usar equipamento danificado ou que já tenha retido uma queda.', { size: 9 }); }
+  P.y += 2; P.text('Cada entrega será registrada na ficha de controle de EPI, com data, CA e assinatura.', { size: 8.5, color: [60, 66, 80] });
+  P.sign([str(f.nome) + ' · Funcionário', 'Responsável pela entrega' + (S.emp && S.emp.responsavel ? ' · ' + S.emp.responsavel : '')]);
+}
+(function () {
+  const m = /[#&]gerar-adm=([a-z0-9]{20})/.exec(location.hash); if (!m || window.parent === window) return;
+  const tk = m[1], t0 = Date.now(); const fim = msg => window.parent.postMessage(Object.assign({ tipo: 'previne-adm-docs', tk }, msg), location.origin);
+  const tentar = async () => {
+    if (!(typeof db !== 'undefined' && db && S.ready.kits && S.ready.epis && Date.now() - t0 > 1500)) { if (Date.now() - t0 > 45000) return fim({ erro: 'Não carregou os kits e EPIs a tempo. Verifique se o seu usuário tem acesso a Ferramentas & EPI.' }); return setTimeout(tentar, 400); }
+    try {
+      const sn = await db.doc('admissoes/' + tk).get(); if (!sn.exists) return fim({ erro: 'Admissão não encontrada.' });
+      const a = sn.data(), dd = (a.cand || {}).dados || {};
+      const f = { id: a.funcionarioId || 'adm-' + tk, nome: str(a.nome), matricula: str(a.matricula), funcao: str(a.funcao), area: str(a.area), areaId: str(a.areaId), subarea: str(a.subarea), subareaId: str(a.subareaId), subareas: a.subareaId ? [a.subareaId] : [], unidade: str(a.unidade), tamCamisa: str(dd.tamCamisa), tamCalca: str(dd.tamCalca), tamCalcado: str(dd.tamCalcado), altura: !!a.altura };
+      await loadPDF(); const P = PDFW(); const modelo = osInto(P, f); P.newPage(); termoEpiInto(P, f);
+      P.footer('Admissão · ' + f.nome + ' · documento para assinatura eletrônica · gerado em ' + fmtDT(new Date().toISOString()));
+      fim({ b64: P.doc.output('datauristring').split(',')[1], modelo: !!modelo, epis: kitEpisF(f).size });
+    } catch (e) { fim({ erro: (e && e.message) || String(e) }); }
+  };
+  tentar();
 })();
 </script>
 </body>

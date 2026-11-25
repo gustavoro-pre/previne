@@ -12,7 +12,7 @@
 *{box-sizing:border-box}
 html,body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
 header{background:var(--ink);color:#fff;border-bottom:4px solid var(--accent);padding:14px 16px}
-header b{font-size:17px}header div{font-size:13px;opacity:.75}
+header b{font-size:17px}.logo img{height:30px;display:block}header div{font-size:13px;opacity:.75}
 main{max-width:640px;margin:0 auto;padding:16px 16px 60px}
 .card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:12px}
 h1{font-size:21px;margin:4px 0 8px}h2{font-size:17px;margin:0 0 6px}
@@ -44,9 +44,10 @@ input:focus,select:focus{outline:none;border-color:var(--ink);box-shadow:0 0 0 3
 </style>
 </head>
 <body>
-<header><b id="emp">PREVINE Engenharia</b><div>Envio de documentos para admissão</div></header>
+<header style="display:flex;gap:12px;align-items:center"><div class="logo" style="background:#fff;border-radius:8px;padding:3px 6px;display:flex"></div><div><b id="emp">PREVINE Engenharia</b><div>Envio de documentos para admissão</div></div></header>
 <main id="app"><div class="card"><p class="note">Carregando…</p></div></main>
 <div id="toast"></div>
+<script src="../logo.js"></script>
 <script src="comum.js"></script>
 <script type="module" src="capi.js"></script>
 <script src="cand.js"></script>

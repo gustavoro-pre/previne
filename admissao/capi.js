@@ -8,6 +8,7 @@ window.CAPI = {
   async get(tk) { try { const s = await getDoc(doc(fs, 'admissoes/' + tk)); return s.exists() ? s.data() : null; } catch (e) { throw new Error(msg(e)); } },
   async empresa() { try { const s = await getDoc(doc(fs, 'config/publico')); return s.exists() ? s.data() : {}; } catch (e) { return {}; } },
   async setCand(tk, cand) { try { await updateDoc(doc(fs, 'admissoes/' + tk), { cand }); } catch (e) { throw new Error(msg(e)); } },
+  async getD(tk, id) { try { const s = await getDoc(doc(fs, `admissoes/${tk}/d/${id}`)); return s.exists() ? s.data() : null; } catch (e) { throw new Error(msg(e)); } },
   async setPart(tk, id, d) { try { await setDoc(doc(fs, `admissoes/${tk}/p/${id}`), { d }); } catch (e) { throw new Error(msg(e)); } }
 };
 window.dispatchEvent(new Event('capi'));

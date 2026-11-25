@@ -224,12 +224,13 @@ main{padding-bottom:40px}
   <button id="usermenu" hidden type="button"><b></b><span>Sair</span></button>
 </div></header>
 <main>
-  <div class="seg" id="seg"><button data-tab="and" class="on">Em andamento</button><button data-tab="nova">Nova admissão</button><button data-tab="conc">Concluídas</button><button data-tab="kpi">Indicadores</button></div>
+  <div class="seg" id="seg"><button data-tab="and" class="on">Em andamento</button><button data-tab="nova">Nova admissão</button><button data-tab="conc">Concluídas</button><button data-tab="kpi">Indicadores</button><button data-tab="mod">Modelos</button></div>
   <div id="body"></div>
 </main>
 <div class="modal" id="modal" hidden><div class="sheet" id="sheet"></div></div>
 <div id="gate"><div class="gbox"><p class="gsub">Carregando…</p></div></div>
 <div id="toast"></div>
+<script src="../logo.js"></script>
 <script>
 window.__FBMODE = true; window.__MODULO = 'admissao';
 window.claude = { use: n => new Promise(r => { const go = () => window.__fbUse ? r(window.__fbUse(n)) : setTimeout(go, 50); go(); }) };
