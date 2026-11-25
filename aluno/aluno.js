@@ -105,6 +105,18 @@ function pararTimer() { if (TM.h) { gravarTempo(); clearInterval(TM.h); } TM.h =
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') gravarTempo(); });
 window.addEventListener('pagehide', gravarTempo);
 
+/* quadro de assinatura com o dedo */
+function padAss(box) {
+  box.innerHTML = `<div style="border:2px dashed #b9c0cb;border-radius:12px;background:#fff;touch-action:none"><canvas style="width:100%;height:160px;display:block"></canvas></div><div style="text-align:right;margin-top:4px"><button class="btn ghost" type="button" style="padding:6px 12px">Limpar</button></div>`;
+  const cv = box.querySelector('canvas'), r = window.devicePixelRatio || 1; cv.width = cv.clientWidth * r; cv.height = 160 * r;
+  const x = cv.getContext('2d'); x.scale(r, r); x.lineWidth = 2.4; x.lineCap = 'round'; x.lineJoin = 'round'; x.strokeStyle = '#14213d';
+  let des = false, pts = 0; const pos = e => { const b = cv.getBoundingClientRect(); return [e.clientX - b.left, e.clientY - b.top]; };
+  cv.onpointerdown = e => { des = true; cv.setPointerCapture(e.pointerId); x.beginPath(); x.moveTo(...pos(e)); };
+  cv.onpointermove = e => { if (!des) return; x.lineTo(...pos(e)); x.stroke(); pts++; };
+  cv.onpointerup = cv.onpointercancel = () => { des = false; };
+  box.querySelector('button').onclick = () => { x.clearRect(0, 0, cv.width, cv.height); pts = 0; };
+  return { vazio: () => pts < 12, img: () => { const o = document.createElement('canvas'); const k = Math.min(1, 600 / cv.width); o.width = Math.round(cv.width * k); o.height = Math.round(cv.height * k); o.getContext('2d').drawImage(cv, 0, 0, o.width, o.height); return o.toDataURL('image/png'); } };
+}
 /* ---------- curso ---------- */
 function abrirCurso(mid) {
   const m = A.mats.find(x => x.id === mid); if (!m) return home(); const { c, n, ok } = cursoInfo(m);
@@ -115,11 +127,15 @@ function abrirCurso(mid) {
   app.innerHTML = `<button class="back" id="bk">‹ Início</button><h2>${esc(c.nome)}</h2>${c.descricao ? `<p class="note" style="margin-top:-6px">${esc(c.descricao)}</p>` : ''}
     <div class="card"><dl class="kv"><dt>Progresso</dt><dd>${ok} de ${n} módulo(s)</dd><dt>Carga horária</dt><dd>${num(c.cargaHoraria)}h</dd><dt>Seu tempo de estudo</dt><dd>${horas}h${minH ? ` de ${minH}h exigidas` : ''}</dd>${m.prazo ? `<dt>Prazo</dt><dd>${fmtD(m.prazo)}</dd>` : ''}</dl>
     ${c.pratica ? '<p class="note" style="margin-bottom:0">Este curso tem uma parte prática presencial. Depois da teoria, o instrutor marca a prática e o certificado sai.</p>' : ''}</div>
-    ${m.concluidoEm ? `<div class="card" style="border-color:var(--ok)"><b>✓ Teoria concluída em ${fmtD(m.concluidoEm)}.</b> ${c.pratica && !m.praticaOk ? 'Aguarde a convocação para a prática presencial.' : 'O certificado foi gerado pela empresa.'}</div>` : ''}
+    ${m.concluidoEm ? `<div class="card" style="border-color:var(--ok)"><b>✓ Teoria concluída em ${fmtD(m.concluidoEm)}.</b> ${c.pratica && !m.praticaOk ? 'Aguarde a convocação para a prática presencial.' : m.assinCert ? `Certificado assinado em ${fmtD(m.assinCert.em)}. A empresa emite o PDF com a sua assinatura.` : 'Assine o seu certificado abaixo.'}</div>
+      ${!(c.pratica && !m.praticaOk) && !m.assinCert ? `<div class="card"><b>Assinar certificado</b><p class="note">Confirme que participou do treinamento <b>${esc(c.nome)}</b>, com ${num(c.cargaHoraria)}h. Sua assinatura vai no certificado.</p><div id="cert-pad"></div><button class="btn primary big" id="cert-go" style="margin-top:10px">Assinar certificado</button></div>` : ''}` : ''}
     <h3>Módulos</h3>${mods.map((md, i) => { const pr = (m.prog || {})[md.id] || {}; const lib = i === 0 || modOk(m, mods[i - 1]); const vistos = (md.mats || []).filter(x => (pr.vistos || {})[x.id]).length;
       const trav = md.quiz && !pr.ok && num(pr.tent) >= num(md.quiz.tent);
       const st = pr.ok ? `<span class="badge b-ok">Aprovado${pr.nota != null ? ' · ' + num(pr.nota) + '%' : ''}</span>` : trav ? '<span class="badge b-bad">Sem tentativas: fale com o RH</span>' : !lib ? '<span class="badge b-mut">Termine o módulo anterior</span>' : `<span class="badge b-warn">${vistos}/${(md.mats || []).length} materiais</span>`;
       return `<button class="item" data-m="${i}" ${lib ? '' : 'disabled'}><div class="ico">${pr.ok ? '✅' : lib ? '📘' : '🔒'}</div><div class="main"><div class="t1">${i + 1}. ${esc(md.titulo)}</div><div class="t2">${st}</div></div></button>`; }).join('')}`;
+  if ($('#cert-pad')) { const pd = padAss($('#cert-pad')); $('#cert-go').onclick = async () => { if (pd.vazio()) return toast('Faça a sua assinatura no quadro.', 'bad'); const b = $('#cert-go'); b.disabled = true;
+    const reg = { img: pd.img(), em: new Date().toISOString(), ua: navigator.userAgent, curso: c.nome };
+    try { await API.salvarMatricula(m.id, { assinCert: reg }); m.assinCert = reg; toast('Certificado assinado!', 'ok'); abrirCurso(m.id); } catch (e) { b.disabled = false; toast('Não foi possível salvar. Tente de novo.', 'bad'); } }; }
   $('#bk').onclick = () => { pararTimer(); home(); };
   $$('#app [data-m]').forEach(b => b.onclick = () => { if (!b.disabled) abrirModulo(m.id, +b.dataset.m); });
   verificarConclusao(m);

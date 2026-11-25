@@ -2459,12 +2459,14 @@ function certInto(doc, r, novaPagina) {
   const frase = `${r.matricula ? 'matrícula ' + r.matricula + ', ' : ''}concluiu com aproveitamento o treinamento ${r.tipoNome}${r.norma ? ', em atendimento à ' + r.norma : ''}, com carga horária de ${num(r.cargaHoraria)} horas, realizado ${periodo}, em ${r.local}.`;
   font(12.5, false, [40, 44, 52]); const ls = doc.splitTextToSize(frase, 220); doc.text(ls, W / 2, y0 + 45, { align: 'center', lineHeightFactor: 1.5 });
   if (r.validade) center('Válido até ' + fmtD(r.validade) + ' (reciclagem conforme a norma)', y0 + 45 + ls.length * 6.6 + 4, 10, true, [154, 91, 0]);
+  const sigImg = { [norm(r.nome)]: r.assinAluno && r.assinAluno.img, [norm(r.instrutor)]: r.instrutorAssin, [norm(r.tst)]: r.tstAssin || (S.emp || {}).tstAssin };
   const sigs = [[r.nome, 'Participante']];
   if (norm(r.rt) === norm(r.instrutor)) sigs.push([r.instrutor, 'Instrutor e Responsável Técnico · ' + str(r.instrutorQualif)]);
   else { sigs.push([r.instrutor, 'Instrutor · ' + str(r.instrutorQualif)]); sigs.push([r.rt, 'Responsável Técnico · ' + str(r.rtQualif)]); }
   if (r.tst && norm(r.tst) !== norm(r.instrutor) && norm(r.tst) !== norm(r.rt)) sigs.push([r.tst, 'Técnico de Segurança do Trabalho' + (r.tstRegistro ? ' · ' + r.tstRegistro : '')]);
   const n = sigs.length, sw = n >= 4 ? 58 : 70, gap = n === 2 ? 40 : n === 3 ? 14 : 8, tot = n * sw + (n - 1) * gap; let x = (W - tot) / 2;
-  sigs.forEach(([nm, rol]) => { doc.setDrawColor(80); doc.setLineWidth(0.3); doc.line(x, 168, x + sw, 168); font(9, true); doc.text(doc.splitTextToSize(str(nm), sw)[0], x + sw / 2, 173, { align: 'center' }); font(7.5, false, [90, 96, 110]); doc.text(doc.splitTextToSize(rol, sw).slice(0, 2), x + sw / 2, 177, { align: 'center' }); x += sw + gap; });
+  sigs.forEach(([nm, rol]) => { const im = sigImg[norm(nm)]; if (/^data:image\/png/.test(str(im))) { try { const p = doc.getImageProperties(im), ra = p.width / p.height; let h = 16, w = h * ra; if (w > sw - 6) { w = sw - 6; h = w / ra; } doc.addImage(im, 'PNG', x + sw / 2 - w / 2, 167 - h, w, h); } catch (_) {} }
+    doc.setDrawColor(80); doc.setLineWidth(0.3); doc.line(x, 168, x + sw, 168); font(9, true); doc.text(doc.splitTextToSize(str(nm), sw)[0], x + sw / 2, 173, { align: 'center' }); font(7.5, false, [90, 96, 110]); doc.text(doc.splitTextToSize(rol, sw).slice(0, 2), x + sw / 2, 177, { align: 'center' }); x += sw + gap; });
   font(7.5, false, [130, 136, 146]); doc.text('Certificado nº ' + str(r.codigo) + ' · emitido em ' + fmtD(todayStr()) + ' · conteúdo programático no verso (NR-01, item 1.7)', W / 2, 192, { align: 'center' });
   doc.addPage('a4', 'landscape');
   doc.setDrawColor(20, 33, 61); doc.setLineWidth(0.3); doc.rect(13, 13, W - 26, H - 26);

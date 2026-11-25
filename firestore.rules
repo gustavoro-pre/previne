@@ -93,7 +93,7 @@ service cloud.firestore {
       allow write: if trein(['gestor', 'tst', 'rh', 'instrutor']) || admi(['rh']);
       // o aluno só registra o próprio progresso: não marca prática, não emite certificado
       allow update: if aluno() && resource.data.funcionarioId == meuFunc()
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['prog', 'tempo', 'inicioEm', 'concluidoEm']);
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['prog', 'tempo', 'inicioEm', 'concluidoEm', 'assinCert']);
     }
     // ---------- módulo Alocação em OM ----------
     match /oms/{id}          { allow read: if aloc(['adm', 'consulta']); allow write: if aloc(['adm']); }
