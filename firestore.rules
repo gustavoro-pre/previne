@@ -18,6 +18,9 @@ service cloud.firestore {
     // perfil no módulo Admissão (sem perfil definido: RH e Gerente são RH)
     function mad() { return perfil().get('modulos', {}).get('admissao', ''); }
     function admi(ps) { return equipe() && (perfil().papel in ['admin', 'gestao'] || mad() in ps || (mad() == '' && perfil().papel in ['rh', 'gerente'] && 'rh' in ps)); }
+    // perfil no módulo Documentação (sem perfil definido: Gerente edita; TST e RH consultam)
+    function mdo() { return perfil().get('modulos', {}).get('documentos', ''); }
+    function docm(ps) { return equipe() && (perfil().papel in ['admin', 'gestao'] || mdo() in ps || (mdo() == '' && ((perfil().papel == 'gerente' && 'editor' in ps) || (perfil().papel in ['tst', 'rh'] && 'consulta' in ps)))); }
     function trein(ps) { return equipe() && (perfil().papel in ['admin', 'gestao'] || mt() in ps || (mt() == '' && ((perfil().papel == 'gerente' && 'gestor' in ps) || perfil().papel in ps))); }
 
     // configuração inicial (primeiro administrador): só pode ser criada uma vez
@@ -127,6 +130,20 @@ service cloud.firestore {
     // salário: só o RH
     match /admissoes_priv/{tk} { allow read, write: if admi(['rh']); }
 
+    // documentação: quem consulta não vê nem baixa documentos restritos
+    match /config/documentos { allow read: if docm(['editor', 'consulta']); allow write: if docm(['editor']); }
+    match /docs/{id} {
+      allow read: if docm(['editor']) || (docm(['consulta']) && resource.data.restrito == false);
+      allow write: if docm(['editor']);
+    }
+    match /docfiles/{id} {
+      allow read: if docm(['editor']) || (docm(['consulta']) && resource.data.restrito == false);
+      allow write: if docm(['editor']);
+      match /p/{n} {
+        allow read: if docm(['editor']) || (docm(['consulta']) && get(/databases/$(database)/documents/docfiles/$(id)).data.restrito == false);
+        allow write: if docm(['editor']);
+      }
+    }
     // anexos (PDFs de padrões, listas, certificados externos, materiais dos cursos), guardados em partes
     // o aluno abre um arquivo pelo código (vem do padrão ou do curso), mas não lista os arquivos
     match /arquivos/{id} {

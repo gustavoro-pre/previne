@@ -6,7 +6,7 @@ import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut, sendP
 import { initializeFirestore, persistentLocalCache, persistentSingleTabManager, collection, doc, getDoc, getDocs, getDocFromServer, getDocFromCache, setDoc, updateDoc, deleteDoc, onSnapshot, query, where, orderBy, limit, writeBatch, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
 const MOD = window.__MODULO || 'portal'; /* qual módulo carregou este arquivo */
-const MOD_NOME = { portal: 'PREVINE ELÉTRICA', ferramentas: 'Ferramentas & EPI', treinamentos: 'Treinamentos', indicadores: 'Indicadores', alocacao: 'Alocação em OM', admissao: 'Admissão' };
+const MOD_NOME = { portal: 'PREVINE ELÉTRICA', ferramentas: 'Ferramentas & EPI', treinamentos: 'Treinamentos', indicadores: 'Indicadores', alocacao: 'Alocação em OM', admissao: 'Admissão', documentos: 'Documentação' };
 const app = initializeApp(FIREBASE_CONFIG);
 const auth = getAuth(app);
 const fs = initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentSingleTabManager({ forceOwnership: true }) }) });
@@ -70,6 +70,7 @@ function papelNoModulo(d) {
   if (MOD === 'indicadores') return d.papel === 'gerente' ? 'todos' : 'nenhum';
   if (MOD === 'alocacao') return d.papel === 'gerente' ? 'adm' : 'nenhum';
   if (MOD === 'admissao') return ['rh', 'gerente'].includes(d.papel) ? 'rh' : 'nenhum';
+  if (MOD === 'documentos') return d.papel === 'gerente' ? 'editor' : ['tst', 'rh'].includes(d.papel) ? 'consulta' : 'nenhum';
   return 'nenhum';
 }
 function telaSemAcesso(u) {

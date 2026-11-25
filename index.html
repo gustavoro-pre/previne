@@ -209,7 +209,8 @@ const MODS = [
   { id: 'treinamentos', icone: '🎓', nome: 'Treinamentos', desc: 'NRs, admissão, treinamentos da ArcelorMittal, padrões operacionais, cursos on-line com prova e certificados.', href: 'treinamentos/', pronto: true },
   { id: 'indicadores', icone: '📊', nome: 'Indicadores', desc: 'KPIs de treinamentos, padrões operacionais, ferramentas e EPI, por área e por funcionário.', href: 'indicadores/', pronto: true },
   { id: 'alocacao', icone: '🗓️', nome: 'Alocação em OM', desc: 'OM fixa de cada funcionário, preventivas e demandas extras com local e horário, pendências de OM, deslocamentos e controle de apontamento.', href: 'alocacao/', pronto: true },
-  { id: 'admissao', icone: '🪪', nome: 'Admissão', desc: 'Contratação: link para o candidato enviar dados e documentos, ASO, integração, treinamentos, assinaturas e tempo de mobilização.', href: 'admissao/', pronto: true }
+  { id: 'admissao', icone: '🪪', nome: 'Admissão', desc: 'Contratação: link para o candidato enviar dados e documentos, ASO, integração, treinamentos, assinaturas e tempo de mobilização.', href: 'admissao/', pronto: true },
+  { id: 'documentos', icone: '📁', nome: 'Documentação', desc: 'Procedimentos, formulários, laudos, ARTs, contratos e certificados com código, revisão, aprovação, validade e histórico. Filtre, baixe e exporte a lista mestra.', href: 'documentos/', pronto: true }
 ];
 const PAPEIS = {
   admin: ['Administrador', 'Acesso total a todos os módulos, usuários e aprovações'],
@@ -224,7 +225,8 @@ const PAPEIS_MOD = {
   treinamentos: { gestor: 'Gestor de treinamentos', tst: 'TST', rh: 'RH', instrutor: 'Instrutor', consulta: 'Consulta (só vê)', nenhum: 'Sem acesso' },
   indicadores: { todos: 'Vê todas as áreas', nenhum: 'Sem acesso' },
   alocacao: { adm: 'Lança, edita e marca apontamento', consulta: 'Consulta (só vê)', nenhum: 'Sem acesso' },
-  admissao: { rh: 'RH: abre, confere e conclui', consulta: 'Consulta (só vê, sem salário)', nenhum: 'Sem acesso' }
+  admissao: { rh: 'RH: abre, confere e conclui', consulta: 'Consulta (só vê, sem salário)', nenhum: 'Sem acesso' },
+  documentos: { editor: 'Anexa, revisa e aprova', consulta: 'Consulta e baixa (sem restritos)', nenhum: 'Sem acesso' }
 };
 const DESC_MOD = [['Treinamentos · Gestor', 'Tudo no módulo: tipos, turmas, admissão, externos, áreas, padrões, cursos e acesso do aluno'], ['Treinamentos · TST / RH', 'Turmas, admissão, externos, padrões, cursos, áreas e funcionários'], ['Treinamentos · Instrutor', 'Turmas, padrões (listas e assinaturas) e cursos'], ['Treinamentos · Consulta', 'Vê tudo, não altera'], ['Indicadores', 'Todas as áreas, ou só uma área escolhida'], ['Alocação em OM · Lança', 'Cadastra OMs e equipe fixa, programa preventivas, completa pendências de OM e marca o apontamento'], ['Alocação em OM · Consulta', 'Vê tudo e tira PDF, não altera'], ['Admissão · RH', 'Abre a admissão, envia o link, confere documentos, registra ASO e integração e cadastra o funcionário'], ['Admissão · Consulta', 'Acompanha as admissões, sem ver salário e sem alterar']];
 let AREAS = [];
@@ -238,6 +240,7 @@ function papelMod(d, id) {
   if (id === 'indicadores') return d.papel === 'gerente' ? 'todos' : 'nenhum';
   if (id === 'alocacao') return d.papel === 'gerente' ? 'adm' : 'nenhum';
   if (id === 'admissao') return ['rh', 'gerente'].includes(d.papel) ? 'rh' : 'nenhum';
+  if (id === 'documentos') return d.papel === 'gerente' ? 'editor' : ['tst', 'rh'].includes(d.papel) ? 'consulta' : 'nenhum';
   return 'nenhum';
 }
 const temModulo = (d, id) => papelMod(d, id) !== 'nenhum';
@@ -252,7 +255,7 @@ function renderMods() {
 function renderUsers() {
   const F = window.__FB, d = F.perfil; const souAdm = d.papel === 'admin', souGestao = d.papel === 'gestao';
   $('#p-users').hidden = !(souAdm || souGestao); if ($('#p-users').hidden) return;
-  const ae = document.activeElement; if (ae && ['pu-n', 'pu-e', 'pu-p', 'pu-t', 'pu-i', 'pu-a', 'pu-d'].includes(ae.id)) return;
+  const ae = document.activeElement; if (ae && ['pu-n', 'pu-e', 'pu-p', 'pu-t', 'pu-i', 'pu-a', 'pu-d', 'pu-o'].includes(ae.id)) return;
   const U0 = F.users(); const U = {}; Object.keys(U0).forEach(k => { if (U0[k].papel !== 'funcionario') U[k] = U0[k]; });
   const me = F.uid; const ALTOS = ['admin', 'gerente'];
   const protegido = u => souGestao && ALTOS.includes(u.papel);
@@ -262,19 +265,19 @@ function renderUsers() {
   const ids = Object.keys(U).sort((a, b) => (U[a].ativo === false) - (U[b].ativo === false) || str(U[a].nome).localeCompare(str(U[b].nome), 'pt'));
   $('#p-ubody').innerHTML = `<div class="card"><p class="ct">Cadastrar usuário</p><p class="cs">A pessoa recebe um e-mail para criar a própria senha. Depois entra no portal com e-mail e senha. Funcionários que só fazem cursos usam o portal do aluno (o acesso é criado no módulo Treinamentos).</p>
     <div class="grid2"><div><label for="pu-n">Nome completo</label><input id="pu-n"></div><div><label for="pu-e">E-mail</label><input id="pu-e" type="email" autocomplete="off"></div></div>
-    <div class="grid3"><div><label for="pu-p">Ferramentas & EPI</label><select id="pu-p">${opt('nenhum')}</select></div><div><label for="pu-t">Treinamentos</label><select id="pu-t">${optM('treinamentos', 'nenhum')}</select></div><div><label for="pu-i">Indicadores</label><select id="pu-i">${optM('indicadores', 'nenhum')}</select></div><div><label for="pu-a">Alocação em OM</label><select id="pu-a">${optM('alocacao', 'nenhum')}</select></div><div><label for="pu-d">Admissão</label><select id="pu-d">${optM('admissao', 'nenhum')}</select></div></div>
+    <div class="grid3"><div><label for="pu-p">Ferramentas & EPI</label><select id="pu-p">${opt('nenhum')}</select></div><div><label for="pu-t">Treinamentos</label><select id="pu-t">${optM('treinamentos', 'nenhum')}</select></div><div><label for="pu-i">Indicadores</label><select id="pu-i">${optM('indicadores', 'nenhum')}</select></div><div><label for="pu-a">Alocação em OM</label><select id="pu-a">${optM('alocacao', 'nenhum')}</select></div><div><label for="pu-d">Admissão</label><select id="pu-d">${optM('admissao', 'nenhum')}</select></div><div><label for="pu-o">Documentação</label><select id="pu-o">${optM('documentos', 'nenhum')}</select></div></div>
     <div class="actions"><button class="btn primary" id="pu-add">Cadastrar e enviar convite</button></div></div>
     <div class="card"><p class="ct">Usuários (${ids.length})</p>${ids.map(id => { const u = U[id]; const eu = id === me; const trav = eu || protegido(u); const ad = u.papel === 'admin';
-      const sm = mid => `<label class="note" style="margin:0">${({ treinamentos: 'Treinamentos', indicadores: 'Indicadores', alocacao: 'Alocação em OM', admissao: 'Admissão' })[mid]}</label><select data-pm="${esc(id)}|${mid}" style="width:auto;padding:7px" ${trav || ad ? 'disabled' : ''}>${optM(mid, papelMod(u, mid))}</select>`;
+      const sm = mid => `<label class="note" style="margin:0">${({ treinamentos: 'Treinamentos', indicadores: 'Indicadores', alocacao: 'Alocação em OM', admissao: 'Admissão', documentos: 'Documentação' })[mid]}</label><select data-pm="${esc(id)}|${mid}" style="width:auto;padding:7px" ${trav || ad ? 'disabled' : ''}>${optM(mid, papelMod(u, mid))}</select>`;
       return `<div class="urow"><div class="main"><b>${esc(u.nome)}</b>${eu ? ' <span class="badge b-info">você</span>' : ''}${u.ativo === false ? ' <span class="badge b-bad">Desativado</span>' : ''}<div class="t2 note">${esc(u.email)}</div></div>
       <label class="note" style="margin:0">Ferramentas & EPI</label><select data-pp="${esc(id)}" style="width:auto;padding:7px" ${trav ? 'disabled' : ''}>${opt(u.papel, trav)}</select>
-      ${sm('treinamentos')}${sm('indicadores')}${sm('alocacao')}${sm('admissao')}
+      ${sm('treinamentos')}${sm('indicadores')}${sm('alocacao')}${sm('admissao')}${sm('documentos')}
       ${protegido(u) ? '' : `<button class="btn sm ghost" data-pinv="${esc(u.email)}">Reenviar convite</button>`}${trav ? '' : `<button class="btn sm ${u.ativo === false ? 'ghost' : 'danger'}" data-pat="${esc(id)}">${u.ativo === false ? 'Reativar' : 'Desativar'}</button>`}</div>`; }).join('')}</div>
     <div class="card"><p class="ct">O que cada perfil faz</p><div class="tbwrap"><table class="tb"><thead><tr><th>Perfil</th><th>Acesso</th></tr></thead><tbody>${Object.values(PAPEIS).map(p => `<tr><td><b>${p[0]}</b></td><td>${p[1]}</td></tr>`).join('')}${DESC_MOD.map(p => `<tr><td><b>${p[0]}</b></td><td>${p[1]}</td></tr>`).join('')}</tbody></table></div>
     <p class="note">Quem não tem perfil definido em Treinamentos herda: Gerente vira Gestor, TST e RH continuam TST e RH. Gestão e Administrador veem tudo.</p></div>`;
   $('#pu-add').onclick = async () => {
     const nome = $('#pu-n').value.trim(), email = $('#pu-e').value.trim().toLowerCase(), papel = $('#pu-p').value;
-    const modulos = { treinamentos: $('#pu-t').value, indicadores: $('#pu-i').value, alocacao: $('#pu-a').value, admissao: $('#pu-d').value };
+    const modulos = { treinamentos: $('#pu-t').value, indicadores: $('#pu-i').value, alocacao: $('#pu-a').value, admissao: $('#pu-d').value, documentos: $('#pu-o').value };
     if (nome.split(/\s+/).length < 2) return toast('Informe o nome completo.', 'bad');
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return toast('E-mail inválido.', 'bad');
     if (Object.values(U0).some(u => str(u.email).toLowerCase() === email)) return toast('Esse e-mail já está cadastrado.', 'bad');
