@@ -1021,6 +1021,8 @@ function renderEmp() {
     <label for="em-e">Endereço / unidade</label><input id="em-e" value="${esc(e.endereco)}" placeholder="Ex.: Contrato ArcelorMittal · Unidade X"></div>
     <div class="card"><span class="lbl">Técnico de Segurança do Trabalho (padrão nos treinamentos)</span>
     <div class="grid2"><div><label for="em-tn">Nome</label><input id="em-tn" value="${esc(e.tstNome)}"></div><div><label for="em-tr">Registro</label><input id="em-tr" value="${esc(e.tstRegistro)}" placeholder="Ex.: Registro MTE 000000"></div></div>
+    <label>Assinatura do TST (sai sozinha nos certificados e nas listas de presença)</label><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><div id="em-tsv" style="width:180px;height:60px;border:1px dashed #ccd;border-radius:8px;display:grid;place-items:center;background:#fff">${e.tstAssin ? `<img src="${e.tstAssin}" style="max-width:170px;max-height:54px">` : '<span class="note">Sem assinatura</span>'}</div><button class="btn ghost sm" id="em-tsb" type="button">Enviar foto da assinatura</button>${e.tstAssin ? '<button class="btn ghost sm" id="em-tsr" type="button">Remover</button>' : ''}<input type="file" id="em-tsf" accept="image/*" hidden></div>
+    <p class="note" style="margin-top:2px">Foto da assinatura em papel branco, só o rabisco, bem recortada. O fundo branco fica transparente.</p>
     <label for="em-j">Jornada diária de treinamento (horas)</label><input id="em-j" type="number" min="1" max="12" value="${num(e.jornadaTreino) || 8}" style="max-width:140px">
     <p class="note">Usada para não marcar dois treinamentos no mesmo dia além da carga diária.</p></div>
     <div class="actions"><button class="btn primary" id="em-s">Salvar dados da empresa</button></div>`;
@@ -1028,9 +1030,12 @@ function renderEmp() {
   $('#em-up').onclick = () => $('#em-file').click();
   $('#em-file').onchange = async ev => { const f = ev.target.files[0]; if (!f) return; try { EMP_LOGO = await lerLogo(f); prev(EMP_LOGO); toast('Logo carregado. Toque em Salvar.', 'ok'); } catch (er) { toast(er.message, 'bad'); } };
   const rm = $('#em-rm'); if (rm) rm.onclick = () => { EMP_LOGO = { logo: '', logoW: 0, logoH: 0 }; prev(null); toast('Logo será removido ao salvar.'); };
+  let TST_SIG; $('#em-tsb').onclick = () => $('#em-tsf').click();
+  $('#em-tsf').onchange = async ev => { const f = ev.target.files[0]; if (!f) return; try { TST_SIG = await sigPngDeArquivo(f); $('#em-tsv').innerHTML = `<img src="${TST_SIG}" style="max-width:170px;max-height:54px">`; toast('Assinatura carregada. Toque em Salvar.', 'ok'); } catch (er) { toast('Não foi possível ler a imagem.', 'bad'); } };
+  if ($('#em-tsr')) $('#em-tsr').onclick = () => { TST_SIG = ''; $('#em-tsv').innerHTML = '<span class="note">Sem assinatura</span>'; toast('A assinatura será removida ao salvar.'); };
   $('#em-s').onclick = async () => {
     if (!guardWrite()) return;
-    const d = Object.assign({}, S.emp || {}, { nome: $('#em-n').value.trim(), cnpj: $('#em-c').value.trim(), responsavel: $('#em-r').value.trim(), endereco: $('#em-e').value.trim(), tstNome: $('#em-tn').value.trim(), tstRegistro: $('#em-tr').value.trim(), jornadaTreino: num($('#em-j').value) || 8 }, EMP_LOGO || {});
+    const d = Object.assign({}, S.emp || {}, { nome: $('#em-n').value.trim(), cnpj: $('#em-c').value.trim(), responsavel: $('#em-r').value.trim(), endereco: $('#em-e').value.trim(), tstNome: $('#em-tn').value.trim(), tstRegistro: $('#em-tr').value.trim(), jornadaTreino: num($('#em-j').value) || 8 }, EMP_LOGO || {}, TST_SIG !== undefined ? { tstAssin: TST_SIG } : {});
     const b = $('#em-s'); b.disabled = true;
     try { await db.doc('config/empresa').set(d); document.activeElement && document.activeElement.blur(); toast('Dados da empresa salvos.', 'ok'); } catch (er) { handleErr(er); }
     b.disabled = false;
@@ -2449,47 +2454,96 @@ function openTreino(id) {
   $('#tr-turma').onclick = () => gerarCertificados(S.tr.filter(x => x.turma === r.turma).sort((a, b) => str(a.nome).localeCompare(str(b.nome), 'pt')), 'certificados_turma_' + r.turma + '.pdf');
   armDelete($('#tr-del'), () => db.doc('treinamentos/' + r.id).delete());
 }
+async function sigPngDeArquivo(file) {
+  const url = await new Promise((ok, er) => { const fr = new FileReader(); fr.onload = () => ok(fr.result); fr.onerror = er; fr.readAsDataURL(file); }); const img = new Image(); await new Promise((r, j) => { img.onload = r; img.onerror = j; img.src = url; });
+  const k = Math.min(1, 700 / img.width); const c = document.createElement('canvas'); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k); const x = c.getContext('2d'); x.drawImage(img, 0, 0, c.width, c.height);
+  const d = x.getImageData(0, 0, c.width, c.height), p = d.data; let x0 = c.width, y0 = c.height, x1 = 0, y1 = 0;
+  for (let i = 0; i < p.length; i += 4) { const l = 0.3 * p[i] + 0.59 * p[i + 1] + 0.11 * p[i + 2]; if (l > 170) p[i + 3] = 0; else { p[i] = p[i + 1] = p[i + 2] = Math.min(l, 60); const q = i / 4, px = q % c.width, py = Math.floor(q / c.width); if (px < x0) x0 = px; if (px > x1) x1 = px; if (py < y0) y0 = py; if (py > y1) y1 = py; } }
+  x.putImageData(d, 0, 0); if (x1 <= x0) throw new Error('vazia');
+  const o = document.createElement('canvas'); o.width = x1 - x0 + 8; o.height = y1 - y0 + 8; o.getContext('2d').drawImage(c, x0 - 4, y0 - 4, o.width, o.height, 0, 0, o.width, o.height); return o.toDataURL('image/png');
+}
 /* desenha um certificado (frente e verso, A4 paisagem) no documento informado */
+function certSigs(r) {
+  const e = S.emp || {};
+  const L = [[r.nome, 'Participante', r.assinAluno && r.assinAluno.img]];
+  if (r.tst && norm(r.tst) !== norm(r.instrutor) && norm(r.tst) !== norm(r.rt)) L.push([r.tst, 'Técnico de Segurança do Trabalho' + (r.tstRegistro ? ' · ' + r.tstRegistro : ''), r.tstAssin || e.tstAssin]);
+  if (r.rt && norm(r.rt) !== norm(r.instrutor)) L.push([r.rt, 'Responsável Técnico · ' + str(r.rtQualif), norm(r.rt) === norm(r.tst) ? (r.tstAssin || e.tstAssin) : '']);
+  L.push([r.instrutor, (norm(r.rt) === norm(r.instrutor) ? 'Instrutor e Responsável Técnico · ' : 'Instrutor · ') + str(r.instrutorQualif), r.instrutorAssin]);
+  return L;
+}
+function certMoldura(doc, W, H, forte) {
+  doc.setFillColor(252, 250, 244); doc.rect(0, 0, W, H, 'F');
+  /* faixas onduladas (guilhoché) no topo e na base */
+  const onda = (y0, amp, fase, cor) => { doc.setDrawColor.apply(doc, cor); doc.setLineWidth(0.18); const pts = []; for (let x = 14; x <= W - 14; x += 2) pts.push([x, y0 + amp * Math.sin((x / 9) + fase)]); for (let i = 1; i < pts.length; i++) doc.line(pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1]); };
+  if (forte) for (let k = 0; k < 6; k++) { onda(19 + k * 0.9, 1.6, k * 0.6, [214, 222, 238]); onda(H - 19 - k * 0.9, 1.6, k * 0.6 + 1, [214, 222, 238]); }
+  doc.setDrawColor(20, 33, 61); doc.setLineWidth(1.4); doc.rect(8, 8, W - 16, H - 16);
+  doc.setDrawColor(242, 169, 0); doc.setLineWidth(0.5); doc.rect(11, 11, W - 22, H - 22);
+  doc.setDrawColor(20, 33, 61); doc.setLineWidth(0.2); doc.rect(12.6, 12.6, W - 25.2, H - 25.2);
+  /* cantos */
+  doc.setFillColor(242, 169, 0); [[11, 11], [W - 11, 11], [11, H - 11], [W - 11, H - 11]].forEach(([x, y]) => { doc.lines([[2.6, 2.6], [-2.6, 2.6], [-2.6, -2.6], [2.6, -2.6]], x, y - 2.6, [1, 1], 'F', true); });
+}
+function certSelo(doc, cx, cy, rr, txt) {
+  const n = 24, pts = []; for (let i = 0; i < n * 2; i++) { const a = Math.PI * i / n - Math.PI / 2, R = i % 2 ? rr * 0.86 : rr; pts.push([cx + R * Math.cos(a), cy + R * Math.sin(a)]); }
+  doc.setFillColor(242, 169, 0); doc.lines(pts.slice(1).map((p, i) => [p[0] - pts[i][0], p[1] - pts[i][1]]), pts[0][0], pts[0][1], [1, 1], 'F', true);
+  doc.setFillColor(20, 33, 61); doc.circle(cx, cy, rr * 0.72, 'F'); doc.setDrawColor(242, 169, 0); doc.setLineWidth(0.4); doc.circle(cx, cy, rr * 0.64, 'S');
+  doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(txt.length > 6 ? 9 : 11); doc.text(txt, cx, cy + 1.2, { align: 'center' });
+  doc.setFontSize(4.6); doc.setTextColor(242, 169, 0); doc.text('TREINAMENTO', cx, cy - 4.2, { align: 'center' }); doc.text('CONCLUÍDO', cx, cy + 5.6, { align: 'center' });
+}
 function certInto(doc, r, novaPagina) {
   const W = 297, H = 210, e = S.emp || {};
-  const font = (sz, b, c) => { doc.setFont('helvetica', b ? 'bold' : 'normal'); doc.setFontSize(sz); doc.setTextColor.apply(doc, c || [30, 33, 40]); };
-  const center = (t, y, sz, b, c) => { font(sz, b, c); doc.text(t, W / 2, y, { align: 'center' }); };
+  const font = (sz, b, c, f) => { doc.setFont(f || 'helvetica', b === true ? 'bold' : b || 'normal'); doc.setFontSize(sz); doc.setTextColor.apply(doc, c || [30, 33, 40]); };
+  const center = (t, y, sz, b, c, f) => { font(sz, b, c, f); doc.text(t, W / 2, y, { align: 'center' }); };
   if (novaPagina) doc.addPage('a4', 'landscape');
-  doc.setDrawColor(20, 33, 61); doc.setLineWidth(1.2); doc.rect(10, 10, W - 20, H - 20); doc.setLineWidth(0.3); doc.rect(13, 13, W - 26, H - 26);
-  doc.setFillColor(242, 169, 0); doc.rect(13, 13, W - 26, 3, 'F');
-  let top = 30; const lg = logoImg();
-  if (lg) { const h = 14, w = Math.min(60, h * (num(lg.logoW) || 3) / (num(lg.logoH) || 1)), hh = w * (num(lg.logoH) || 1) / (num(lg.logoW) || 3); try { doc.addImage(lg.logo, /jpeg/.test(lg.logo.slice(0, 20)) ? 'JPEG' : 'PNG', W / 2 - w / 2, 20, w, hh); top = 20 + hh + 6; } catch (_) {} }
-  center(str(e.nome) || 'PREVINE INSTALAÇÃO E MANUTENÇÃO ELÉTRICA LTDA', top, 12, true, [20, 33, 61]);
-  center('CNPJ ' + (e.cnpj || '03.052.261/0001-43'), top + 5.5, 8.5, false, [110, 116, 128]);
-  const y0 = Math.max(58, top + 20);
-  center('CERTIFICADO', y0, 34, true, [20, 33, 61]);
-  center('Certificamos que', y0 + 15, 13, false, [60, 66, 80]);
-  center(str(r.nome).toUpperCase(), y0 + 29, 22, true, [20, 33, 61]);
-  doc.setDrawColor(242, 169, 0); doc.setLineWidth(0.6); doc.line(W / 2 - 70, y0 + 33, W / 2 + 70, y0 + 33);
+  certMoldura(doc, W, H, true);
+  const lg = logoImg(); const ra = lg ? (num(lg.logoW) || 3) / (num(lg.logoH) || 1) : 1;
+  if (lg) { try { /* marca-d'água */ if (doc.GState) doc.setGState(new doc.GState({ opacity: 0.05 })); const wm = 120, hm = wm / ra; doc.addImage(lg.logo, 'PNG', W / 2 - wm / 2, H / 2 - hm / 2 + 8, wm, hm); if (doc.GState) doc.setGState(new doc.GState({ opacity: 1 })); } catch (_) {} }
+  let top = 27;
+  if (lg) { const h = 17, w = h * ra; try { doc.addImage(lg.logo, /jpeg/.test(lg.logo.slice(0, 20)) ? 'JPEG' : 'PNG', W / 2 - w / 2, 18, w, h); top = 18 + h + 5; } catch (_) {} }
+  center(str(e.nome) || 'PREVINE INSTALAÇÃO E MANUTENÇÃO ELÉTRICA LTDA', top, 11.5, true, [20, 33, 61]);
+  center('CNPJ ' + (e.cnpj || '03.052.261/0001-43'), top + 5, 8, false, [110, 116, 128]);
+  certSelo(doc, W - 42, 40, 17, str(r.norma || 'NR').toUpperCase());
+  const y0 = top + 20;
+  center('CERTIFICADO', y0, 36, true, [20, 33, 61], 'times');
+  font(9, true, [180, 125, 0]); doc.text('D E   C O N C L U S Ã O   D E   T R E I N A M E N T O', W / 2, y0 + 7, { align: 'center' });
+  center('Certificamos que', y0 + 18, 12, 'italic', [60, 66, 80], 'times');
+  center(str(r.nome), y0 + 31, 26, 'bolditalic', [20, 33, 61], 'times');
+  doc.setDrawColor(242, 169, 0); doc.setLineWidth(0.6); doc.line(W / 2 - 75, y0 + 35, W / 2 + 75, y0 + 35);
   const periodo = r.inicio === r.termino ? 'em ' + fmtD(r.termino) : 'no período de ' + fmtD(r.inicio) + ' a ' + fmtD(r.termino);
-  const frase = `${r.matricula ? 'matrícula ' + r.matricula + ', ' : ''}concluiu com aproveitamento o treinamento ${r.tipoNome}${r.norma ? ', em atendimento à ' + r.norma : ''}, com carga horária de ${num(r.cargaHoraria)} horas, realizado ${periodo}, em ${r.local}.`;
-  font(12.5, false, [40, 44, 52]); const ls = doc.splitTextToSize(frase, 220); doc.text(ls, W / 2, y0 + 45, { align: 'center', lineHeightFactor: 1.5 });
-  if (r.validade) center('Válido até ' + fmtD(r.validade) + ' (reciclagem conforme a norma)', y0 + 45 + ls.length * 6.6 + 4, 10, true, [154, 91, 0]);
-  const sigImg = { [norm(r.nome)]: r.assinAluno && r.assinAluno.img, [norm(r.instrutor)]: r.instrutorAssin, [norm(r.tst)]: r.tstAssin || (S.emp || {}).tstAssin };
-  const sigs = [[r.nome, 'Participante']];
-  if (norm(r.rt) === norm(r.instrutor)) sigs.push([r.instrutor, 'Instrutor e Responsável Técnico · ' + str(r.instrutorQualif)]);
-  else { sigs.push([r.instrutor, 'Instrutor · ' + str(r.instrutorQualif)]); sigs.push([r.rt, 'Responsável Técnico · ' + str(r.rtQualif)]); }
-  if (r.tst && norm(r.tst) !== norm(r.instrutor) && norm(r.tst) !== norm(r.rt)) sigs.push([r.tst, 'Técnico de Segurança do Trabalho' + (r.tstRegistro ? ' · ' + r.tstRegistro : '')]);
-  const n = sigs.length, sw = n >= 4 ? 58 : 70, gap = n === 2 ? 40 : n === 3 ? 14 : 8, tot = n * sw + (n - 1) * gap; let x = (W - tot) / 2;
-  sigs.forEach(([nm, rol]) => { const im = sigImg[norm(nm)]; if (/^data:image\/png/.test(str(im))) { try { const p = doc.getImageProperties(im), ra = p.width / p.height; let h = 22, w = h * ra; if (w > sw) { w = sw; h = w / ra; } doc.addImage(im, 'PNG', x + sw / 2 - w / 2, 167 - h, w, h); } catch (_) {} }
-    doc.setDrawColor(80); doc.setLineWidth(0.3); doc.line(x, 168, x + sw, 168); font(9, true); doc.text(doc.splitTextToSize(str(nm), sw)[0], x + sw / 2, 173, { align: 'center' }); font(7.5, false, [90, 96, 110]); doc.text(doc.splitTextToSize(rol, sw).slice(0, 2), x + sw / 2, 177, { align: 'center' }); x += sw + gap; });
-  font(7.5, false, [130, 136, 146]); doc.text('Certificado nº ' + str(r.codigo) + ' · emitido em ' + fmtD(todayStr()) + ' · conteúdo programático no verso (NR-01, item 1.7)', W / 2, 192, { align: 'center' });
-  doc.addPage('a4', 'landscape');
-  doc.setDrawColor(20, 33, 61); doc.setLineWidth(0.3); doc.rect(13, 13, W - 26, H - 26);
-  font(14, true, [20, 33, 61]); doc.text('CONTEÚDO PROGRAMÁTICO', 22, 28);
-  font(9.5, false, [60, 66, 80]); doc.text(doc.splitTextToSize(`${r.tipoNome} · ${num(r.cargaHoraria)}h · ${fmtD(r.inicio)}${r.inicio !== r.termino ? ' a ' + fmtD(r.termino) : ''} · ${r.local}`, W - 44)[0], 22, 35);
-  const itens = str(r.conteudo).split(/\n|;/).map(t => t.trim()).filter(Boolean); let y = 46; const colW = 120; let col = 0;
-  itens.forEach(t => { font(9.5); const l = doc.splitTextToSize(t, colW - 6); if (y + l.length * 4.6 > 168) { if (col) return; col = 1; y = 46; } const cx = 22 + col * (colW + 16); doc.text('•', cx, y); doc.text(l, cx + 4, y); y += l.length * 4.6 + 1.6; });
-  font(9, false, [60, 66, 80]); let fy = r.tst ? 177 : 182;
-  doc.text('Instrutor: ' + str(r.instrutor) + ' · ' + str(r.instrutorQualif), 22, fy); fy += 5;
-  doc.text('Responsável técnico: ' + str(r.rt) + ' · ' + str(r.rtQualif), 22, fy); fy += 5;
-  if (r.tst) doc.text('Técnico de Segurança do Trabalho: ' + str(r.tst) + (r.tstRegistro ? ' · ' + r.tstRegistro : ''), 22, fy);
-  font(7.5, false, [130, 136, 146]); doc.text('Certificado nº ' + str(r.codigo), W - 22, 192, { align: 'right' });
+  const frase = `${r.matricula ? 'matrícula ' + r.matricula + ', ' : ''}concluiu com aproveitamento o treinamento ${r.tipoNome}${r.norma && !str(r.tipoNome).startsWith(r.norma) ? ', em atendimento à ' + r.norma : ''}, com carga horária de ${num(r.cargaHoraria)} ${num(r.cargaHoraria) === 1 ? 'hora' : 'horas'}, realizado ${periodo}.`;
+  font(12, false, [40, 44, 52]); const ls = doc.splitTextToSize(frase, 210); doc.text(ls, W / 2, y0 + 46, { align: 'center', lineHeightFactor: 1.5 });
+  if (r.validade) center('Válido até ' + fmtD(r.validade), y0 + 46 + ls.length * 6.4 + 3, 10, true, [154, 91, 0]);
+  const sigs = certSigs(r); const n = sigs.length, sw = n >= 4 ? 56 : 68, gap = n === 2 ? 50 : n === 3 ? 16 : 8, tot = n * sw + (n - 1) * gap; let x = (W - tot) / 2; const yl = 171;
+  sigs.forEach(([nm, rol, im]) => { if (/^data:image\/png/.test(str(im))) { try { const p = doc.getImageProperties(im), q = p.width / p.height; let h = 20, w = h * q; if (w > sw) { w = sw; h = w / q; } doc.addImage(im, 'PNG', x + sw / 2 - w / 2, yl - 1 - h, w, h); } catch (_) {} }
+    doc.setDrawColor(60, 66, 80); doc.setLineWidth(0.3); doc.line(x, yl, x + sw, yl); font(8.8, true, [20, 33, 61]); doc.text(doc.splitTextToSize(str(nm), sw)[0], x + sw / 2, yl + 4.5, { align: 'center' }); font(7, false, [90, 96, 110]); doc.text(doc.splitTextToSize(rol, sw).slice(0, 2), x + sw / 2, yl + 8.3, { align: 'center' }); x += sw + gap; });
+  font(7, false, [130, 136, 146]); doc.text('Certificado nº ' + str(r.codigo) + '   ·   emitido em ' + fmtD(todayStr()) + '   ·   conteúdo programático no verso (NR-01, item 1.7)', W / 2, 189, { align: 'center' });
+  /* ---------- verso ---------- */
+  doc.addPage('a4', 'landscape'); certMoldura(doc, W, H, false);
+  doc.setFillColor(20, 33, 61); doc.rect(12.6, 12.6, W - 25.2, 13, 'F'); doc.setFillColor(242, 169, 0); doc.rect(12.6, 25.6, W - 25.2, 0.9, 'F');
+  font(13, true, [255, 255, 255]); doc.text('CONTEÚDO PROGRAMÁTICO', 20, 21.3);
+  if (lg) { try { const h = 9, w = h * ra; doc.addImage(lg.logo, 'PNG', W - 20 - w, 14.6, w, h); } catch (_) {} }
+  const info = [['Treinamento', r.tipoNome], ['Carga horária', num(r.cargaHoraria) + 'h'], ['Período', fmtD(r.inicio) + (r.inicio !== r.termino ? ' a ' + fmtD(r.termino) : '')], ['Validade', r.validade ? fmtD(r.validade) : '—'], ['Participante', r.nome], ['Certificado nº', r.codigo]];
+  const cw = [118, 30, 48, 40]; let ix = 20, iy = 33;
+  info.slice(0, 4).forEach(([k, v], i) => { font(6.8, false, [110, 116, 128]); doc.text(k.toUpperCase(), ix, iy); font(9, true, [20, 33, 61]); doc.text(doc.splitTextToSize(str(v), cw[i] - 3)[0], ix, iy + 4.4); ix += cw[i]; });
+  doc.setDrawColor(226, 229, 234); doc.setLineWidth(0.3); doc.line(20, iy + 7.5, W - 20, iy + 7.5);
+  /* itens: "1. Título: texto" vira número em destaque + título em negrito; "3.1." vira subitem */
+  const itens = str(r.conteudo).split(/\n|;/).map(t => t.trim().replace(/^[•\-–]\s*/, '')).filter(Boolean).map(t => { const m = /^(\d+(?:\.\d+)*)[.)]?\s+(.*)$/.exec(t); const num0 = m ? m[1] : '', resto = m ? m[2] : t; const sub = num0.includes('.'); const c = resto.indexOf(':'); const tit = c > 0 && c < 70 ? resto.slice(0, c + 1) : ''; return { n: num0, sub, tit, txt: tit ? resto.slice(c + 1).trim() : resto }; });
+  const colW = 119, yTop = iy + 16, yMax = 170, lh = 4.9;
+  const linhas = it => { font(10); const ind = it.sub ? 16 : 9; return doc.splitTextToSize((it.tit ? it.tit + ' ' : '') + it.txt, colW - ind).length; };
+  const alt = it => linhas(it) * lh + 3;
+  const total = itens.reduce((a, it) => a + alt(it), 0); let col = 0, y = yTop, usado = 0;
+  itens.forEach(it => {
+    const h = alt(it); if (col === 0 && (usado + h > total / 2 + 6 || y + h > yMax)) { col = 1; y = yTop; } if (y + h > yMax + 4) return; usado += h;
+    const cx = 20 + col * (colW + 15), ind = it.sub ? 17 : 9;
+    if (it.n) { if (!it.sub) { doc.setFillColor(20, 33, 61); doc.circle(cx + 3, y - 1.4, 3.1, 'F'); font(it.n.length > 1 ? 6.6 : 7.5, true, [255, 255, 255]); doc.text(it.n, cx + 3, y - 0.2, { align: 'center' }); } else { font(7.8, true, [180, 125, 0]); doc.text(it.n, cx + 9, y); } }
+    else { doc.setFillColor(242, 169, 0); doc.circle(cx + 3, y - 1.3, 1, 'F'); }
+    font(10); const ls2 = doc.splitTextToSize((it.tit ? it.tit + ' ' : '') + it.txt, colW - ind);
+    ls2.forEach((l, k) => { const xx = cx + ind + (it.sub ? 0 : 0); if (k === 0 && it.tit) { const tw = Math.min(l.length, it.tit.length); font(10, true, [20, 33, 61]); doc.text(l.slice(0, tw), xx, y); const w0 = doc.getTextWidth(l.slice(0, tw)); font(10, false, [40, 44, 52]); doc.text(l.slice(tw), xx + w0, y); } else { font(10, false, [40, 44, 52]); doc.text(l, xx, y); } y += lh; });
+    y += 3;
+  });
+  doc.setDrawColor(226, 229, 234); doc.line(20, 176, W - 20, 176);
+  const resp = sigs.slice(1).map(([nm, rol]) => nm + ' · ' + rol);
+  font(7.5, false, [90, 96, 110]); resp.forEach((t, i) => doc.text(doc.splitTextToSize(t, W - 40)[0], 20, 181 + i * 4));
+  font(7, false, [130, 136, 146]); doc.text('Certificado nº ' + str(r.codigo), W - 20, 193, { align: 'right' });
 }
 async function gerarCertificados(regs, nome) {
   if (regs.some(r => str(r.termino) > todayStr())) { toast('Há treinamento ainda não concluído (término no futuro). O certificado só deve ser emitido após a conclusão.', 'bad'); await sleep(2600); }
@@ -2508,13 +2562,17 @@ function listaInto(P, d, parts) {
   const cols = [['Nº', 10], ['Nome completo', 78], ['Matrícula', 22], ['Função', 30], ['Assinatura', 40]];
   const th = () => { P.need(8); doc.setFillColor(20, 33, 61); doc.rect(P.L, P.y, P.W, 6.5, 'F'); P.font(8, true, [255, 255, 255]); let x = P.L; cols.forEach(([t, w]) => { doc.text(t, x + 1.5, P.y + 4.4); x += w; }); P.y += 6.5; };
   th();
-  parts.forEach((p, i) => { if (P.need(11)) th(); let x = P.L; [String(i + 1), p.nome, p.matricula, p.funcao].forEach((v, j) => { P.font(8.5); doc.text(doc.splitTextToSize(str(v), cols[j][1] - 3)[0] || '', x + 1.5, P.y + 6.5); x += cols[j][1]; }); doc.setDrawColor(200); doc.setLineWidth(0.15); doc.line(P.L, P.y + 10, P.R, P.y + 10); P.y += 10; });
-  P.sign(['Instrutor · ' + d.instrutor, 'Responsável técnico · ' + d.rt].concat(d.tst && norm(d.tst) !== norm(d.instrutor) && norm(d.tst) !== norm(d.rt) ? ['Técnico de Segurança · ' + d.tst + (d.tstRegistro ? ' · ' + d.tstRegistro : '')] : []));
+  parts.forEach((p, i) => { if (P.need(11)) th(); let x = P.L; [String(i + 1), p.nome, p.matricula, p.funcao].forEach((v, j) => { P.font(8.5); doc.text(doc.splitTextToSize(str(v), cols[j][1] - 3)[0] || '', x + 1.5, P.y + 6.5); x += cols[j][1]; }); if (/^data:image\/png/.test(str(p.assin))) { try { const pp = doc.getImageProperties(p.assin), q = pp.width / pp.height; let h = 8.5, ww = h * q; if (ww > 38) { ww = 38; h = ww / q; } doc.addImage(p.assin, 'PNG', x + 1, P.y + 0.8, ww, h); } catch (_) {} } doc.setDrawColor(200); doc.setLineWidth(0.15); doc.line(P.L, P.y + 10, P.R, P.y + 10); P.y += 10; });
+  const sg = certSigs({ nome: '', tst: d.tst, tstRegistro: d.tstRegistro, tstAssin: d.tstAssin, rt: d.rt, rtQualif: d.rtQualif, instrutor: d.instrutor, instrutorQualif: d.instrutorQualif, instrutorAssin: d.instrutorAssin }).slice(1);
+  P.need(34); P.y += 24; const n = sg.length, gap = 10, w = (P.W - gap * (n - 1)) / n;
+  sg.forEach(([nm, rol, im], i) => { const x = P.L + i * (w + gap); if (/^data:image\/png/.test(str(im))) { try { const pp = doc.getImageProperties(im), q = pp.width / pp.height; let h = 16, ww = h * q; if (ww > w) { ww = w; h = ww / q; } doc.addImage(im, 'PNG', x + w / 2 - ww / 2, P.y - 1 - h, ww, h); } catch (_) {} }
+    doc.setDrawColor(80); doc.setLineWidth(0.3); doc.line(x, P.y, x + w, P.y); P.font(8, true, [20, 33, 61]); doc.text(doc.splitTextToSize(str(nm), w)[0], x + w / 2, P.y + 4, { align: 'center' }); P.font(7, false, [90, 96, 110]); doc.text(doc.splitTextToSize(rol, w).slice(0, 2), x + w / 2, P.y + 7.5, { align: 'center' }); });
+  P.y += 14;
 }
 /* dados da lista a partir de um registro de treinamento: todos da mesma turma e do mesmo tipo */
 function listaDoRegistro(r) {
   const parts = S.tr.filter(x => x.turma && x.turma === r.turma && x.tipoId === r.tipoId).sort((a, b) => str(a.nome).localeCompare(str(b.nome), 'pt'));
-  return { d: { t: { nome: r.tipoNome, norma: r.norma }, ch: num(r.cargaHoraria), inicio: r.inicio, termino: r.termino, local: r.local, instrutor: str(r.instrutor), instrutorQualif: str(r.instrutorQualif), rt: str(r.rt), tst: str(r.tst), tstRegistro: str(r.tstRegistro) }, parts: (parts.length ? parts : [r]).map(x => ({ nome: x.nome, matricula: x.matricula, funcao: x.funcao })) };
+  return { d: { t: { nome: r.tipoNome, norma: r.norma }, ch: num(r.cargaHoraria), inicio: r.inicio, termino: r.termino, local: r.local, instrutor: str(r.instrutor), instrutorQualif: str(r.instrutorQualif), rt: str(r.rt), tst: str(r.tst), tstRegistro: str(r.tstRegistro), rtQualif: str(r.rtQualif), instrutorAssin: str(r.instrutorAssin), tstAssin: str(r.tstAssin || (S.emp || {}).tstAssin) }, parts: (parts.length ? parts : [r]).map(x => ({ nome: x.nome, matricula: x.matricula, funcao: x.funcao, assin: x.assinAluno && x.assinAluno.img })) };
 }
 /* certificados de uma lista de registros: frente + verso de cada um; a lista de presença da turma entra logo depois do último certificado daquela turma/tipo */
 function certsComLista(doc, regs, primeiraNova) {
