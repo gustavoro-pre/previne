@@ -2496,7 +2496,7 @@ function certInto(doc, r, novaPagina) {
   if (novaPagina) doc.addPage('a4', 'landscape');
   certMoldura(doc, W, H, true);
   const lg = logoImg(); const ra = lg ? (num(lg.logoW) || 3) / (num(lg.logoH) || 1) : 1;
-  if (lg) { try { /* marca-d'água */ if (doc.GState) doc.setGState(new doc.GState({ opacity: 0.05 })); const wm = 120, hm = wm / ra; doc.addImage(lg.logo, 'PNG', W / 2 - wm / 2, H / 2 - hm / 2 + 8, wm, hm); if (doc.GState) doc.setGState(new doc.GState({ opacity: 1 })); } catch (_) {} }
+  if (lg) { try { /* marca-d'água */ if (doc.GState) doc.setGState(new doc.GState({ opacity: 0.035 })); const wm = 120, hm = wm / ra; doc.addImage(lg.logo, 'PNG', W / 2 - wm / 2, H / 2 - hm / 2 + 8, wm, hm); if (doc.GState) doc.setGState(new doc.GState({ opacity: 1 })); } catch (_) {} }
   let top = 27;
   if (lg) { const h = 17, w = h * ra; try { doc.addImage(lg.logo, /jpeg/.test(lg.logo.slice(0, 20)) ? 'JPEG' : 'PNG', W / 2 - w / 2, 18, w, h); top = 18 + h + 5; } catch (_) {} }
   center(str(e.nome) || 'PREVINE INSTALAÇÃO E MANUTENÇÃO ELÉTRICA LTDA', top, 11.5, true, [20, 33, 61]);
