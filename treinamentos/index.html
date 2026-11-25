@@ -2587,7 +2587,7 @@ async function gerarCertificados(regs, nome) {
 function listaInto(P, d, parts) {
   const doc = P.doc;
   P.header('LISTA DE PRESENÇA', 'Treinamento · NR-01, item 1.7');
-  P.box([['Treinamento', d.t.nome], ['Carga horária', d.ch + 'h'], ['Início', fmtD(d.inicio)], ['Término', fmtD(d.termino)], ['Local', d.local], ['Instrutor', d.instrutor + ' · ' + d.instrutorQualif]]);
+  P.box([['Treinamento', d.t.nome], ['Carga horária', d.ch + 'h'], ['Início', fmtD(d.inicio)], ['Término', fmtD(d.termino)], ['Local', str(d.local).replace(/ensino a dist[âa]ncia \(portal do aluno\)/i, 'Portal do Aluno')], ['Instrutor', d.instrutor + ' · ' + d.instrutorQualif]]);
   const cols = [['Nº', 10], ['Nome completo', 78], ['Matrícula', 22], ['Função', 30], ['Assinatura', 40]];
   const th = () => { P.need(8); doc.setFillColor(20, 33, 61); doc.rect(P.L, P.y, P.W, 6.5, 'F'); P.font(8, true, [255, 255, 255]); let x = P.L; cols.forEach(([t, w]) => { doc.text(t, x + 1.5, P.y + 4.4); x += w; }); P.y += 6.5; };
   th();
