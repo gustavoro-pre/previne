@@ -14,7 +14,7 @@
     ['mae', 'Nome da mãe', 'text', true], ['pai', 'Nome do pai', 'text', false], ['telefone', 'Celular (WhatsApp)', 'tel', true], ['email', 'E-mail', 'email', false],
     ['cep', 'CEP', 'cep', true], ['rua', 'Rua / avenida', 'text', true], ['numero', 'Número', 'text', true], ['complemento', 'Complemento', 'text', false], ['bairro', 'Bairro', 'text', true], ['cidade', 'Cidade', 'text', true], ['uf', 'Estado', UFS, true],
     ['escolaridade', 'Escolaridade', ['Fundamental incompleto', 'Fundamental completo', 'Médio incompleto', 'Médio completo', 'Técnico', 'Superior incompleto', 'Superior completo', 'Pós-graduação'], true],
-    ['pis', 'PIS / NIS (se souber)', 'text', false], ['banco', 'Banco', 'text', false], ['agencia', 'Agência', 'text', false], ['conta', 'Conta', 'text', false], ['pix', 'Chave PIX', 'text', false],
+    ['pis', 'PIS / NIS (se souber)', 'text', false], ['banco', 'Banco', 'text', false], ['pix', 'Chave PIX', 'text', false],
     ['tamCamisa', 'Tamanho de camisa', TAM_CAMISA, true], ['tamCalca', 'Tamanho de calça', TAM_CALCA, true], ['tamCalcado', 'Número do calçado', TAM_CALCADO, true],
     ['emergNome', 'Contato de emergência (nome)', 'text', true], ['emergTel', 'Contato de emergência (telefone)', 'tel', true], ['dependentes', 'Dependentes (nome, parentesco e nascimento)', 'area', false]
   ];

@@ -13,14 +13,13 @@
     { id: 'escolaridade', t: 'Comprovante de escolaridade', d: 'Diploma, certificado ou histórico do maior grau concluído.', obr: true, max: 3 },
     { id: 'certidao', t: 'Certidão de nascimento ou casamento', d: '', obr: true, max: 2 },
     { id: 'filhos', t: 'Filhos: certidão, CPF e vacinação', d: 'Filhos menores de 14 anos: certidão e CPF. Menores de 7: cartão de vacina.', obr: false, max: 6 },
-    { id: 'banco', t: 'Dados bancários', d: 'Print ou cartão mostrando banco, agência e conta.', obr: false, max: 1 },
     { id: 'cursos', t: 'Certificados de cursos e NRs', d: 'NR-10, NR-35, NR-33, curso técnico, se tiver.', obr: false, max: 8 },
     { id: 'registro', t: 'Registro profissional (CREA / CFT)', d: 'Só para técnicos e engenheiros.', obr: false, max: 2 },
     { id: 'cnpj', t: 'Cartão CNPJ', d: 'Comprovante de inscrição do CNPJ (site da Receita).', obr: true, max: 1, pj: true },
     { id: 'contrato', t: 'Contrato social ou certificado MEI', d: '', obr: true, max: 4, pj: true }
   ];
   /* PJ (prestador): pede CNPJ e contrato social; carteira de trabalho e documentos de registro CLT ficam opcionais */
-  const OBR_PJ = ['foto', 'rg', 'residencia', 'cnpj', 'contrato', 'banco'];
+  const OBR_PJ = ['foto', 'rg', 'residencia', 'cnpj', 'contrato'];
   function slotsDe(a) { const pj = a && a.vinculo === 'PJ'; return SLOTS.filter(s => pj || !s.pj).map(s => pj ? Object.assign({}, s, { obr: OBR_PJ.includes(s.id) }) : s); }
   const PARTE = 700000, MAX_PDF = 8 * 1048576;
   const rand = n => { const a = new Uint8Array(n); crypto.getRandomValues(a); return [...a].map(x => 'abcdefghijkmnpqrstuvwxyz23456789'[x % 32]).join(''); };
