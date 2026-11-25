@@ -128,13 +128,22 @@ function tRev() {
 }
 function tAprov() {
   const P = D.docs.filter(d => d.pend), meus = P.filter(d => eu(d.pend.aprovador)), outros = P.filter(d => !eu(d.pend.aprovador));
-  const lin = d => `<div class="drow" data-open="${esc(d.id)}"><div class="ext ${esc(extDe(((d.pend || {}).arquivo || {}).nome))}">${esc(extDe(((d.pend || {}).arquivo || {}).nome).toUpperCase() || '—')}</div>
+  const lin = (d, ck) => `<div class="drow" data-open="${esc(d.id)}">${ck && !d.pend.recusa ? `<input type="checkbox" class="lote" data-id="${esc(d.id)}" checked style="width:22px;height:22px;flex:none;margin-right:4px">` : ''}<div class="ext ${esc(extDe(((d.pend || {}).arquivo || {}).nome))}">${esc(extDe(((d.pend || {}).arquivo || {}).nome).toUpperCase() || '—')}</div>
     <div class="main"><div><span class="dcod">${esc(d.codigo)}</span> · <b>${esc(d.titulo)}</b></div>
     <div class="note">${revTxt(d.pend.rev)} · enviada por ${esc(d.pend.por || '—')} em ${fmtD(d.pend.data)} · aprovador: <b>${esc(d.pend.aprovador || '—')}</b></div>
     <div class="note">${esc(d.pend.motivo || '')}</div>${d.pend.recusa ? `<div class="note" style="color:var(--bad)">Recusada por ${esc(d.pend.recusa.por)}: ${esc(d.pend.recusa.motivo)}</div>` : ''}</div></div>`;
   $('#body').innerHTML = `<p class="note">Todo documento novo e toda nova revisão só valem depois de aprovados por quem foi indicado como aprovador. Enquanto isso, a revisão anterior continua vigente.</p>
-    <h3>Aguardando a sua aprovação (${meus.length})</h3><div class="card" style="padding:2px 14px">${meus.map(lin).join('') || '<p class="note">Nada aguardando você.</p>'}</div>
-    <h3>Aguardando outros aprovadores (${outros.length})</h3><div class="card" style="padding:2px 14px">${outros.map(lin).join('') || '<p class="note">Nenhum.</p>'}</div>`;
+    <h3>Aguardando a sua aprovação (${meus.length})</h3>${meus.some(d => !d.pend.recusa) ? `<div class="top2" style="align-items:center"><label style="display:flex;gap:6px;align-items:center;color:var(--ink)"><input type="checkbox" id="lote-all" checked style="width:20px;height:20px"> Marcar todos</label><button class="btn primary" id="lote-go">Aprovar selecionados</button></div><p class="note">Confira os arquivos antes (toque no documento e em Ver). Os desmarcados continuam aguardando.</p>` : ''}<div class="card" style="padding:2px 14px">${meus.map(d => lin(d, true)).join('') || '<p class="note">Nada aguardando você.</p>'}</div>
+    <h3>Aguardando outros aprovadores (${outros.length})</h3><div class="card" style="padding:2px 14px">${outros.map(d => lin(d, ADMIN)).join('') || '<p class="note">Nenhum.</p>'}</div>`;
+  $$('#body .lote').forEach(c => c.onclick = e => e.stopPropagation());
+  const all = $('#lote-all'); if (all) all.onchange = () => $$('#body .lote').forEach(c => c.checked = all.checked);
+  const go = $('#lote-go'); if (go) go.onclick = async () => {
+    const ids = $$('#body .lote').filter(c => c.checked).map(c => c.dataset.id); if (!ids.length) return toast('Marque pelo menos um documento.', 'bad');
+    if (!confirm(`Aprovar ${ids.length} documento(s)? Cada um passa a ser a revisão vigente e recebe o carimbo de aprovação.`)) return;
+    go.disabled = true; let ok = 0, falhas = [];
+    for (const id of ids) { const d = docBy(id); go.textContent = `Aprovando ${ok + falhas.length + 1} de ${ids.length}…`; try { if (d && await aprovar(d, true)) ok++; } catch (e) { falhas.push(d ? d.codigo : id); } }
+    toast(`${ok} aprovado(s).` + (falhas.length ? ' Não foi possível: ' + falhas.join(', ') : ''), falhas.length ? 'bad' : 'ok'); render();
+  };
 }
 function tCfg() {
   if (!EDITA) { V.tab = 'docs'; return render(); }
@@ -224,9 +233,9 @@ async function carimbar(u8, d, p, quando) {
   (d.hist || []).slice().sort((a, b) => (+a.rev || 0) - (+b.rev || 0)).concat([{ rev: p.rev, data: p.data, motivo: p.motivo, por: p.por, aprovador: MEU }]).forEach(h => { if (y < 60) return; T(`${revTxt(h.rev)} · ${fmtD(h.data)} · ${h.motivo || ''} · elab.: ${h.por || '-'} · aprov.: ${h.aprovador || '-'}`, 40, 8.5); y -= 14; });
   return await pdf.save();
 }
-async function aprovar(d) {
+async function aprovar(d, lote) {
   const p = d.pend; if (!p) return; if (!podeAprovar(d)) return toast('Só o aprovador indicado pode aprovar.', 'bad');
-  if (!confirm(`Aprovar ${d.codigo} ${revTxt(p.rev)}? Ela passa a ser a revisão vigente${d.rev != null ? ' e a ' + revTxt(d.rev) + ' fica obsoleta' : ''}.`)) return;
+  if (!lote && !confirm(`Aprovar ${d.codigo} ${revTxt(p.rev)}? Ela passa a ser a revisão vigente${d.rev != null ? ' e a ' + revTxt(d.rev) + ' fica obsoleta' : ''}.`)) return;
   const b = $('#aprovar'); if (b) { b.disabled = true; b.textContent = 'Aprovando…'; }
   const agora = new Date().toISOString();
   try {
@@ -241,8 +250,8 @@ async function aprovar(d) {
     H.push({ rev: p.rev, data: p.data, motivo: p.motivo, por: p.por, aprovador: MEU, aprovadoEm: agora, arquivo: arq, em: p.em });
     await db.doc('docs/' + d.id).update({ rev: p.rev, dataRev: p.data, arquivo: arq, hist: H, status: 'vigente', elaborador: p.por, aprovador: MEU, aprovadoEm: agora, atualizadoEm: agora, pend: null });
     if (d.modeloPortal) await db.doc('config/modelos').set({ [d.modeloPortal]: { codigo: d.codigo, rev: p.rev, data: p.data, aprovador: MEU, elaborador: p.por } }, { merge: true }).catch(e => console.warn(e));
-    toast(`${d.codigo} ${revTxt(p.rev)} aprovada e vigente.`, 'ok');
-  } catch (e) { console.error(e); toast('Não foi possível aprovar. Tente de novo.', 'bad'); if (b) { b.disabled = false; b.textContent = 'Aprovar'; } }
+    if (!lote) toast(`${d.codigo} ${revTxt(p.rev)} aprovada e vigente.`, 'ok'); return true;
+  } catch (e) { console.error(e); if (lote) throw e; toast('Não foi possível aprovar. Tente de novo.', 'bad'); if (b) { b.disabled = false; b.textContent = 'Aprovar'; } }
 }
 
 /* ---------- novo, editar, nova revisão ---------- */
