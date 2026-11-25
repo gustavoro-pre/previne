@@ -84,9 +84,13 @@ function gerarCertPdf(ids) {
 }
 async function baixarCerts(a, ids, btn) {
   const t0 = btn.textContent; btn.disabled = true; btn.textContent = 'Gerando…';
+  /* no celular, a janela precisa abrir no toque; o PDF entra nela quando ficar pronto */
+  const cel = /Android|iPhone|iPad/i.test(navigator.userAgent); const w = cel ? window.open('', '_blank') : null;
+  if (w) try { w.document.write('<p style="font:16px sans-serif;padding:20px">Gerando o certificado…</p>'); } catch (_) {}
   try { const m = await gerarCertPdf(ids); const bin = atob(m.b64); const u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
-    await baixar(`Certificado${ids.length > 1 ? 's' : ''} - ${a.nome}.pdf`, new Blob([u], { type: 'application/pdf' })); }
-  catch (e) { toast(e.message || 'Não foi possível gerar.', 'bad'); }
+    const blob = new Blob([u], { type: 'application/pdf' });
+    if (w && !w.closed) { w.location.href = URL.createObjectURL(blob); } else await baixar(`Certificado${ids.length > 1 ? 's' : ''} - ${a.nome}.pdf`, blob); }
+  catch (e) { if (w && !w.closed) w.close(); toast(e.message || 'Não foi possível gerar.', 'bad'); }
   btn.disabled = false; btn.textContent = t0;
 }
 async function prepararOsEpi(a) {
