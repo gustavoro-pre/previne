@@ -53,11 +53,12 @@ const waDe = a => { const t = ADM.dig(a.telefone); const msg = `Olá, ${str(a.no
 const ehTexto = id => id === 'lgpd' || id === 'carta';
 const tituloDoc = (a, id) => id === 'osepi' ? 'Ordem de Serviço de Segurança e Termo de EPI' : str(((a.assinar || {})[id] || {}).titulo) || 'Documento';
 function assinado(a, id) { const s = ((a.cand || {}).assin || {})[id]; const d = !ehTexto(id) ? (a.assinar || {})[id] : ((a.textos || {})[id]); return !!(s && d && s.hash === d.hash); }
-const empNome = () => str(D.emp.nome) || 'PREVINE ELÉTRICA';
+const empNome = () => str(D.emp.nome) || 'PREVINE INSTALAÇÃO E MANUTENÇÃO ELÉTRICA LTDA';
+const empCnpj = () => str(D.emp.cnpj) || '03.052.261/0001-43';
 /* gera (ou refaz) o texto da carta-convite e do termo LGPD com os dados da admissão; o candidato lê e assina */
 async function gerarTextos(a, salario, quais) {
   quais = quais || ['lgpd', 'carta'];
-  const ex = { empresa: empNome(), cnpj: str(D.emp.cnpj) || '—', salario: ADM.moeda(salario) }; const tx = Object.assign({}, a.textos || {}); const agora = new Date().toISOString();
+  const ex = { empresa: empNome(), cnpj: empCnpj(), salario: ADM.moeda(salario), beneficios: a.vinculo === 'PJ' ? ADM.BENEF_PJ : (str(D.cfg.beneficiosTxt).trim() || ADM.BENEF_PADRAO) }; const tx = Object.assign({}, a.textos || {}); const agora = new Date().toISOString();
   for (const q of quais) { const texto = ADM.preencher(q === 'carta' ? (D.cfg.cartaTxt || ADM.CARTA_PADRAO) : (D.cfg.lgpdTxt || ADM.LGPD_PADRAO), a, ex);
     await db.doc(`admissoes/${a.id}/d/${q}`).set({ texto, em: agora }); tx[q] = { hash: await ADM.sha256(texto), em: agora }; }
   await db.doc('admissoes/' + a.id).update({ textos: tx }); a.textos = tx;
@@ -91,7 +92,7 @@ async function pdfTexto(a, q) {
   const texto = d.data().texto; const s = ((a.cand || {}).assin || {})[q]; const ok = assinado(a, q);
   const doc = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4' }); const L = 18, W = 174; let y = 16;
   const lg = window.logoEmp ? window.logoEmp(D.emp) : D.emp; if (/^data:image/.test(str(lg.logo))) { try { const h = 14, w = Math.min(40, h * (+lg.logoW || 3) / (+lg.logoH || 1)); doc.addImage(lg.logo, /jpeg/.test(lg.logo.slice(0, 20)) ? 'JPEG' : 'PNG', L, y - 4, w, w * (+lg.logoH || 1) / (+lg.logoW || 3)); } catch (e) {} }
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(20, 33, 61); doc.text(q === 'carta' ? 'CARTA-CONVITE' : 'TERMO LGPD', L + W, y + 2, { align: 'right' }); doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.text(empNome(), L + W, y + 7, { align: 'right' }); if (D.emp.cnpj) doc.text('CNPJ ' + D.emp.cnpj, L + W, y + 11, { align: 'right' });
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(20, 33, 61); doc.text(q === 'carta' ? 'CARTA-CONVITE' : 'TERMO LGPD', L + W, y + 2, { align: 'right' }); doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.text(empNome(), L + W, y + 7, { align: 'right' }); doc.text('CNPJ ' + empCnpj(), L + W, y + 11, { align: 'right' });
   y += 16; doc.setDrawColor(242, 169, 0); doc.setLineWidth(0.8); doc.line(L, y, L + W, y); y += 8; doc.setTextColor(30, 33, 40); doc.setFontSize(10.5);
   doc.splitTextToSize(texto, W).forEach(l => { if (y > 270) { doc.addPage(); y = 18; } doc.text(l, L, y); y += 5.2; });
   y += 6; if (y > 230) { doc.addPage(); y = 20; }
@@ -111,7 +112,8 @@ async function pdfDoc(a, id) {
     const lin = `Assinado eletronicamente por ${a.nome} em ${fmtDH(s.em)} · SHA-256 ${s.hash.slice(0, 16)}…`;
     pdf.getPages().forEach(pg => pg.drawText(lin, { x: 42, y: 31, size: 6.5, font: f, color: rgb(0.1, 0.35, 0.2) }));
     const pg = pdf.addPage([595.28, 841.89]); let y = 790;
-    pg.drawText('REGISTRO DE ASSINATURA ELETRÔNICA', { x: 50, y, size: 14, font: fb, color: rgb(0.08, 0.13, 0.24) }); y -= 22;
+    pg.drawText('REGISTRO DE ASSINATURA ELETRÔNICA', { x: 50, y, size: 14, font: fb, color: rgb(0.08, 0.13, 0.24) }); y -= 18;
+    pg.drawText((empNome() + ' · CNPJ ' + empCnpj()).slice(0, 110), { x: 50, y, size: 9, font: f, color: rgb(0.25, 0.27, 0.32) }); y -= 16;
     pg.drawText(('Documento: ' + tit).slice(0, 110), { x: 50, y, size: 9.5, font: f }); y -= 30;
     const png = await pdf.embedPng(s.img); const dim = png.scaleToFit(220, 80); pg.drawImage(png, { x: 50, y: y - dim.height, width: dim.width, height: dim.height }); y -= dim.height + 8;
     pg.drawLine({ start: { x: 50, y }, end: { x: 300, y }, thickness: 0.6, color: rgb(0.3, 0.3, 0.3) }); y -= 13; pg.drawText(`${a.nome} · CPF ${ADM.fmtCpf(a.cpf)}`, { x: 50, y, size: 9.5, font: fb }); y -= 26;
@@ -138,11 +140,12 @@ function assinBox(a, ro) {
 }
 function rMod() {
   if (!PODE) { $('#body').innerHTML = '<div class="ro-banner">Seu perfil só consulta.</div>'; return; }
-  $('#body').innerHTML = `<div class="card"><p class="ct">Carta-convite</p><p class="cs">Campos trocados automaticamente: {nome} {cpf} {funcao} {area} {unidade} {salario} {vinculo} {empresa} {cnpj}</p><textarea id="md-c" rows="16">${esc(D.cfg.cartaTxt || ADM.CARTA_PADRAO)}</textarea></div>
+  $('#body').innerHTML = `<div class="card"><p class="ct">Carta-convite</p><p class="cs">Campos trocados automaticamente: {nome} {cpf} {funcao} {area} {unidade} {salario} {vinculo} {beneficios} {empresa} {cnpj}</p><textarea id="md-c" rows="16">${esc(D.cfg.cartaTxt || ADM.CARTA_PADRAO)}</textarea></div>
+    <div class="card"><p class="ct">Benefícios (CLT)</p><p class="cs">Entra no lugar de {beneficios} na carta. Para PJ, a carta mostra "conforme o contrato de prestação de serviços".</p><textarea id="md-b" rows="4">${esc(D.cfg.beneficiosTxt || ADM.BENEF_PADRAO)}</textarea></div>
     <div class="card"><p class="ct">Termo LGPD</p><p class="cs">Revise com o jurídico ou a contabilidade antes de usar.</p><textarea id="md-l" rows="16">${esc(D.cfg.lgpdTxt || ADM.LGPD_PADRAO)}</textarea></div>
     <div class="actions"><button class="btn ghost" id="md-r">Voltar aos textos padrão</button><button class="btn primary" id="md-s">Salvar modelos</button></div><p class="note">Vale para as próximas admissões. As já abertas mantêm o texto que o candidato recebeu, até você clicar em “Atualizar carta”.</p>`;
-  $('#md-s').onclick = async () => { try { const c = Object.assign({}, D.cfg, { cartaTxt: $('#md-c').value, lgpdTxt: $('#md-l').value }); await db.doc('config/admissao').set(c); D.cfg = c; toast('Modelos salvos.', 'ok'); } catch (e) { toast('Não foi possível salvar.', 'bad'); } };
-  $('#md-r').onclick = () => { $('#md-c').value = ADM.CARTA_PADRAO; $('#md-l').value = ADM.LGPD_PADRAO; toast('Textos padrão carregados. Clique em Salvar para valer.'); };
+  $('#md-s').onclick = async () => { try { const c = Object.assign({}, D.cfg, { cartaTxt: $('#md-c').value, lgpdTxt: $('#md-l').value, beneficiosTxt: $('#md-b').value }); await db.doc('config/admissao').set(c); D.cfg = c; toast('Modelos salvos.', 'ok'); } catch (e) { toast('Não foi possível salvar.', 'bad'); } };
+  $('#md-r').onclick = () => { $('#md-c').value = ADM.CARTA_PADRAO; $('#md-l').value = ADM.LGPD_PADRAO; $('#md-b').value = ADM.BENEF_PADRAO; toast('Textos padrão carregados. Clique em Salvar para valer.'); };
 }
 
 /* ---------- dados ---------- */

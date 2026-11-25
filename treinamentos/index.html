@@ -2070,8 +2070,8 @@ function PDFW(existente) {
     header(titulo, sub) {
       const e = S.emp || {}; let lx = L; const lg = logoImg();
       if (lg) { const h = 11, w = Math.min(38, h * (num(lg.logoW) || 3) / (num(lg.logoH) || 1)); try { doc.addImage(lg.logo, /jpeg/.test(lg.logo.slice(0, 20)) ? 'JPEG' : 'PNG', L, y - 0.5, w, w * (num(lg.logoH) || 1) / (num(lg.logoW) || 3)); lx = L + w + 4; } catch (_) {} }
-      P.font(11, true, [20, 33, 61]); doc.text(doc.splitTextToSize(str(e.nome) || 'Nome da empresa (preencha em Cadastros → Empresa)', 100 - (lx - L))[0], lx, y + 4);
-      P.font(8, false, [90, 96, 110]); doc.text(doc.splitTextToSize([e.cnpj ? 'CNPJ ' + e.cnpj : '', e.endereco || ''].filter(Boolean).join(' · ') || ' ', 100 - (lx - L))[0], lx, y + 8.5);
+      P.font(11, true, [20, 33, 61]); doc.text(doc.splitTextToSize(str(e.nome) || 'PREVINE INSTALAÇÃO E MANUTENÇÃO ELÉTRICA LTDA', 100 - (lx - L))[0], lx, y + 4);
+      P.font(8, false, [90, 96, 110]); doc.text(doc.splitTextToSize(['CNPJ ' + (e.cnpj || '03.052.261/0001-43'), e.endereco || ''].filter(Boolean).join(' · ') || ' ', 100 - (lx - L))[0], lx, y + 8.5);
       P.font(12.5, true, [20, 33, 61]); doc.text(titulo, R, y + 4, { align: 'right' });
       P.font(8, false, [90, 96, 110]); doc.text(sub, R, y + 8.5, { align: 'right' });
       y += 12; doc.setDrawColor(242, 169, 0); doc.setLineWidth(0.8); doc.line(L, y, R, y); y += 5;
@@ -2457,8 +2457,8 @@ function certInto(doc, r, novaPagina) {
   doc.setFillColor(242, 169, 0); doc.rect(13, 13, W - 26, 3, 'F');
   let top = 30; const lg = logoImg();
   if (lg) { const h = 14, w = Math.min(60, h * (num(lg.logoW) || 3) / (num(lg.logoH) || 1)), hh = w * (num(lg.logoH) || 1) / (num(lg.logoW) || 3); try { doc.addImage(lg.logo, /jpeg/.test(lg.logo.slice(0, 20)) ? 'JPEG' : 'PNG', W / 2 - w / 2, 20, w, hh); top = 20 + hh + 6; } catch (_) {} }
-  center(str(e.nome) || 'Nome da empresa', top, 12, true, [20, 33, 61]);
-  if (e.cnpj) center('CNPJ ' + e.cnpj, top + 5.5, 8.5, false, [110, 116, 128]);
+  center(str(e.nome) || 'PREVINE INSTALAÇÃO E MANUTENÇÃO ELÉTRICA LTDA', top, 12, true, [20, 33, 61]);
+  center('CNPJ ' + (e.cnpj || '03.052.261/0001-43'), top + 5.5, 8.5, false, [110, 116, 128]);
   const y0 = Math.max(58, top + 20);
   center('CERTIFICADO', y0, 34, true, [20, 33, 61]);
   center('Certificamos que', y0 + 15, 13, false, [60, 66, 80]);

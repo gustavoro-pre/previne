@@ -99,6 +99,9 @@ Local de trabalho: {unidade}
 Remuneração mensal: {salario}
 Vínculo: {vinculo}
 
+Benefícios:
+{beneficios}
+
 A contratação se concretiza após a entrega dos documentos, o exame admissional (ASO) com resultado apto e a integração de segurança. Nos próximos passos você vai enviar seus dados e documentos por este mesmo link, e o RH vai acompanhar você até o primeiro dia de trabalho.
 
 Seja muito bem-vindo(a)! Contamos com você para trabalhar com segurança, qualidade e respeito.
@@ -106,6 +109,9 @@ Seja muito bem-vindo(a)! Contamos com você para trabalhar com segurança, quali
 Atenciosamente,
 {empresa}
 CNPJ {cnpj}`;
+  const BENEF_PADRAO = `• Cartão alimentação de R$ 500,00 por mês, sendo R$ 250,00 de alimentação e R$ 250,00 de assiduidade.
+• Plano de saúde coparticipativo, após o término do período de experiência.`;
+  const BENEF_PJ = '• Conforme o contrato de prestação de serviços (contratação como pessoa jurídica).';
   const LGPD_PADRAO = `TERMO DE CIÊNCIA E CONSENTIMENTO PARA TRATAMENTO DE DADOS PESSOAIS (Lei nº 13.709/2018 – LGPD)
 
 Eu, {nome}, CPF {cpf}, declaro estar ciente de que a {empresa}, inscrita no CNPJ {cnpj} ("Empresa"), na condição de controladora, tratará os meus dados pessoais para as finalidades descritas abaixo.
@@ -127,5 +133,5 @@ Eu, {nome}, CPF {cpf}, declaro estar ciente de que a {empresa}, inscrita no CNPJ
     return String(tpl || '').replace(/\{(\w+)\}/g, (m, k) => vars[k] != null && vars[k] !== '' ? String(vars[k]) : m === '{salario}' ? 'a combinar' : '—');
   }
   async function sha256(txt) { const b = new TextEncoder().encode(txt); const h = await crypto.subtle.digest('SHA-256', b); return [...new Uint8Array(h)].map(x => x.toString(16).padStart(2, '0')).join(''); }
-  window.ADM = { CARTA_PADRAO, LGPD_PADRAO, moeda, preencher, sha256, SLOTS, slotsDe, rand, dig, cpfOk, fmtCpf, preparar, gravar, ler, docsSt, ultimoEnvio, qualidade };
+  window.ADM = { CARTA_PADRAO, LGPD_PADRAO, BENEF_PADRAO, BENEF_PJ, moeda, preencher, sha256, SLOTS, slotsDe, rand, dig, cpfOk, fmtCpf, preparar, gravar, ler, docsSt, ultimoEnvio, qualidade };
 })();
