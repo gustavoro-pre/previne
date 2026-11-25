@@ -529,7 +529,8 @@ function renderDemo() {
 
 /* ================= cálculos EPI ================= */
 function ultimas() { const m = {}; for (const e of S.ent) { const k = m[e.funcionarioId] || (m[e.funcionarioId] = {}); if (!k[e.epiId] || str(k[e.epiId].data) < str(e.data)) k[e.epiId] = e; } return m; }
-const kitsDa = funcao => S.kits.filter(k => norm(k.funcao) && norm(k.funcao) === norm(funcao));
+const kitFuncs = k => [k.funcao].concat(Array.isArray(k.funcoesAlt) ? k.funcoesAlt : []).map(norm).filter(Boolean);
+const kitsDa = funcao => S.kits.filter(k => norm(funcao) && kitFuncs(k).includes(norm(funcao)));
 /* adicionais: kits que valem por atividade (ex.: trabalho em altura), somados ao kit da função */
 const ADIC = { altura: 'Trabalho em altura (NR-35)' };
 const kitsAdic = f => S.kits.filter(k => k.adicional && f && f[k.adicional]);
@@ -1445,7 +1446,7 @@ function renderKits() {
   const L = S.kits.slice().sort((a, b) => str(a.nome).localeCompare(str(b.nome), 'pt'));
   $('#k-list').innerHTML = L.length ? L.map(k => {
     const custo = (k.epis || []).reduce((a, x) => { const p = S.epis.find(y => y.id === x.epiId); return a + (p ? num(p.custo) * (num(x.qtd) || 1) : 0); }, 0);
-    const nf = S.func.filter(f => f.ativo !== false && (k.adicional ? f[k.adicional] : norm(f.funcao) === norm(k.funcao))).length;
+    const nf = S.func.filter(f => f.ativo !== false && (k.adicional ? f[k.adicional] : kitFuncs(k).includes(norm(f.funcao)))).length;
     return `<button class="item" data-kit="${esc(k.id)}"><div class="main"><div class="t1">${esc(k.nome)}${k.adicional ? ' <span class="badge b-info">Adicional</span>' : ''}</div><div class="t2">${k.adicional ? 'Vale para quem está marcado “' + esc(ADIC[k.adicional]) + '”' : 'Função: ' + esc(k.funcao || '—')} · ${nf} funcionário(s)</div><div class="t2">${(k.epis || []).length} EPIs (${brl(custo)} por kit) · ${(k.ferramentas || []).length} ferramentas</div></div></button>`;
   }).join('') : `<div class="empty">Nenhum kit. Crie um por função (ex.: Eletricista, Mecânico, Soldador).</div>`;
 }
@@ -1460,24 +1461,28 @@ function openKit(id, adicional) {
   (k && k.ferramentas || []).forEach(t => { if (!tipos.some(x => norm(x) === norm(t))) tipos.push(t); });
   openModal(mtop(ad ? 'Adicional: ' + esc(ADIC[ad]) : k ? 'Kit' : 'Novo kit') + `<div class="card"><div class="grid2"><div><label for="kt-nome">Nome do kit *</label><input id="kt-nome" value="${esc(k ? k.nome : ad ? 'Adicional · ' + ADIC[ad] : '')}" placeholder="Ex.: Kit Eletricista"></div>
     ${ad ? `<div><p class="note" style="margin-top:28px">Vale para todo funcionário marcado “${esc(ADIC[ad])}” no cadastro, somado ao kit da função dele.</p><input id="kt-fun" type="hidden" value=""></div>` : `<div><label for="kt-fun">Função *</label><input id="kt-fun" list="kfuns" value="${esc(k ? k.funcao : '')}"></div>`}</div>
+    ${ad ? '' : `<label for="kt-alt">Também vale para as funções (uma por linha, como estão no cadastro)</label><textarea id="kt-alt" rows="2" placeholder="Ex.: TEC SEG DO TRABALHO">${esc(((k && k.funcoesAlt) || []).join('\n'))}</textarea>`}
     <datalist id="kfuns">${[...new Set(S.func.map(x => x.funcao).filter(Boolean))].map(c => `<option value="${esc(c)}">`).join('')}</datalist></div>
     <div class="card"><span class="lbl">EPIs do kit</span>${S.epis.length ? S.epis.slice().sort((a, b) => str(a.nome).localeCompare(str(b.nome), 'pt')).map(p => `<div class="kitrow"><input type="checkbox" data-kep="${esc(p.id)}" ${ke.has(p.id) ? 'checked' : ''} id="kep-${esc(p.id)}"><label for="kep-${esc(p.id)}" class="main" style="margin:0;color:inherit;font-size:14px">${esc(p.nome)} <span class="note">CA ${esc(p.ca)}</span></label><input type="number" min="1" value="${ke.get(p.id) || 1}" data-keq="${esc(p.id)}" style="width:64px;padding:6px 8px" aria-label="Quantidade"></div>`).join('') : '<div class="note">Cadastre EPIs primeiro.</div>'}</div>
     <div class="card"><span class="lbl">Ferramentas do kit</span>${tipos.length ? tipos.map((t, i) => `<div class="kitrow"><input type="checkbox" data-kft="${esc(t)}" id="kft-${i}" ${kf.has(norm(t)) ? 'checked' : ''}><label for="kft-${i}" class="main" style="margin:0;color:inherit;font-size:14px">${esc(t)} <span class="note">${S.ferr.filter(f => norm(f.descricao) === norm(t) && f.status === 'disponivel').length} disponível(is)</span></label></div>`).join('') : '<div class="note">Cadastre ferramentas primeiro.</div>'}</div>
     <div class="card"><div class="head" style="margin:0 0 4px"><span class="lbl" style="margin:0;margin-right:auto">Ordem de Serviço de Segurança (NR-01)</span><button class="btn sm ghost" id="kt-mod" type="button">Preencher com modelo</button></div>
     <p class="note" style="margin-top:0">Texto da OS desta função. Os EPIs obrigatórios entram automaticamente a partir do kit. Separe os itens com ponto e vírgula ou um por linha. Revise com o SESMT conforme o PGR.</p>
-    ${OSF.map(([kk, t]) => `<label for="os-${kk}">${t}</label><textarea id="os-${kk}" rows="3">${esc(((k && k.os) || {})[kk] || '')}</textarea>`).join('')}</div>
-    <div class="actions">${k ? `<button class="btn danger" id="kt-del">Excluir</button><button class="btn ghost" id="kt-osall">OS dos ${S.func.filter(f => f.ativo !== false && (k.adicional ? f[k.adicional] : norm(f.funcao) === norm(k.funcao))).length} funcionários (PDF)</button>` : ''}<button class="btn ghost" data-close>Cancelar</button><button class="btn primary" id="kt-save" ${S.canWrite === false ? 'disabled' : ''}>Salvar</button></div>`);
+    <div class="grid2">${OSX.map(([kk, t, ph]) => `<div><label for="os-${kk}">${t}</label><input id="os-${kk}" value="${esc(((k && k.os) || {})[kk] || '')}" placeholder="${esc(ph || '')}"></div>`).join('')}</div>
+    ${OSF.map(([kk, t]) => `<label for="os-${kk}">${t}</label><textarea id="os-${kk}" rows="3">${esc(((k && k.os) || {})[kk] || '')}</textarea>`).join('')}
+    <label for="os-entregadores">Quem pode assinar a entrega na ficha de EPI (um por linha; o primeiro é o padrão)</label><textarea id="os-entregadores" rows="2">${esc(((k && k.os) || {}).entregadores || '')}</textarea></div>
+    <div class="actions">${k ? `<button class="btn danger" id="kt-del">Excluir</button><button class="btn ghost" id="kt-osall">OS dos ${S.func.filter(f => f.ativo !== false && (k.adicional ? f[k.adicional] : kitFuncs(k).includes(norm(f.funcao)))).length} funcionários (PDF)</button>` : ''}<button class="btn ghost" data-close>Cancelar</button><button class="btn primary" id="kt-save" ${S.canWrite === false ? 'disabled' : ''}>Salvar</button></div>`);
   $('#kt-save').onclick = async () => {
     if (!guardWrite()) return;
     const nome = $('#kt-nome').value.trim(), funcao = ad ? '' : $('#kt-fun').value.trim();
     if (!nome || (!funcao && !ad)) return toast('Preencha nome e função.', 'bad');
     const epis = $$('#sheet [data-kep]:checked').map(c => ({ epiId: c.dataset.kep, qtd: num($(`#sheet [data-keq="${CSS.escape(c.dataset.kep)}"]`).value) || 1 }));
     const ferramentas = $$('#sheet [data-kft]:checked').map(c => c.dataset.kft);
-    const os = {}; OSF.forEach(([kk]) => os[kk] = $('#os-' + kk).value.trim());
-    try { if (k) await db.doc('kits/' + k.id).update({ nome, funcao, epis, ferramentas, os, adicional: ad }); else await db.collection('kits').doc().set({ nome, funcao, epis, ferramentas, os, adicional: ad, criadoEm: new Date().toISOString() }); closeModal(); toast('Kit salvo.', 'ok'); } catch (e) { handleErr(e); }
+    const os = {}; OSF.concat(OSX, [['entregadores']]).forEach(([kk]) => { const el = $('#os-' + kk); if (el) os[kk] = el.value.trim(); });
+    const funcoesAlt = ad ? [] : $('#kt-alt').value.split(/\n|;/).map(x => x.trim()).filter(Boolean);
+    try { if (k) await db.doc('kits/' + k.id).update({ nome, funcao, funcoesAlt, epis, ferramentas, os, adicional: ad }); else await db.collection('kits').doc().set({ nome, funcao, funcoesAlt, epis, ferramentas, os, adicional: ad, criadoEm: new Date().toISOString() }); closeModal(); toast('Kit salvo.', 'ok'); } catch (e) { handleErr(e); }
   };
   $('#kt-mod').onclick = () => { const m = ad ? Object.assign({}, osAdic(ad), { emergencia: '' }) : osModelo($('#kt-fun').value); let n = 0; OSF.forEach(([kk]) => { const el = $('#os-' + kk); if (!el.value.trim()) { el.value = m[kk]; n++; } }); toast(n ? 'Modelo aplicado nos campos vazios. Revise antes de salvar.' : 'Os campos já estão preenchidos.', n ? 'ok' : ''); };
-  const oa = $('#kt-osall'); if (oa) oa.onclick = () => gerarOS(S.func.filter(f => f.ativo !== false && (k.adicional ? f[k.adicional] : norm(f.funcao) === norm(k.funcao))).sort((a, b) => str(a.nome).localeCompare(str(b.nome), 'pt')), 'os_seguranca_' + norm(k.funcao).replace(/[^a-z0-9]+/g, '_') + '.pdf');
+  const oa = $('#kt-osall'); if (oa) oa.onclick = () => gerarOS(S.func.filter(f => f.ativo !== false && (k.adicional ? f[k.adicional] : kitFuncs(k).includes(norm(f.funcao)))).sort((a, b) => str(a.nome).localeCompare(str(b.nome), 'pt')), 'os_seguranca_' + norm(k.funcao).replace(/[^a-z0-9]+/g, '_') + '.pdf');
   const del = $('#kt-del'); if (del) armDelete(del, () => db.doc('kits/' + k.id).delete());
 }
 
@@ -2040,7 +2045,8 @@ $('#p-qr').onclick = () => abrirEtiquetas('epi');
 
 
 /* ================= documentos PDF: ficha de EPI e OS de segurança ================= */
-const OSF = [['atividades', 'Descrição das atividades'], ['riscos', 'Riscos da função'], ['medidas', 'Medidas preventivas'], ['proibicoes', 'É proibido'], ['emergencia', 'Em caso de acidente ou emergência']];
+const OSF = [['atividades', 'Descrição das atividades'], ['riscos', 'Riscos da função (um por linha; para sair em tabela: Tipo | Perigo / fonte | Possíveis lesões | Nível | Medidas de controle)'], ['exames', 'Exames médicos (PCMSO)'], ['treinamentos', 'Treinamentos exigidos'], ['medidas', 'Procedimentos de segurança'], ['proibicoes', 'É proibido'], ['emergencia', 'Em caso de acidente ou emergência'], ['uniforme', 'Observação sobre EPI e uniforme']];
+const OSX = [['ghe', 'GHE (PGR)', 'Ex.: GHE 10 – SEGURANÇA DO TRABALHO'], ['setor', 'Setor', 'Ex.: OPERACIONAL'], ['local', 'Local de trabalho', 'Ex.: Obras e contratos da empresa'], ['base', 'Base da OS', 'Ex.: PGR Rev. 08 / PCMSO 2026-2027'], ['codigo', 'Código da OS', 'Ex.: OS-SST-GHE10-TST'], ['revisao', 'Revisão', '00'], ['assinante', 'Quem assina a OS pela empresa', 'Nome'], ['assinanteCargo', 'Cargo de quem assina', 'Ex.: Gerente de Operações']];
 const OS_EMERG = 'Interromper a atividade e isolar a área; acionar a brigada/emergência da planta e o SESMT; não mover a vítima se não houver risco imediato; comunicar ao supervisor todo acidente, incidente ou quase acidente, por menor que seja';
 function osModelo(funcao) {
   const f = norm(funcao);
@@ -2071,7 +2077,7 @@ const ALT_MODELO = { atividades: 'Atividades executadas acima de 2 metros do ní
 function osAdic(a) { const k = S.kits.find(x => x.adicional === a); const o = Object.assign({}, a === 'altura' ? ALT_MODELO : {}); if (k && k.os) Object.keys(k.os).forEach(c => { if (str(k.os[c]).trim()) o[c] = k.os[c]; }); return o; }
 function osDa(funcao) {
   const ks = kitsDa(funcao); const m = osModelo(funcao); const o = {}; let modelo = false;
-  OSF.forEach(([k]) => { const v = ks.map(x => (x.os || {})[k]).find(v => str(v).trim()); if (v) o[k] = v; else { o[k] = m[k]; modelo = true; } });
+  OSF.concat(OSX, [['entregadores']]).forEach(([k]) => { const v = ks.map(x => (x.os || {})[k]).find(v => str(v).trim()); if (v) o[k] = v; else { o[k] = m[k] || ''; if (m[k] && ['atividades', 'riscos', 'medidas', 'proibicoes'].includes(k)) modelo = true; } });
   return { os: o, modelo };
 }
 function PDFW(existente) {
@@ -2081,23 +2087,38 @@ function PDFW(existente) {
     newPage() { doc.addPage('a4', 'portrait'); y = 15; },
     need(h) { if (y + h > B) { P.newPage(); return true; } return false; },
     font(size, bold, color) { doc.setFont('helvetica', bold ? 'bold' : 'normal'); doc.setFontSize(size); doc.setTextColor.apply(doc, color || [30, 33, 40]); },
-    text(t, o) { o = o || {}; const size = o.size || 9; P.font(size, o.bold, o.color); const lh = size * 0.3528 * 1.38; const lines = doc.splitTextToSize(str(t), W - (o.indent || 0)); lines.forEach(l => { P.need(lh); doc.text(l, L + (o.indent || 0), y + lh * 0.78); y += lh; }); y += (o.gap == null ? 1 : o.gap); },
-    bullets(t) { const items = str(t).split(/;|\n/).map(x => x.trim().replace(/\.$/, '')).filter(Boolean).map(x => x[0].toUpperCase() + x.slice(1)); items.forEach(it => { P.font(9); const lh = 9 * 0.3528 * 1.38; const lines = doc.splitTextToSize(it, W - 6); P.need(lh); doc.text('•', L + 1.5, y + lh * 0.78); lines.forEach(l => { P.need(lh); doc.text(l, L + 6, y + lh * 0.78); y += lh; }); y += 0.6; }); y += 1; },
-    section(n, t) { P.need(12); y += 2; doc.setFillColor(236, 239, 244); doc.rect(L, y, W, 6.5, 'F'); P.font(9.5, true, [20, 33, 61]); doc.text((n ? n + '. ' : '') + t.toUpperCase(), L + 2, y + 4.5); y += 9; },
-    header(titulo, sub) {
-      const e = S.emp || {}; let lx = L; const lg = logoImg();
-      if (lg) { const h = 11, w = Math.min(38, h * (num(lg.logoW) || 3) / (num(lg.logoH) || 1)); try { doc.addImage(lg.logo, /jpeg/.test(lg.logo.slice(0, 20)) ? 'JPEG' : 'PNG', L, y - 0.5, w, w * (num(lg.logoH) || 1) / (num(lg.logoW) || 3)); lx = L + w + 4; } catch (_) {} }
-      const nomeE = str(e.nome) || 'PREVINE INSTALAÇÃO E MANUTENÇÃO ELÉTRICA LTDA', larg = 100 - (lx - L); let fsz = 11, extra = 0;
-      P.font(fsz, true, [20, 33, 61]); while (fsz > 8.5 && doc.getTextWidth(nomeE) > larg) { fsz -= 0.5; P.font(fsz, true, [20, 33, 61]); }
-      if (doc.getTextWidth(nomeE) > larg) { const ls = doc.splitTextToSize(nomeE, larg).slice(0, 2); doc.text(ls[0], lx, y + 3); doc.text(ls[1] || '', lx, y + 6.6); extra = 2.6; } else doc.text(nomeE, lx, y + 4);
-      P.font(8, false, [90, 96, 110]); doc.text(doc.splitTextToSize(['CNPJ ' + (e.cnpj || '03.052.261/0001-43'), e.endereco || ''].filter(Boolean).join(' · ') || ' ', larg)[0], lx, y + 8.5 + extra);
-      P.font(12.5, true, [20, 33, 61]); doc.text(titulo, R, y + 4, { align: 'right' });
-      P.font(8, false, [90, 96, 110]); doc.text(sub, R, y + 8.5, { align: 'right' });
-      y += 12 + extra; doc.setDrawColor(242, 169, 0); doc.setLineWidth(0.8); doc.line(L, y, R, y); y += 5;
+    text(t, o) { o = o || {}; const size = o.size || P.fs || 9; P.font(size, o.bold, o.color); const lh = size * 0.3528 * 1.38; const lines = doc.splitTextToSize(str(t), W - (o.indent || 0)); lines.forEach((l, i) => { P.need(lh); const jus = o.align === 'justify' && i < lines.length - 1; doc.text(l, L + (o.indent || 0), y + lh * 0.78, jus ? { align: 'justify', maxWidth: W - (o.indent || 0) } : undefined); y += lh; }); y += (o.gap == null ? 1 : o.gap); },
+    bullets(t) { const items = str(t).split(/\n/.test(str(t)) ? /\n/ : /;/).map(x => x.trim().replace(/\.$/, '')).filter(Boolean).map(x => x[0].toUpperCase() + x.slice(1)); const bz = P.fs || 9; items.forEach(it => { P.font(bz); const lh = bz * 0.3528 * 1.38; const lines = doc.splitTextToSize(it, W - 6); P.need(lh); doc.text('•', L + 1.5, y + lh * 0.78); lines.forEach(l => { P.need(lh); doc.text(l, L + 6, y + lh * 0.78); y += lh; }); y += 0.3; }); y += 0.8; },
+    section(n, t) { P.need(14); y += 1.5; doc.setFillColor(20, 33, 61); doc.rect(L, y, W, 6, 'F'); P.font(9, true, [255, 255, 255]); doc.text((n ? n + '. ' : '') + t.toUpperCase(), L + 2, y + 4.2); y += 8; },
+    header(titulo, sub, codigo) {
+      const e = S.emp || {}; let lx = L; const lg = logoImg(), y0 = y;
+      if (lg) { const hh = 19, ww = Math.min(26, hh * (num(lg.logoW) || 1.25) / (num(lg.logoH) || 1)); try { doc.addImage(lg.logo, /jpeg/.test(lg.logo.slice(0, 20)) ? 'JPEG' : 'PNG', L, y - 2, ww, ww * (num(lg.logoH) || 1) / (num(lg.logoW) || 1.25)); lx = L + ww + 4; } catch (_) {} }
+      const nomeE = str(e.nome) || 'PREVINE INSTALAÇÃO E MANUTENÇÃO ELÉTRICA LTDA', larg = 118 - (lx - L); let fsz = 10.5;
+      P.font(fsz, true, [20, 33, 61]); while (fsz > 8 && doc.getTextWidth(nomeE) > larg) { fsz -= 0.5; P.font(fsz, true, [20, 33, 61]); }
+      doc.text(doc.splitTextToSize(nomeE, larg)[0], lx, y + 3);
+      P.font(8.5, false, [68, 68, 68]); doc.text('CNPJ ' + (e.cnpj || '03.052.261/0001-43'), lx, y + 7.5);
+      P.font(titulo.length > 30 ? 11.5 : 12.5, true, [31, 78, 156]); doc.text(titulo, lx, y + 14);
+      P.font(7.5, false, [68, 68, 68]); if (codigo) doc.text(codigo, R, y + 3, { align: 'right' }); doc.text(doc.splitTextToSize(sub, 78), R, y + (codigo ? 7.5 : 3), { align: 'right' });
+      y = y0 + 18; doc.setDrawColor(20, 33, 61); doc.setLineWidth(1.1); doc.line(L, y, R, y); y += 5; (P.cods = P.cods || {})[doc.getNumberOfPages()] = codigo || '';
     },
-    box(rows) { const h = Math.ceil(rows.length / 2) * 6 + 3; P.need(h); doc.setDrawColor(210); doc.setLineWidth(0.2); doc.rect(L, y, W, h); rows.forEach(([k, v], i) => { const cx = L + 3 + (i % 2) * (W / 2), cy = y + 5 + Math.floor(i / 2) * 6; P.font(7.5, false, [110, 116, 128]); doc.text(k, cx, cy); P.font(9.5, true); doc.text(doc.splitTextToSize(str(v) || '—', W / 2 - 30)[0], cx + 24, cy); }); y += h + 4; },
-    sign(labels) { P.need(24); y += 14; const n = labels.length, gap = 10, w = (W - gap * (n - 1)) / n; labels.forEach((l, i) => { const x = L + i * (w + gap); doc.setDrawColor(80); doc.setLineWidth(0.3); doc.line(x, y, x + w, y); P.font(8, false, [60, 66, 80]); doc.text(doc.splitTextToSize(l, w), x + w / 2, y + 4, { align: 'center' }); }); y += 12; },
-    footer(txt) { const n = doc.getNumberOfPages(); for (let i = 1; i <= n; i++) { doc.setPage(i); if (doc.internal.pageSize.getHeight() < 250) continue; P.font(7, false, [140, 146, 156]); doc.text(txt, L, 290); doc.text('Página ' + i + ' de ' + n, R, 290, { align: 'right' }); } }
+    table(cols, rows, o) {
+      o = o || {}; const fs = o.size || 7.8, lh = fs * 0.3528 * 1.3;
+      const th = () => { P.need(9); doc.setFillColor(31, 78, 156); P.font(7.8, true, [255, 255, 255]); const hs = cols.map(([t, w]) => doc.splitTextToSize(t, w - 3)); const h = Math.max(...hs.map(x => x.length)) * lh + 3; doc.rect(L, y, W, h, 'F'); let x = L; hs.forEach((t, j) => { doc.text(t, x + cols[j][1] / 2, y + 1.5 + lh * 0.8, { align: 'center', lineHeightFactor: 1.3 }); x += cols[j][1]; }); y += h; };
+      th();
+      rows.forEach((r, i) => {
+        const cel = r.map((v, j) => { P.font(fs, j === 0 && o.boldFirst); return doc.splitTextToSize(str(v), cols[j][1] - 3); });
+        const h = Math.max(o.minH || 0, Math.max(...cel.map(c => c.length)) * lh + 2.2);
+        if (P.need(h)) th();
+        if (i % 2 && !o.noZebra) { doc.setFillColor(238, 241, 246); doc.rect(L, y, W, h, 'F'); }
+        let x = L; cel.forEach((c, j) => { P.font(fs, j === 0 && o.boldFirst); const al = (o.center || []).includes(j); doc.text(c, al ? x + cols[j][1] / 2 : x + 1.5, y + 1.1 + lh * 0.8, { lineHeightFactor: 1.3, align: al ? 'center' : 'left' }); x += cols[j][1]; });
+        doc.setDrawColor(154, 166, 184); doc.setLineWidth(0.15); doc.rect(L, y, W, h); let xx = L; cols.slice(0, -1).forEach(([, w]) => { xx += w; doc.line(xx, y, xx, y + h); });
+        if (o.after) o.after(i, y, h); y += h;
+      });
+      y += 2;
+    },
+    box(rows) { const h = Math.ceil(rows.length / 2) * 5.6 + 3; P.need(h); doc.setDrawColor(210); doc.setLineWidth(0.2); doc.rect(L, y, W, h); rows.forEach(([k, v], i) => { const cx = L + 3 + (i % 2) * (W / 2), cy = y + 5 + Math.floor(i / 2) * 5.6; P.font(7.5, false, [110, 116, 128]); doc.text(k, cx, cy); let fz = 9.5; P.font(fz, true); while (fz > 7 && doc.getTextWidth(str(v) || '—') > W / 2 - 28) { fz -= 0.5; P.font(fz, true); } doc.text(doc.splitTextToSize(str(v) || '—', W / 2 - 27)[0], cx + 24, cy); }); y += h + 4; },
+    sign(labels) { P.need(22); y += 12; const n = labels.length, gap = 10, w = (W - gap * (n - 1)) / n; labels.forEach((l, i) => { const x = L + i * (w + gap); doc.setDrawColor(80); doc.setLineWidth(0.3); doc.line(x, y, x + w, y); P.font(8, false, [60, 66, 80]); doc.text(doc.splitTextToSize(l, w), x + w / 2, y + 4, { align: 'center' }); }); y += 12; },
+    footer(txt) { const e = S.emp || {}, n = doc.getNumberOfPages(); for (let i = 1; i <= n; i++) { doc.setPage(i); if (doc.internal.pageSize.getHeight() < 250) continue; doc.setDrawColor(154, 166, 184); doc.setLineWidth(0.3); doc.line(L, 285.5, R, 285.5); P.font(7, false, [100, 106, 116]); doc.text((str(e.nome) || 'PREVINE INSTALAÇÃO E MANUTENÇÃO ELÉTRICA LTDA') + ' – CNPJ ' + (e.cnpj || '03.052.261/0001-43'), L, 289); let cd = ''; Object.keys(P.cods || {}).map(Number).sort((a, b) => a - b).forEach(pg => { if (pg <= i) cd = P.cods[pg]; }); doc.text((cd ? cd + ' – ' : '') + 'Página ' + i + ' de ' + n, R, 289, { align: 'right' }); P.font(6.3, false, [150, 156, 166]); doc.text(txt, L, 292.5); } }
   };
   return P;
 }
@@ -2111,38 +2132,47 @@ async function gerarFichas(funcs, nome) {
   if (!funcs.length) return toast('Nenhum funcionário.', 'bad');
   toast('Gerando ficha(s) de EPI…');
   try { await loadPDF(); } catch (_) { return toast('Sem conexão para gerar o PDF.', 'bad'); }
+  const ent = await escolherEntregador(funcs); if (ent === null) return;
   const P = PDFW();
-  funcs.forEach((f, fi) => { if (fi) P.newPage(); fichaInto(P, f); });
+  funcs.forEach((f, fi) => { if (fi) P.newPage(); fichaInto(P, f, ent); });
   P.footer('Gerado em ' + fmtDT(new Date().toISOString()) + ' · registro eletrônico com extração de relatório (NR-06, 6.5.1.1)');
   await salvarPDF(P, nome, funcs.length);
 }
-function fichaInto(P, f) {
+function entregadoresDe(f) { const l = []; kitsPessoa(f).forEach(k => str((k.os || {}).entregadores).split(/\n|;/).map(x => x.trim()).filter(Boolean).forEach(n => { if (!l.some(x => norm(x) === norm(n))) l.push(n); })); if (!l.length && S.emp && S.emp.responsavel) l.push(S.emp.responsavel); return l; }
+function escolherEntregador(funcs) {
+  const ops = []; funcs.forEach(f => entregadoresDe(f).forEach(n => { if (!ops.some(x => norm(x) === norm(n))) ops.push(n); }));
+  if (ops.length <= 1) return Promise.resolve(ops[0] || '');
+  return new Promise(res => {
+    openModal(mtop('Quem assina a entrega?') + `<div class="card"><p class="note" style="margin-top:0">Nome que sai em “Entregue por” na ficha de EPI.</p>${ops.map((n, i) => `<label style="display:flex;gap:8px;align-items:center;color:inherit;font-size:15px;margin:8px 0"><input type="radio" name="ent-q" value="${esc(n)}" ${i ? '' : 'checked'} style="width:18px;height:18px"> ${esc(n)}</label>`).join('')}</div>
+      <div class="actions"><button class="btn ghost" id="ent-x">Cancelar</button><button class="btn primary" id="ent-ok">Gerar ficha</button></div>`);
+    $('#ent-x').onclick = () => { closeModal(); res(null); };
+    $('#ent-ok').onclick = () => { const v = $$('#sheet input[name=ent-q]').find(r => r.checked).value; closeModal(); res(v); };
+  });
+}
+function fichaInto(P, f, entregador) {
   const doc = P.doc;
-  {
-    P.header('FICHA DE CONTROLE DE EPI', 'Registro de fornecimento · NR-06');
-    P.box([['Funcionário', f.nome], ['Matrícula', f.matricula], ['Função', f.funcao], ['Área', [f.area, f.subarea].filter(Boolean).join(' / ')], ['Unidade', f.unidade], ['Admissão', fmtD(f.admissao)], ['Nº calçado', f.tamCalcado], ['Camisa / calça', [f.tamCamisa || f.tamRoupa, f.tamCalca].filter(Boolean).join(' / ')]]);
-    P.text('Declaro que recebi gratuitamente os Equipamentos de Proteção Individual relacionados abaixo, novos e em perfeito estado, e que fui orientado sobre o uso correto, a guarda, a conservação e a higienização de cada um. Comprometo-me a usá-los apenas para a finalidade a que se destinam, a responsabilizar-me pela sua guarda e conservação, a comunicar qualquer alteração que os torne impróprios para uso e a devolvê-los quando substituídos ou no desligamento. Estou ciente de que a recusa injustificada ao uso do EPI constitui ato faltoso (CLT, art. 158, parágrafo único).', { size: 8.2, color: [60, 66, 80], gap: 3 });
-    Object.keys(ADIC).filter(a => f[a]).forEach(a => { const ks = kitsAdic(f).filter(k => k.adicional === a); const eps = ks.flatMap(k => k.epis || []).map(x => S.epis.find(p => p.id === x.epiId)).filter(Boolean);
-      P.text(ADIC[a].toUpperCase() + ': o funcionário está designado para trabalho em altura. Declaro que recebi' + (eps.length ? ' os EPIs ' + eps.map(p => p.nome + (p.ca ? ' (CA ' + p.ca + ')' : '')).join(', ') : ' os EPIs para trabalho em altura') + ', que fui orientado a inspecioná-los antes de cada uso, a ancorar somente em pontos definidos, a manter ao menos um talabarte conectado nos deslocamentos e a retirar de uso o equipamento que retiver uma queda, e que só executarei trabalho em altura com treinamento NR-35 válido, aptidão no ASO, análise de risco e autorização.', { size: 8.5, color: [60, 66, 80], gap: 2 }); });
-    const cols = [['Data', 20], ['EPI', 58], ['CA', 15], ['Qtd', 9], ['Tam.', 11], ['Motivo', 30], ['Assinatura', 37]];
-    const th = () => { P.need(8); doc.setFillColor(20, 33, 61); doc.rect(P.L, P.y, P.W, 6.5, 'F'); P.font(8, true, [255, 255, 255]); let x = P.L; cols.forEach(([t, w]) => { doc.text(t, x + 1.5, P.y + 4.4); x += w; }); P.y += 6.5; };
-    th();
-    const rows = S.ent.filter(e => e.funcionarioId === f.id).sort((a, b) => str(a.data).localeCompare(str(b.data)));
-    if (!rows.length) { P.text('Nenhuma entrega registrada.', { size: 8.5, color: [120, 120, 120] }); }
-    rows.forEach((e, i) => {
-      const h = 10.5;
-      if (P.need(h)) th();
-      if (i % 2) { doc.setFillColor(247, 248, 250); doc.rect(P.L, P.y, P.W, h, 'F'); }
-      let x = P.L; const vals = [fmtD(e.data), str(e.epiNome), str(e.ca), String(num(e.qtd)), str(e.tamanho), MOT[e.motivo] || str(e.motivo)];
-      vals.forEach((v, j) => { P.font(7.8, false, j === 5 && MOTGRP(e.motivo) === 'evit' ? [179, 38, 30] : [30, 33, 40]); const ls = doc.splitTextToSize(v, cols[j][1] - 2.5).slice(0, 2); doc.text(ls, x + 1.5, P.y + 4.2); x += cols[j][1]; });
-      if (e.validadeCA && e.validadeCA < str(e.data).slice(0, 10)) { P.font(6, true, [179, 38, 30]); doc.text('CA VENCIDO', P.L + 20 + 58 + 1.5, P.y + 8.6); }
-      const sig = safeImg(e.assinatura);
-      if (sig) { try { doc.addImage(sig, 'PNG', x + 2, P.y + 0.6, 30, 9.2); } catch (_) {} }
-      else { doc.setDrawColor(170); doc.setLineWidth(0.2); doc.line(x + 2, P.y + 8, x + cols[6][1] - 2, P.y + 8); }
-      doc.setDrawColor(225); doc.setLineWidth(0.1); doc.line(P.L, P.y + h, P.R, P.y + h); P.y += h;
-    });
-    P.sign([str(f.nome) + ' · Funcionário', 'Responsável pela entrega' + (S.emp && S.emp.responsavel ? ' · ' + S.emp.responsavel : '')]);
-  }
+  const { os } = osDa(f.funcao);
+  P.header('FICHA DE CONTROLE DE ENTREGA DE EPI', 'Revisão ' + (str(os.revisao) || '00') + (os.base ? ' – Base: ' + os.base : ' – NR-06'), 'FEPI-' + (str(os.codigo).replace(/^OS-SST-/, '') || norm(f.funcao).replace(/[^a-z0-9]+/g, '-').toUpperCase().slice(0, 24)));
+  P.box([['Nome', f.nome], ['CPF', f.cpf ? fmtCpfF(f.cpf) : '—'], ['Função', f.funcao], ['GHE (PGR)', os.ghe], ['Matrícula', f.matricula], ['Admissão', fmtD(f.admissao)]]);
+  P.section(0, 'Termo de responsabilidade');
+  P.text('Recebi gratuitamente os Equipamentos de Proteção Individual (EPI) descritos abaixo, adequados aos riscos da minha função conforme o PGR, e fui orientado sobre o uso correto, a guarda e a conservação, conforme a NR-06. Comprometo-me a: usá-los apenas para a finalidade a que se destinam; responsabilizar-me pela guarda e conservação; comunicar qualquer dano ou alteração que os torne impróprios para uso; e devolvê-los na troca, na substituição ou no desligamento. Estou ciente de que a recusa injustificada ao uso do EPI constitui ato faltoso (art. 158 da CLT).', { align: 'justify', gap: 2 });
+  Object.keys(ADIC).filter(a => f[a]).forEach(a => { const ks = kitsAdic(f).filter(k => k.adicional === a); const eps = ks.flatMap(k => k.epis || []).map(x => S.epis.find(p => p.id === x.epiId)).filter(Boolean);
+    P.text(ADIC[a].toUpperCase() + ': o funcionário está designado para trabalho em altura. Declaro que recebi' + (eps.length ? ' os EPIs ' + eps.map(p => p.nome + (p.ca ? ' (CA ' + p.ca + ')' : '')).join(', ') : ' os EPIs para trabalho em altura') + ', que fui orientado a inspecioná-los antes de cada uso, a ancorar somente em pontos definidos, a manter ao menos um talabarte conectado nos deslocamentos e a retirar de uso o equipamento que retiver uma queda, e que só executarei trabalho em altura com treinamento NR-35 válido, aptidão no ASO, análise de risco e autorização.', { size: 8.5, color: [60, 66, 80], gap: 2 }); });
+  P.section(0, 'Registro de entregas');
+  const ents = S.ent.filter(e => e.funcionarioId === f.id).sort((a, b) => str(a.data).localeCompare(str(b.data)));
+  const entregues = new Set(ents.map(e => e.epiId));
+  const pend = [...kitEpisF(f).entries()].filter(([id]) => !entregues.has(id)).map(([id, q]) => [S.epis.find(p => p.id === id), q]).filter(x => x[0]);
+  const rows = ents.map(e => ({ q: String(num(e.qtd)).padStart(2, '0'), d: fmtD(e.data), n: str(e.epiNome) + (e.tamanho ? ' · ' + e.tamanho : ''), ca: str(e.ca) + (e.validadeCA && e.validadeCA < str(e.data).slice(0, 10) ? ' (VENCIDO)' : ''), sig: safeImg(e.assinatura) }))
+    .concat(pend.map(([p, q]) => ({ q: String(q).padStart(2, '0'), d: '', n: p.nome, ca: p.ca || '—' })));
+  const vazias = Math.max(3, 14 - rows.length);
+  for (let i = 0; i < vazias; i++) rows.push({ q: '', d: '', n: '', ca: '' });
+  const sigs = rows.map(r => r.sig);
+  P.table([['Qtd.', 13], ['Data da entrega', 20], ['Descrição do EPI', 47], ['C.A.', 15], ['Assinatura do empregado', 33], ['Data da troca / devolução', 20], ['Assinatura', 32]],
+    rows.map(r => [r.q, r.d, r.n, r.ca, '', '', '']), { center: [0, 1, 3], minH: 8.5, noZebra: true, after: (i, yy, h) => { if (sigs[i]) { try { doc.addImage(sigs[i], 'PNG', P.L + 96, yy + 0.5, 31, Math.min(h - 1, 9)); } catch (_) {} } } });
+  P.need(16); P.y += 8;
+  P.font(8.5, true); doc.text('Entregue por:', P.L, P.y); P.font(8.5); doc.text(entregador || '_______________________________________', P.L + 22, P.y);
+  P.font(8.5, true); doc.text('Assinatura:', P.L + 108, P.y); doc.setDrawColor(80); doc.setLineWidth(0.3); doc.line(P.L + 127, P.y + 0.5, P.R, P.y + 0.5);
+  P.y += 6; P.text('Confira a validade do C.A. no momento da entrega.', { size: 7.5, color: [100, 106, 116] });
 }
 async function gerarOS(funcs, nome) {
   if (!funcs.length) return toast('Nenhum funcionário nessa função.', 'bad');
@@ -2157,7 +2187,8 @@ async function gerarOS(funcs, nome) {
 async function gerarAdmissao(f) {
   toast('Gerando documentos de admissão…');
   try { await loadPDF(); } catch (_) { return toast('Sem conexão para gerar o PDF.', 'bad'); }
-  const P = PDFW(); fichaInto(P, f); P.newPage(); const m = osInto(P, f);
+  const ent = await escolherEntregador([f]); if (ent === null) return;
+  const P = PDFW(); fichaInto(P, f, ent); P.newPage(); const m = osInto(P, f);
   P.footer('Admissão · ' + str(f.nome) + ' · gerado em ' + fmtDT(new Date().toISOString()));
   await salvarPDF(P, 'admissao_ficha_epi_e_os_' + norm(f.nome).replace(/[^a-z0-9]+/g, '_') + '.pdf', 2);
   if (m) setTimeout(() => toast('A OS usou o texto-modelo da função. Revise em Cadastros → Kits.', 'bad'), 3600);
@@ -2168,7 +2199,8 @@ async function gerarDocsFunc(f, keys) {
   const regs = keys.filter(k => k.startsWith('tr:')).map(k => S.tr.find(r => r.id === k.slice(3))).filter(Boolean);
   const temP = keys.includes('ficha') || keys.includes('os');
   let P = null, doc, modelo = false;
-  if (temP) { P = PDFW(); doc = P.doc; if (keys.includes('ficha')) fichaInto(P, f); if (keys.includes('os')) { if (keys.includes('ficha')) P.newPage(); modelo = osInto(P, f); } }
+  let ent = ''; if (keys.includes('ficha')) { ent = await escolherEntregador([f]); if (ent === null) return; }
+  if (temP) { P = PDFW(); doc = P.doc; if (keys.includes('ficha')) fichaInto(P, f, ent); if (keys.includes('os')) { if (keys.includes('ficha')) P.newPage(); modelo = osInto(P, f); } }
   else doc = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape' });
   if (P) P.footer(str(f.nome) + ' · gerado em ' + fmtDT(new Date().toISOString()));
   certsComLista(doc, regs, temP);
@@ -2177,32 +2209,42 @@ async function gerarDocsFunc(f, keys) {
   try { await dl.save({ filename: nome, data: doc.output('blob') }); toast(`PDF com ${keys.length} documento(s) pronto.`, 'ok'); } catch (er) { if (!(er && er.code === 'declined')) toast('Não foi possível salvar o PDF.', 'bad'); }
   if (modelo) setTimeout(() => toast('A OS usou o texto-modelo da função. Revise em Cadastros → Kits.', 'bad'), 3600);
 }
+function osCidade() { const e = str((S.emp || {}).endereco); const m = e.match(/([A-Za-zÀ-ú .]+)\s*[\/-]\s*([A-Z]{2})\b/); return /resende/i.test(e) || !e ? 'Resende/RJ' : m ? m[1].trim().split(/,|-/).pop().trim() + '/' + m[2] : ''; }
 function osInto(P, f) {
   const doc = P.doc;
-  {
-    const { os, modelo } = osDa(f.funcao);
-    P.header('ORDEM DE SERVIÇO DE SEGURANÇA', 'NR-01, item 1.4.1, alínea c · CLT, art. 157');
-    P.box([['Funcionário', f.nome], ['Matrícula', f.matricula], ['Função', f.funcao], ['Área / contrato', f.area], ['Data', fmtD(todayStr())], ['Revisão', '00']]);
-    P.text('Esta Ordem de Serviço informa os riscos da função, as medidas de prevenção e os EPIs obrigatórios, para que o trabalhador conheça e cumpra as normas de segurança e saúde no trabalho.', { size: 8.5, color: [60, 66, 80], gap: 2 });
-    P.section(1, 'Descrição das atividades'); P.text(os.atividades);
-    P.section(2, 'Riscos da função'); P.bullets(os.riscos);
-    P.section(3, 'EPIs obrigatórios');
-    const ke = [...kitEpisF(f).entries()].map(([id, q]) => [S.epis.find(p => p.id === id), q]).filter(x => x[0]);
-    if (ke.length) ke.forEach(([p, q]) => P.text(`•  ${p.nome}  —  CA ${p.ca}${num(p.vidaUtilDias) ? '  ·  troca a cada ' + num(p.vidaUtilDias) + ' dias' : ''}${q > 1 ? '  ·  qtd ' + q : ''}`, { size: 9, gap: 0.4 }));
-    else P.text('Nenhum kit de EPI cadastrado para esta função.', { color: [179, 38, 30] });
-    P.y += 1;
-    P.section(4, 'Medidas preventivas'); P.bullets(os.medidas);
-    P.section(5, 'É proibido'); P.bullets(os.proibicoes);
-    let sn = 6;
-    Object.keys(ADIC).filter(a => f[a]).forEach(a => { const o = osAdic(a); P.section(sn++, ADIC[a]); P.text(o.atividades, { size: 9 }); P.text('Riscos:', { size: 9, bold: true }); P.bullets(o.riscos); P.text('Medidas preventivas:', { size: 9, bold: true }); P.bullets(o.medidas); P.text('É proibido:', { size: 9, bold: true }); P.bullets(o.proibicoes); });
-    P.section(sn++, 'Em caso de acidente ou emergência'); P.bullets(os.emergencia);
-    P.section(sn++, 'Obrigações do empregado');
-    P.bullets('Cumprir as disposições legais e regulamentares de segurança e saúde no trabalho, inclusive esta Ordem de Serviço; usar os EPIs fornecidos e zelar pela sua guarda e conservação; submeter-se aos exames médicos previstos nas NR; colaborar com a empresa na aplicação das NR; comunicar imediatamente situações de risco grave e iminente, podendo interromper a atividade (direito de recusa)');
-    P.text('A recusa injustificada ao cumprimento desta Ordem de Serviço ou ao uso dos EPIs constitui ato faltoso, sujeito às penalidades previstas (CLT, art. 158, parágrafo único).', { size: 8.5, bold: true, color: [60, 66, 80], gap: 2 });
-    P.text('Declaro que recebi esta Ordem de Serviço, li (ou a ouvi lida) e compreendi seu conteúdo, comprometendo-me a cumpri-la.', { size: 9 });
-    P.sign([str(f.nome) + ' · Funcionário', 'Responsável SST' + (S.emp && S.emp.responsavel ? ' · ' + S.emp.responsavel : ''), 'Supervisor imediato']);
-    return modelo;
-  }
+  const { os, modelo } = osDa(f.funcao);
+  const base = str(os.base) || 'PGR / PCMSO', cod = str(os.codigo) || 'OS-SST-' + norm(f.funcao).replace(/[^a-z0-9]+/g, '-').toUpperCase().slice(0, 24);
+  P.fs = 8.5; P.header('ORDEM DE SERVIÇO – SST', 'Revisão ' + (str(os.revisao) || '00') + ' – Base: ' + base, cod);
+  P.text('Esta Ordem de Serviço informa o trabalhador sobre os riscos ocupacionais da sua função, as medidas de prevenção adotadas pela empresa e os procedimentos que ele deve seguir, em cumprimento à NR-01, item 1.4.1, alínea "c", e ao art. 157, inciso II, da CLT. As informações de riscos e exames foram extraídas do ' + base + ' da empresa.', { size: 9, gap: 1, align: 'justify' });
+  let sn = 1;
+  P.section(sn++, 'Identificação');
+  P.box([['Nome', f.nome], ['CPF', f.cpf ? fmtCpfF(f.cpf) : '—'], ['Função', f.funcao], ['Setor', os.setor || f.area], ['GHE (PGR)', os.ghe], ['Local', os.local || f.unidade || f.area], ['Matrícula', f.matricula], ['Data', fmtD(todayStr())]]);
+  P.section(sn++, 'Descrição das atividades');
+  const at = str(os.atividades).split(/\n/).map(x => x.trim()).filter(Boolean);
+  if (at.length > 1) { if (!/^[-•]/.test(at[0]) && /:$/.test(at[0])) { P.text(at.shift(), { gap: 0.5 }); } P.bullets(at.map(x => x.replace(/^[-•]\s*/, '')).join('\n')); } else P.text(at[0] || '');
+  P.section(sn++, 'Riscos ocupacionais e medidas de controle' + (os.ghe ? ' (PGR – ' + str(os.ghe).split(/\s*[–-]\s*/)[0] + ')' : ''));
+  const rl = str(os.riscos).split(/\n/).map(x => x.trim()).filter(Boolean), tab = rl.filter(x => x.includes('|')).map(x => x.split('|').map(c => c.trim())), sol = rl.filter(x => !x.includes('|'));
+  if (tab.length) P.table([['Tipo', 20], ['Perigo / fonte', 42], ['Possíveis lesões ou agravos', 38], ['Nível', 19], ['Medidas de controle', 61]], tab.map(r => r.concat(['', '', '', '', '']).slice(0, 5)), { boldFirst: true, center: [3] });
+  if (sol.length && tab.length) sol.forEach(t => P.text(t, { size: 8, color: [80, 86, 96], gap: 0.5 }));
+  else if (sol.length) P.bullets(sol.join('\n'));
+  P.section(sn++, 'EPI obrigatórios');
+  const ke = [...kitEpisF(f).entries()].map(([id, q]) => [S.epis.find(p => p.id === id), q]).filter(x => x[0]);
+  if (ke.length) P.table([['EPI', 100], ['C.A.', 25], ['Qtd.', 20], ['Troca', 35]], ke.map(([p, q]) => [p.nome, p.ca || '—', String(q), num(p.vidaUtilDias) ? 'a cada ' + num(p.vidaUtilDias) + ' dias' : 'quando danificado']), { center: [1, 2, 3] });
+  else P.text('Nenhum kit de EPI cadastrado para esta função.', { color: [179, 38, 30] });
+  P.text(str(os.uniforme) || 'O EPI deve ser usado apenas para a finalidade a que se destina, guardado e conservado pelo empregado, e trocado sempre que estiver danificado.', { size: 8.5, gap: 1 });
+  if (str(os.exames).trim()) { P.section(sn++, 'Exames médicos (PCMSO)'); P.text(os.exames, { align: 'justify' }); }
+  if (str(os.treinamentos).trim()) { P.section(sn++, 'Treinamentos exigidos'); P.bullets(os.treinamentos); }
+  P.section(sn++, 'Procedimentos de segurança'); P.bullets(os.medidas);
+  P.section(sn++, 'Proibições'); P.bullets(os.proibicoes);
+  Object.keys(ADIC).filter(a => f[a]).forEach(a => { const o = osAdic(a); P.section(sn++, ADIC[a]); P.text(o.atividades, { size: 9 }); P.text('Riscos:', { size: 9, bold: true }); P.bullets(o.riscos); P.text('Medidas preventivas:', { size: 9, bold: true }); P.bullets(o.medidas); P.text('É proibido:', { size: 9, bold: true }); P.bullets(o.proibicoes); });
+  P.section(sn++, 'Emergências e acidentes'); P.bullets(os.emergencia);
+  P.section(sn++, 'Direitos e deveres do empregado');
+  P.text('O empregado deve cumprir as disposições legais e regulamentares de SST e esta Ordem de Serviço, usar o EPI fornecido e submeter-se aos exames médicos (art. 158 da CLT e NR-01). A recusa injustificada em cumprir esta OS ou em usar o EPI constitui ato faltoso. O empregado pode interromper sua atividade sempre que constatar situação de trabalho que, a seu ver, envolva risco grave e iminente para sua vida e saúde, informando imediatamente o superior hierárquico (NR-01, item 1.4.3).', { align: 'justify' });
+  P.need(40); P.section(sn++, 'Ciência');
+  P.text('Declaro que recebi esta Ordem de Serviço, li e compreendi seu conteúdo, recebi orientação sobre os riscos da minha função e as medidas de prevenção, e me comprometo a cumpri-la.', { align: 'justify', gap: 3 });
+  P.text((osCidade() ? osCidade() + ', ' : '') + '______ de ____________________ de ________.', { gap: 0 });
+  P.sign([str(f.nome) + '\nEmpregado' + (f.cpf ? ' – CPF ' + fmtCpfF(f.cpf) : ''), (str(os.assinante) || (S.emp && S.emp.responsavel) || 'Responsável pela empresa') + '\n' + (str(os.assinanteCargo) || 'Responsável pela empresa')]);
+  P.fs = 9; return modelo;
 }
 $('#u-docs').onclick = () => {
   const ativos = S.func.filter(f => f.ativo !== false).sort((a, b) => str(a.nome).localeCompare(str(b.nome), 'pt'));
