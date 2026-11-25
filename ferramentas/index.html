@@ -2154,7 +2154,7 @@ function fichaInto(P, f, entregador) {
   {
     const { os } = osDa(f.funcao);
     P.header('FICHA DE CONTROLE DE EPI', 'Revisão ' + (str(os.revisao) || '00') + ' – Registro de fornecimento · NR-06', 'FEPI-' + (str(os.codigo).replace(/^OS-SST-/, '') || norm(f.funcao).replace(/[^a-z0-9]+/g, '-').toUpperCase().slice(0, 24)));
-    P.box([['Funcionário', f.nome], ['Matrícula', f.matricula], ['Função', f.funcao], ['Área', [f.area, f.subarea].filter(Boolean).join(' / ')], ['Unidade', f.unidade], ['Admissão', fmtD(f.admissao)], ['Nº calçado', f.tamCalcado], ['Camisa / calça', [f.tamCamisa || f.tamRoupa, f.tamCalca].filter(Boolean).join(' / ')]]);
+    P.box([['Funcionário', f.nome], ['CPF', f.cpf ? fmtCpfF(f.cpf) : '—'], ['Função', f.funcao], ['Área', [f.area, f.subarea].filter(Boolean).join(' / ')], ['Unidade', f.unidade], ['Admissão', fmtD(f.admissao)], ['Nº calçado', f.tamCalcado], ['Camisa / calça', [f.tamCamisa || f.tamRoupa, f.tamCalca].filter(Boolean).join(' / ')]]);
     P.text('Declaro que recebi gratuitamente os Equipamentos de Proteção Individual relacionados abaixo, novos e em perfeito estado, e que fui orientado sobre o uso correto, a guarda, a conservação e a higienização de cada um. Comprometo-me a usá-los apenas para a finalidade a que se destinam, a responsabilizar-me pela sua guarda e conservação, a comunicar qualquer alteração que os torne impróprios para uso e a devolvê-los quando substituídos ou no desligamento. Estou ciente de que a recusa injustificada ao uso do EPI constitui ato faltoso (CLT, art. 158, parágrafo único).', { size: 8.2, color: [60, 66, 80], gap: 3 });
     Object.keys(ADIC).filter(a => f[a]).forEach(a => { const ks = kitsAdic(f).filter(k => k.adicional === a); const eps = ks.flatMap(k => k.epis || []).map(x => S.epis.find(p => p.id === x.epiId)).filter(Boolean);
       P.text(ADIC[a].toUpperCase() + ': o funcionário está designado para trabalho em altura. Declaro que recebi' + (eps.length ? ' os EPIs ' + eps.map(p => p.nome + (p.ca ? ' (CA ' + p.ca + ')' : '')).join(', ') : ' os EPIs para trabalho em altura') + ', que fui orientado a inspecioná-los antes de cada uso, a ancorar somente em pontos definidos, a manter ao menos um talabarte conectado nos deslocamentos e a retirar de uso o equipamento que retiver uma queda, e que só executarei trabalho em altura com treinamento NR-35 válido, aptidão no ASO, análise de risco e autorização.', { size: 8.5, color: [60, 66, 80], gap: 2 }); });
@@ -2175,7 +2175,9 @@ function fichaInto(P, f, entregador) {
       else { doc.setDrawColor(170); doc.setLineWidth(0.2); doc.line(x + 2, P.y + 8, x + cols[6][1] - 2, P.y + 8); }
       doc.setDrawColor(225); doc.setLineWidth(0.1); doc.line(P.L, P.y + h, P.R, P.y + h); P.y += h;
     });
-    P.sign([str(f.nome) + ' · Funcionário', 'Responsável pela entrega' + (entregador ? ' · ' + entregador : S.emp && S.emp.responsavel ? ' · ' + S.emp.responsavel : '')]);
+    const cpfL = c => 'CPF ' + (c ? fmtCpfF(c) : '_____._____._____-____'), ent = entregador || (S.emp && S.emp.responsavel) || '';
+    const pe = ent && S.func.find(x => norm(x.nome) === norm(ent));
+    P.sign([str(f.nome) + ' · Funcionário\n' + cpfL(f.cpf), 'Responsável pela entrega' + (ent ? ' · ' + ent : '') + '\n' + cpfL(pe && pe.cpf)]);
   }
 }
 async function gerarOS(funcs, nome) {
