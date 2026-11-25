@@ -1023,6 +1023,9 @@ function renderEmp() {
     <div class="grid2"><div><label for="em-tn">Nome</label><input id="em-tn" value="${esc(e.tstNome)}"></div><div><label for="em-tr">Registro</label><input id="em-tr" value="${esc(e.tstRegistro)}" placeholder="Ex.: Registro MTE 000000"></div></div>
     <label>Assinatura do TST (sai sozinha nos certificados e nas listas de presença)</label><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><div id="em-tsv" style="width:180px;height:60px;border:1px dashed #ccd;border-radius:8px;display:grid;place-items:center;background:#fff">${e.tstAssin ? `<img src="${e.tstAssin}" style="max-width:170px;max-height:54px">` : '<span class="note">Sem assinatura</span>'}</div><button class="btn ghost sm" id="em-tsb" type="button">Enviar foto da assinatura</button>${e.tstAssin ? '<button class="btn ghost sm" id="em-tsr" type="button">Remover</button>' : ''}<input type="file" id="em-tsf" accept="image/*" hidden></div>
     <p class="note" style="margin-top:2px">Foto da assinatura em papel branco, só o rabisco, bem recortada. O fundo branco fica transparente.</p>
+    </div><div class="card"><span class="lbl">Instrutor e responsável técnico padrão (sai nos certificados quando o treinamento não indicar outro)</span>
+    <div class="grid2"><div><label for="em-in">Nome</label><input id="em-in" value="${esc(e.instrutorNome)}"></div><div><label for="em-iq">Qualificação</label><input id="em-iq" value="${esc(e.instrutorQualif)}" placeholder="Ex.: Eng. Eletricista · CREA 000000"></div></div>
+    <label>Assinatura do instrutor padrão</label><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><div id="em-isv" style="width:180px;height:60px;border:1px dashed #ccd;border-radius:8px;display:grid;place-items:center;background:#fff">${e.instrutorAssin ? `<img src="${e.instrutorAssin}" style="max-width:170px;max-height:54px">` : '<span class="note">Sem assinatura</span>'}</div><button class="btn ghost sm" id="em-isb" type="button">Enviar foto da assinatura</button><input type="file" id="em-isf" accept="image/*" hidden></div>
     <label for="em-j">Jornada diária de treinamento (horas)</label><input id="em-j" type="number" min="1" max="12" value="${num(e.jornadaTreino) || 8}" style="max-width:140px">
     <p class="note">Usada para não marcar dois treinamentos no mesmo dia além da carga diária.</p></div>
     <div class="actions"><button class="btn primary" id="em-s">Salvar dados da empresa</button></div>`;
@@ -1030,12 +1033,14 @@ function renderEmp() {
   $('#em-up').onclick = () => $('#em-file').click();
   $('#em-file').onchange = async ev => { const f = ev.target.files[0]; if (!f) return; try { EMP_LOGO = await lerLogo(f); prev(EMP_LOGO); toast('Logo carregado. Toque em Salvar.', 'ok'); } catch (er) { toast(er.message, 'bad'); } };
   const rm = $('#em-rm'); if (rm) rm.onclick = () => { EMP_LOGO = { logo: '', logoW: 0, logoH: 0 }; prev(null); toast('Logo será removido ao salvar.'); };
+  let INS_SIG; $('#em-isb').onclick = () => $('#em-isf').click();
+  $('#em-isf').onchange = async ev => { const f = ev.target.files[0]; if (!f) return; try { INS_SIG = await sigPngDeArquivo(f); $('#em-isv').innerHTML = `<img src="${INS_SIG}" style="max-width:170px;max-height:54px">`; toast('Assinatura carregada. Toque em Salvar.', 'ok'); } catch (er) { toast('Não foi possível ler a imagem.', 'bad'); } };
   let TST_SIG; $('#em-tsb').onclick = () => $('#em-tsf').click();
   $('#em-tsf').onchange = async ev => { const f = ev.target.files[0]; if (!f) return; try { TST_SIG = await sigPngDeArquivo(f); $('#em-tsv').innerHTML = `<img src="${TST_SIG}" style="max-width:170px;max-height:54px">`; toast('Assinatura carregada. Toque em Salvar.', 'ok'); } catch (er) { toast('Não foi possível ler a imagem.', 'bad'); } };
   if ($('#em-tsr')) $('#em-tsr').onclick = () => { TST_SIG = ''; $('#em-tsv').innerHTML = '<span class="note">Sem assinatura</span>'; toast('A assinatura será removida ao salvar.'); };
   $('#em-s').onclick = async () => {
     if (!guardWrite()) return;
-    const d = Object.assign({}, S.emp || {}, { nome: $('#em-n').value.trim(), cnpj: $('#em-c').value.trim(), responsavel: $('#em-r').value.trim(), endereco: $('#em-e').value.trim(), tstNome: $('#em-tn').value.trim(), tstRegistro: $('#em-tr').value.trim(), jornadaTreino: num($('#em-j').value) || 8 }, EMP_LOGO || {}, TST_SIG !== undefined ? { tstAssin: TST_SIG } : {});
+    const d = Object.assign({}, S.emp || {}, { nome: $('#em-n').value.trim(), cnpj: $('#em-c').value.trim(), responsavel: $('#em-r').value.trim(), endereco: $('#em-e').value.trim(), tstNome: $('#em-tn').value.trim(), tstRegistro: $('#em-tr').value.trim(), jornadaTreino: num($('#em-j').value) || 8 }, EMP_LOGO || {}, TST_SIG !== undefined ? { tstAssin: TST_SIG } : {}, { instrutorNome: $('#em-in').value.trim(), instrutorQualif: $('#em-iq').value.trim() }, INS_SIG !== undefined ? { instrutorAssin: INS_SIG } : {});
     const b = $('#em-s'); b.disabled = true;
     try { await db.doc('config/empresa').set(d); document.activeElement && document.activeElement.blur(); toast('Dados da empresa salvos.', 'ok'); } catch (er) { handleErr(er); }
     b.disabled = false;
@@ -2291,10 +2296,12 @@ function openTurma() {
     <div class="grid3"><div><label for="tu-i">Data de início *</label><input type="date" id="tu-i" value="${todayStr()}"></div><div><label for="tu-f">Data de término *</label><input type="date" id="tu-f" value="${todayStr()}"></div><div><label for="tu-ch">Carga horária (h)</label><input id="tu-ch" type="number" min="1"></div></div>
     <label for="tu-l">Local de realização *</label><input id="tu-l" value="${esc(e.endereco || '')}" placeholder="Ex.: Sala de treinamento · Volta Redonda/RJ"></div>
     <div class="card"><span class="lbl">Instrutor e responsável técnico</span>
-    <div class="grid2"><div><label for="tu-in">Instrutor *</label><input id="tu-in"></div><div><label for="tu-iq">Qualificação do instrutor *</label><input id="tu-iq" placeholder="Ex.: Eng. Eletricista · CREA 000000"></div></div>
+    <label style="display:flex;gap:8px;align-items:center;color:inherit;font-size:15px"><input type="checkbox" id="tu-alt"> Alterar instrutor / responsáveis neste treinamento</label><p class="note" id="tu-padr" style="margin:2px 0 0">Se não marcar, o certificado sai com o padrão da empresa: ${esc(e.instrutorNome || '(preencha em Cadastros → Empresa)')}${e.instrutorQualif ? ' · ' + esc(e.instrutorQualif) : ''} e TST ${esc(e.tstNome || '—')}.</p>
+    <div id="tu-altbox" class="hidden">
+    <div class="grid2"><div><label for="tu-in">Instrutor *</label><input id="tu-in" value="${esc(e.instrutorNome || '')}"></div><div><label for="tu-iq">Qualificação do instrutor *</label><input id="tu-iq" value="${esc(e.instrutorQualif || '')}" placeholder="Ex.: Eng. Eletricista · CREA 000000"></div></div>
     <label style="display:flex;gap:8px;align-items:center;color:inherit;font-size:15px;margin-top:10px"><input type="checkbox" id="tu-same" checked> O instrutor também é o responsável técnico</label>
     <div id="tu-rtbox" class="hidden"><div class="grid2"><div><label for="tu-rn">Responsável técnico</label><input id="tu-rn"></div><div><label for="tu-rq">Qualificação do RT</label><input id="tu-rq"></div></div></div>
-    <div class="grid2"><div><label for="tu-tn">Técnico de Segurança do Trabalho</label><input id="tu-tn" value="${esc(e.tstNome || '')}"></div><div><label for="tu-tr">Registro do TST</label><input id="tu-tr" value="${esc(e.tstRegistro || '')}" placeholder="Ex.: Registro MTE 000000"></div></div></div>
+    <div class="grid2"><div><label for="tu-tn">Técnico de Segurança do Trabalho</label><input id="tu-tn" value="${esc(e.tstNome || '')}"></div><div><label for="tu-tr">Registro do TST</label><input id="tu-tr" value="${esc(e.tstRegistro || '')}" placeholder="Ex.: Registro MTE 000000"></div></div></div></div>
     <div class="card"><span class="lbl">Participantes</span>
     <div class="srow"><input id="tu-q" placeholder="Buscar funcionário pelo nome ou matrícula" autocomplete="off"><button class="qbtn" type="button" id="tu-ext" title="Adicionar pessoa sem cadastro" aria-label="Adicionar pessoa sem cadastro">+</button></div>
     <div id="tu-res" class="results"></div><div id="tu-parts" style="margin-top:8px"></div>
@@ -2303,6 +2310,7 @@ function openTurma() {
   const info = () => { const t = S.tt.find(x => x.id === $('#tu-t').value); $('#tu-info').innerHTML = t ? `${esc(t.norma || '')} · ${num(t.validadeMeses) ? 'validade ' + num(t.validadeMeses) + ' meses' : 'sem validade'} · ${str(t.conteudo).split(/\n/).filter(Boolean).length} itens no conteúdo programático` : ''; if (t) $('#tu-ch').value = num(t.cargaHoraria); };
   $('#tu-t').onchange = info;
   $('#tu-same').onchange = e2 => $('#tu-rtbox').classList.toggle('hidden', e2.target.checked);
+  $('#tu-alt').onchange = e2 => { $('#tu-altbox').classList.toggle('hidden', !e2.target.checked); $('#tu-padr').classList.toggle('hidden', e2.target.checked); };
   const drawParts = () => { $('#tu-parts').innerHTML = TU.parts.map((p, i) => `<div class="sel"><div class="main"><input value="${esc(p.nome)}" data-pn="${i}" aria-label="Nome completo" style="padding:7px 9px"><div class="t2" style="margin-top:3px">${p.funcionarioId ? esc([p.matricula, p.funcao].filter(Boolean).join(' · ')) : 'Sem cadastro'}</div></div><button class="x" data-prm="${i}" aria-label="Remover">×</button></div>`).join('') || '<div class="note">Nenhum participante.</div>'; };
   const drawRes = () => { const q = norm($('#tu-q').value); $('#tu-res').innerHTML = !q ? '' : S.func.filter(f => f.ativo !== false && !TU.parts.some(p => p.funcionarioId === f.id) && matchFunc(f, q)).slice(0, 8).map(f => `<button class="res" data-padd="${esc(f.id)}"><span><b>${esc(f.nome)}</b> <span class="note">${esc([f.matricula, f.funcao].filter(Boolean).join(' · '))}</span></span><span class="badge b-ok">Adicionar +</span></button>`).join('') || '<div class="note">Ninguém encontrado. Use “+” para adicionar sem cadastro.</div>'; };
   $('#tu-q').addEventListener('input', drawRes);
@@ -2318,6 +2326,7 @@ function openTurma() {
   const dados = () => {
     const t = S.tt.find(x => x.id === $('#tu-t').value);
     const d = { t, inicio: $('#tu-i').value, termino: $('#tu-f').value, ch: num($('#tu-ch').value), local: $('#tu-l').value.trim(), instrutor: $('#tu-in').value.trim(), instrutorQualif: $('#tu-iq').value.trim(), same: $('#tu-same').checked, rt: $('#tu-rn').value.trim(), rtQualif: $('#tu-rq').value.trim(), tst: $('#tu-tn').value.trim(), tstRegistro: $('#tu-tr').value.trim() };
+    if (!$('#tu-alt').checked) { const ep = S.emp || {}; Object.assign(d, { instrutor: str(ep.instrutorNome), instrutorQualif: str(ep.instrutorQualif), same: true, tst: str(ep.tstNome), tstRegistro: str(ep.tstRegistro), instrutorAssin: str(ep.instrutorAssin), tstAssin: str(ep.tstAssin) }); if (!d.instrutor) { toast('Preencha o instrutor padrão em Cadastros → Empresa, ou marque "Alterar instrutor".', 'bad'); return null; } }
     if (d.same) { d.rt = d.instrutor; d.rtQualif = d.instrutorQualif; }
     const err = !t ? 'Escolha o tipo de treinamento.' : !d.inicio || !d.termino ? 'Informe as datas.' : d.termino < d.inicio ? 'A data de término é anterior ao início.' : !d.ch ? 'Informe a carga horária.' : !d.local ? 'Informe o local.' : !d.instrutor || !d.instrutorQualif ? 'Informe o instrutor e a qualificação.' : !d.rt ? 'Informe o responsável técnico.' : !TU.parts.length ? 'Adicione ao menos um participante.' : TU.parts.some(p => p.nome.trim().split(/\s+/).length < 2) ? 'Escreva o nome completo de cada participante.' : '';
     if (err) { toast(err, 'bad'); return null; }
@@ -2332,7 +2341,7 @@ function openTurma() {
     try {
       for (const [i, p] of TU.parts.entries()) {
         const r = { turma, funcionarioId: p.funcionarioId, nome: p.nome.trim(), matricula: p.matricula, funcao: p.funcao, tipoId: d.t.id, tipoNome: str(d.t.nome), norma: str(d.t.norma), cargaHoraria: d.ch, conteudo: str(d.t.conteudo),
-          inicio: d.inicio, termino: d.termino, validade: addMonths(d.termino, num(d.t.validadeMeses)), local: d.local, instrutor: d.instrutor, instrutorQualif: d.instrutorQualif, rt: d.rt, rtQualif: d.rtQualif, tst: d.tst, tstRegistro: d.tstRegistro,
+          inicio: d.inicio, termino: d.termino, validade: addMonths(d.termino, num(d.t.validadeMeses)), local: d.local, instrutor: d.instrutor, instrutorQualif: d.instrutorQualif, rt: d.rt, rtQualif: d.rtQualif, tst: d.tst, tstRegistro: d.tstRegistro, instrutorAssin: str(d.instrutorAssin), tstAssin: str(d.tstAssin),
           codigo: 'T' + d.termino.replace(/-/g, '').slice(2) + '-' + turma.slice(-4) + '-' + String(i + 1).padStart(2, '0'), criadoEm: new Date().toISOString(), por: S.uid || '' };
         await db.collection('treinamentos').doc().set(r); regs.push(r); await sleep(50);
       }
@@ -2386,7 +2395,7 @@ function openPlano(fid) {
     <div id="pl-rows">${grp('o', 'Obrigatórios para ' + (fu || 'a função'))}${grp('e', 'Às vezes (' + (fu || 'função') + ')')}${grp('x', 'Outros treinamentos')}</div>
     <div class="card"><span class="lbl">Instrutor, responsável técnico e TST</span>
     <label for="pl-l">Local *</label><input id="pl-l" value="${esc(e.endereco || '')}">
-    <div class="grid2"><div><label for="pl-in">Instrutor padrão *</label><input id="pl-in"></div><div><label for="pl-iq">Qualificação *</label><input id="pl-iq" placeholder="Ex.: Eng. Eletricista · CREA 000000"></div></div>
+    <div class="grid2"><div><label for="pl-in">Instrutor padrão *</label><input id="pl-in" value="${esc(e.instrutorNome || '')}"></div><div><label for="pl-iq">Qualificação *</label><input id="pl-iq" value="${esc(e.instrutorQualif || '')}" placeholder="Ex.: Eng. Eletricista · CREA 000000"></div></div>
     <label style="display:flex;gap:8px;align-items:center;color:inherit;font-size:15px;margin-top:10px"><input type="checkbox" id="pl-same" checked> O instrutor também é o responsável técnico</label>
     <div id="pl-rtbox" class="hidden"><div class="grid2"><div><label for="pl-rn">Responsável técnico</label><input id="pl-rn"></div><div><label for="pl-rq">Qualificação do RT</label><input id="pl-rq"></div></div></div>
     <div class="grid2"><div><label for="pl-tn">Técnico de Segurança do Trabalho</label><input id="pl-tn" value="${esc(e.tstNome || '')}"></div><div><label for="pl-tr">Registro do TST</label><input id="pl-tr" value="${esc(e.tstRegistro || '')}"></div></div></div>
@@ -2467,8 +2476,8 @@ function certSigs(r) {
   const e = S.emp || {};
   const L = [[r.nome, 'Participante', r.assinAluno && r.assinAluno.img]];
   if (r.tst && norm(r.tst) !== norm(r.instrutor) && norm(r.tst) !== norm(r.rt)) L.push([r.tst, 'Técnico de Segurança do Trabalho' + (r.tstRegistro ? ' · ' + r.tstRegistro : ''), r.tstAssin || e.tstAssin]);
-  if (r.rt && norm(r.rt) !== norm(r.instrutor)) L.push([r.rt, 'Responsável Técnico · ' + str(r.rtQualif), norm(r.rt) === norm(r.tst) ? (r.tstAssin || e.tstAssin) : '']);
-  L.push([r.instrutor, (norm(r.rt) === norm(r.instrutor) ? 'Instrutor e Responsável Técnico · ' : 'Instrutor · ') + str(r.instrutorQualif), r.instrutorAssin]);
+  if (r.rt && norm(r.rt) !== norm(r.instrutor)) L.push([r.rt, 'Responsável Técnico · ' + str(r.rtQualif), norm(r.rt) === norm(r.tst) ? (r.tstAssin || e.tstAssin) : (e.instrutorAssin && norm(r.rt) === norm(e.instrutorNome) ? e.instrutorAssin : '')]);
+  L.push([r.instrutor, (norm(r.rt) === norm(r.instrutor) ? 'Instrutor e Responsável Técnico · ' : 'Instrutor · ') + str(r.instrutorQualif), r.instrutorAssin || (e.instrutorAssin && norm(r.instrutor) === norm(e.instrutorNome) ? e.instrutorAssin : '')]);
   return L;
 }
 function certMoldura(doc, W, H, forte) {

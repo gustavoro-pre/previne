@@ -675,9 +675,11 @@ function editCurso(id) {
     <label for="ce-t">Tipo de treinamento (vai no certificado) *</label><select id="ce-t"><option value="">Escolha…</option>${S.tt.slice().sort((a, b) => str(a.nome).localeCompare(str(b.nome), 'pt')).map(t => `<option value="${esc(t.id)}" ${c && c.tipoId === t.id ? 'selected' : ''}>${esc(t.nome)}</option>`).join('')}</select>
     <div class="grid3"><div><label for="ce-ch">Carga horária (h) *</label><input id="ce-ch" type="number" min="1" value="${c ? num(c.cargaHoraria) : ''}"></div><div><label for="ce-mh">Tempo mínimo de estudo (h)</label><input id="ce-mh" type="number" min="0" step="0.5" value="${c ? num(c.minHoras) : ''}" placeholder="0 = não exige"></div><div><label for="ce-pz">Prazo (dias)</label><input id="ce-pz" type="number" min="0" value="${c ? num(c.prazoDias) || '' : ''}" placeholder="opcional"></div></div>
     <label style="display:flex;gap:8px;align-items:center;color:inherit;font-size:15px;margin-top:12px"><input type="checkbox" id="ce-pr" ${c && c.pratica ? 'checked' : ''}> Tem parte prática presencial (o certificado só sai depois que ela for marcada)</label>
+    <label style="display:flex;gap:8px;align-items:center;color:inherit;font-size:15px;margin-top:12px"><input type="checkbox" id="ce-alt" ${c && c.instrPadrao === false ? 'checked' : ''}> Alterar instrutor / responsável técnico deste curso</label><p class="note" id="ce-padr" style="margin:2px 0 0">Se não marcar, o certificado sai com o padrão da empresa: ${esc((S.emp || {}).instrutorNome || '(preencha em Cadastros → Empresa)')}${(S.emp || {}).instrutorQualif ? ' · ' + esc(S.emp.instrutorQualif) : ''}, e TST ${esc((S.emp || {}).tstNome || '—')}.</p>
+    <div id="ce-altbox" ${c && c.instrPadrao === false ? '' : 'style="display:none"'}>
     <div class="grid2"><div><label for="ce-in">Instrutor / responsável técnico *</label><input id="ce-in" value="${v('instrutor')}"></div><div><label for="ce-iq">Qualificação *</label><input id="ce-iq" value="${v('instrutorQualif')}" placeholder="Ex.: Eng. Eletricista · CREA 000000"></div></div>
     <label>Assinatura do instrutor (sai sozinha nos certificados)</label><div style="display:flex;gap:10px;align-items:center"><div id="ce-sigv" style="width:180px;height:60px;border:1px dashed #ccd;border-radius:8px;display:grid;place-items:center;background:#fff">${c && c.instrutorAssin ? `<img src="${c.instrutorAssin}" style="max-width:170px;max-height:54px">` : '<span class="note">sem imagem</span>'}</div><input type="file" id="ce-sig" accept="image/*" style="padding:8px;flex:1"></div>
-    <p class="note" style="margin-top:2px">Foto da assinatura em papel branco, bem recortada. O fundo branco fica transparente.</p>
+    <p class="note" style="margin-top:2px">Foto da assinatura em papel branco, bem recortada. O fundo branco fica transparente.</p></div>
     <label for="ce-d">Descrição para o aluno</label><textarea id="ce-d" rows="2">${v('descricao')}</textarea></div>
     <div id="ce-mods"></div><button class="btn ghost" id="ce-addm" type="button" style="width:100%">+ Módulo</button>
     <div class="actions">${c ? `<button class="btn danger" id="ce-at" type="button">${c.ativo === false ? 'Reativar' : 'Desativar'}</button>` : ''}<button class="btn ghost" data-close>Cancelar</button><button class="btn primary" id="ce-save">Salvar curso</button></div>`);
@@ -711,12 +713,15 @@ function editCurso(id) {
     if (d.cmup != null) { const i = +d.cmup; [CU.mods[i - 1], CU.mods[i]] = [CU.mods[i], CU.mods[i - 1]]; draw(); } });
   $('#ce-addm').onclick = () => { CU.mods.push({ id: novoId(), titulo: 'Módulo ' + (CU.mods.length + 1), mats: [], quiz: null, quizTxt: '', min: 70, tent: 3 }); draw(); };
   const at = $('#ce-at'); if (at) at.onclick = async () => { if (!guardWrite()) return; try { await db.doc('cursos/' + c.id).update({ ativo: c.ativo === false }); closeModal(); toast('Feito.', 'ok'); } catch (e) { handleErr(e); } };
+  $('#ce-alt').onchange = ev => { $('#ce-altbox').style.display = ev.target.checked ? '' : 'none'; $('#ce-padr').style.display = ev.target.checked ? 'none' : ''; }; if ($('#ce-alt').checked) $('#ce-padr').style.display = 'none';
   $('#ce-sig').onchange = async () => { const f = $('#ce-sig').files[0]; if (!f) return; try { CU.sig = await assinaturaPng(f); $('#ce-sigv').innerHTML = `<img src="${CU.sig}" style="max-width:170px;max-height:54px">`; } catch (e) { toast('Não foi possível ler a imagem.', 'bad'); } };
   $('#ce-save').onclick = async () => {
     if (!guardWrite()) return;
     const d = { instrutorAssin: CU.sig !== undefined ? CU.sig : str(c && c.instrutorAssin), nome: $('#ce-n').value.trim(), tipoId: $('#ce-t').value, cargaHoraria: num($('#ce-ch').value), minHoras: num($('#ce-mh').value), prazoDias: num($('#ce-pz').value), pratica: $('#ce-pr').checked, instrutor: $('#ce-in').value.trim(), instrutorQualif: $('#ce-iq').value.trim(), descricao: $('#ce-d').value.trim() };
     if (!d.nome || !d.tipoId || !d.cargaHoraria) return toast('Preencha nome, tipo de treinamento e carga horária.', 'bad');
-    if (!d.instrutor || !d.instrutorQualif) return toast('Informe o instrutor/responsável técnico e a qualificação (vão no certificado).', 'bad');
+    d.instrPadrao = !$('#ce-alt').checked;
+    if (!d.instrPadrao && (!d.instrutor || !d.instrutorQualif)) return toast('Informe o instrutor/responsável técnico e a qualificação (vão no certificado).', 'bad');
+    if (d.instrPadrao && !str((S.emp || {}).instrutorNome)) return toast('Preencha o instrutor padrão em Cadastros → Empresa, ou marque "Alterar instrutor".', 'bad');
     for (const [i, m] of CU.mods.entries()) {
       if (!str(m.titulo).trim()) return toast(`Módulo ${i + 1}: falta o título.`, 'bad');
       if (!(m.mats || []).length) return toast(`Módulo ${i + 1}: adicione ao menos um material.`, 'bad');
@@ -771,12 +776,12 @@ async function tAutoCert() {
     const c = T.cursos.find(x => x.id === m.cursoId); if (!c || m.certId || !m.concluidoEm || (c.pratica && !m.praticaOk) || tCertFeito.has(m.id)) continue;
     const t = S.tt.find(x => x.id === c.tipoId); const f = funcDe(m.funcionarioId); if (!t || !f) continue;
     tCertFeito.add(m.id);
-    const termino = str(m.praticaEm || m.concluidoEm).slice(0, 10), inicio = str(m.inicioEm || m.liberadoEm || termino).slice(0, 10); const id = 'ead_' + m.id; const e = S.emp || {};
+    const termino = str(m.praticaEm || m.concluidoEm).slice(0, 10), inicio = str(m.inicioEm || m.liberadoEm || termino).slice(0, 10); const id = 'ead_' + m.id; const e = S.emp || {}; const pad = c.instrPadrao !== false && !!str(e.instrutorNome);
     try {
       await db.doc('treinamentos/' + id).set({ turma: 'EAD-' + c.id.slice(0, 6).toUpperCase(), origem: 'ead', cursoId: c.id, funcionarioId: f.id, nome: str(f.nome).trim(), matricula: str(f.matricula), funcao: str(f.funcao), tipoId: t.id, tipoNome: str(t.nome), norma: str(t.norma), cargaHoraria: num(c.cargaHoraria), conteudo: str(t.conteudo),
-        inicio, termino, validade: addMonths(termino, num(t.validadeMeses)), local: 'Ensino a distância (portal do aluno)' + (c.pratica ? ' + prática presencial' : ''), instrutor: str(c.instrutor), instrutorQualif: str(c.instrutorQualif), rt: str(c.instrutor), rtQualif: str(c.instrutorQualif), tst: str(e.tstNome), tstRegistro: str(e.tstRegistro),
+        inicio, termino, validade: addMonths(termino, num(t.validadeMeses)), local: 'Portal do Aluno' + (c.pratica ? ' + prática presencial' : ''), instrutor: pad ? str(e.instrutorNome) : str(c.instrutor), instrutorQualif: pad ? str(e.instrutorQualif) : str(c.instrutorQualif), rt: pad ? str(e.instrutorNome) : str(c.instrutor), rtQualif: pad ? str(e.instrutorQualif) : str(c.instrutorQualif), tst: str(e.tstNome), tstRegistro: str(e.tstRegistro),
         codigo: 'E' + termino.replace(/-/g, '').slice(2) + '-' + m.id.slice(-6).toUpperCase(), criadoEm: new Date().toISOString(), por: S.uid || '',
-        assinAluno: m.assinCert || null, instrutorAssin: str(c.instrutorAssin), tstAssin: str(e.tstAssin) });
+        assinAluno: m.assinCert || null, instrutorAssin: pad ? str(e.instrutorAssin) : str(c.instrutorAssin), tstAssin: str(e.tstAssin) });
       await db.doc('matriculas/' + m.id).update({ certId: id });
     } catch (er) { console.warn('cert ead', er); }
   }

@@ -1,5 +1,5 @@
 /* Guarda o portal e os módulos no aparelho para abrir sem internet. Os dados ficam no cache do Firestore. */
-const V = 'previne-v11';
+const V = 'previne-v12';
 const SHELL = ['./logo.js', './', './index.html', './fb.js', './firebase-config.js', './manifest.webmanifest', './icon-192.png', './icon-512.png',
   './ferramentas/', './ferramentas/index.html', './treinamentos/', './treinamentos/index.html', './treinamentos/trein.js', './indicadores/', './indicadores/index.html', './indicadores/ind.js', './alocacao/', './alocacao/index.html', './alocacao/aloc.js', './admissao/', './admissao/index.html', './admissao/adm.js', './admissao/comum.js', './documentos/', './documentos/index.html', './documentos/doc.js'];
 const LIBS = /^https:\/\/(www\.gstatic\.com\/firebasejs|cdn\.jsdelivr\.net\/npm|fonts\.(googleapis|gstatic)\.com)\//;
