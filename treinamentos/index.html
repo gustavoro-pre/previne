@@ -2106,7 +2106,7 @@ function PDFW(existente) {
     need(h) { if (y + h > B) { P.newPage(); return true; } return false; },
     font(size, bold, color) { doc.setFont('helvetica', bold ? 'bold' : 'normal'); doc.setFontSize(size); doc.setTextColor.apply(doc, color || [30, 33, 40]); },
     text(t, o) { o = o || {}; const size = o.size || P.fs || 9; P.font(size, o.bold, o.color); const lh = size * 0.3528 * 1.38; const lines = doc.splitTextToSize(str(t), W - (o.indent || 0)); lines.forEach((l, i) => { P.need(lh); const jus = (o.align === 'justify' || (P.just && !o.align)) && i < lines.length - 1; if (jus) P.jline(l, L + (o.indent || 0), y + lh * 0.78, W - (o.indent || 0)); else doc.text(l, L + (o.indent || 0), y + lh * 0.78); y += lh; }); y += (o.gap == null ? 1 : o.gap); },
-    jline(l, x, yy, w) { const ws = str(l).trim().split(/\s+/); if (ws.length < 2) { doc.text(str(l), x, yy); return; } const tot = ws.reduce((a, q) => a + doc.getTextWidth(q), 0), g = (w - tot) / (ws.length - 1); if (g > w * 0.12 || g < doc.getTextWidth(' ')) { doc.text(str(l), x, yy); return; } let cx = x; ws.forEach(q => { doc.text(q, cx, yy); cx += doc.getTextWidth(q) + g; }); },
+    jline(l, x, yy, w, mx) { const ws = str(l).trim().split(/\s+/); if (ws.length < 2) { doc.text(str(l), x, yy); return; } const tot = ws.reduce((a, q) => a + doc.getTextWidth(q), 0), g = (w - tot) / (ws.length - 1); if (g > w * (mx || 0.12) || g < doc.getTextWidth(' ')) { doc.text(str(l), x, yy); return; } let cx = x; ws.forEach(q => { doc.text(q, cx, yy); cx += doc.getTextWidth(q) + g; }); },
     bullets(t) { const items = str(t).split(/\n/.test(str(t)) ? /\n/ : /;/).map(x => x.trim().replace(/\.$/, '')).filter(Boolean).map(x => x[0].toUpperCase() + x.slice(1)); const bz = P.fs || 9; items.forEach(it => { P.font(bz); const lh = bz * 0.3528 * 1.38; const lines = doc.splitTextToSize(it, W - 6); P.need(lh); doc.text('•', L + 1.5, y + lh * 0.78); lines.forEach((l, li) => { P.need(lh); if (P.just && li < lines.length - 1) P.jline(l, L + 6, y + lh * 0.78, W - 6); else doc.text(l, L + 6, y + lh * 0.78); y += lh; }); y += 0.3; }); y += 0.8; },
     section(n, t) { P.need(14); y += 1.5; doc.setFillColor(20, 33, 61); doc.rect(L, y, W, 6, 'F'); P.font(9, true, [255, 255, 255]); doc.text((n ? n + '. ' : '') + t.toUpperCase(), L + 2, y + 4.2); y += 8; },
     header(titulo, sub, codigo) {
@@ -2122,14 +2122,14 @@ function PDFW(existente) {
     },
     table(cols, rows, o) {
       o = o || {}; const fs = o.size || 7.8, lh = fs * 0.3528 * 1.3;
-      const th = () => { P.need(9); doc.setFillColor(31, 78, 156); P.font(7.8, true, [255, 255, 255]); const hs = cols.map(([t, w]) => doc.splitTextToSize(t, w - 3)); const h = Math.max(...hs.map(x => x.length)) * lh + 3; doc.rect(L, y, W, h, 'F'); let x = L; hs.forEach((t, j) => { doc.text(t, x + cols[j][1] / 2, y + 1.5 + lh * 0.8, { align: 'center', lineHeightFactor: 1.3 }); x += cols[j][1]; }); y += h; };
+      const th = () => { P.need(9); doc.setFillColor(31, 78, 156); P.font(fs, true, [255, 255, 255]); const hs = cols.map(([t, w]) => doc.splitTextToSize(t, w - 3)); const h = Math.max(...hs.map(x => x.length)) * lh + 3; doc.rect(L, y, W, h, 'F'); let x = L; hs.forEach((t, j) => { doc.text(t, x + cols[j][1] / 2, y + 1.5 + lh * 0.8, { align: 'center', lineHeightFactor: 1.3 }); x += cols[j][1]; }); y += h; };
       th();
       rows.forEach((r, i) => {
         const cel = r.map((v, j) => { P.font(fs, j === 0 && o.boldFirst); return doc.splitTextToSize(str(v), cols[j][1] - 3); });
         const h = Math.max(o.minH || 0, Math.max(...cel.map(c => c.length)) * lh + 2.2);
         if (P.need(h)) th();
         if (i % 2 && !o.noZebra) { doc.setFillColor(238, 241, 246); doc.rect(L, y, W, h, 'F'); }
-        let x = L; cel.forEach((c, j) => { P.font(fs, j === 0 && o.boldFirst); const al = (o.center || []).includes(j); if (al || !P.just) doc.text(c, al ? x + cols[j][1] / 2 : x + 1.5, y + 1.1 + lh * 0.8, { lineHeightFactor: 1.3, align: al ? 'center' : 'left' }); else c.forEach((ln, li) => { const yy = y + 1.1 + lh * 0.8 + li * lh; if (li < c.length - 1) P.jline(ln, x + 1.5, yy, cols[j][1] - 3); else doc.text(ln, x + 1.5, yy); }); x += cols[j][1]; });
+        let x = L; cel.forEach((c, j) => { P.font(fs, j === 0 && o.boldFirst); const al = (o.center || []).includes(j); if (al || !P.just) doc.text(c, al ? x + cols[j][1] / 2 : x + 1.5, y + 1.1 + lh * 0.8, { lineHeightFactor: 1.3, align: al ? 'center' : 'left' }); else c.forEach((ln, li) => { const yy = y + 1.1 + lh * 0.8 + li * lh; if (li < c.length - 1) P.jline(ln, x + 1.5, yy, cols[j][1] - 3, 0.4); else doc.text(ln, x + 1.5, yy); }); x += cols[j][1]; });
         doc.setDrawColor(154, 166, 184); doc.setLineWidth(0.15); doc.rect(L, y, W, h); let xx = L; cols.slice(0, -1).forEach(([, w]) => { xx += w; doc.line(xx, y, xx, y + h); });
         if (o.after) o.after(i, y, h); y += h;
       });
@@ -2242,7 +2242,7 @@ function osInto(P, f) {
   const doc = P.doc;
   const { os, modelo } = osDa(f.funcao);
   const base = str(os.base) || 'PGR / PCMSO', cod = str(os.codigo) || 'OS-SST-' + norm(f.funcao).replace(/[^a-z0-9]+/g, '-').toUpperCase().slice(0, 24);
-  const mc = modeloCab('os', cod, str(os.revisao), 'Base: ' + base); P.fs = 8.5; P.just = true; P.ctlProx = mc.ctl || ''; P.header('ORDEM DE SERVIÇO – SST', mc.sub, mc.cod);
+  const mc = modeloCab('os', cod, str(os.revisao), 'Base: ' + base); P.fs = 9; P.just = true; P.ctlProx = mc.ctl || ''; P.header('ORDEM DE SERVIÇO – SST', mc.sub, mc.cod);
   P.text('Esta Ordem de Serviço informa o trabalhador sobre os riscos ocupacionais da sua função, as medidas de prevenção adotadas pela empresa e os procedimentos que ele deve seguir, em cumprimento à NR-01, item 1.4.1, alínea "c", e ao art. 157, inciso II, da CLT. As informações de riscos e exames foram extraídas do ' + base + ' da empresa.', { size: 9, gap: 1, align: 'justify' });
   let sn = 1;
   P.section(sn++, 'Identificação');
@@ -2252,14 +2252,14 @@ function osInto(P, f) {
   if (at.length > 1) { if (!/^[-•]/.test(at[0]) && /:$/.test(at[0])) { P.text(at.shift(), { gap: 0.5 }); } P.bullets(at.map(x => x.replace(/^[-•]\s*/, '')).join('\n')); } else P.text(at[0] || '');
   P.section(sn++, 'Riscos ocupacionais e medidas de controle' + (os.ghe ? ' (PGR – ' + str(os.ghe).split(/\s*[–-]\s*/)[0] + ')' : ''));
   const rl = str(os.riscos).split(/\n/).map(x => x.trim()).filter(Boolean), tab = rl.filter(x => x.includes('|')).map(x => x.split('|').map(c => c.trim())), sol = rl.filter(x => !x.includes('|'));
-  if (tab.length) P.table([['Tipo', 20], ['Perigo / fonte', 42], ['Possíveis lesões ou agravos', 38], ['Nível', 19], ['Medidas de controle', 61]], tab.map(r => r.concat(['', '', '', '', '']).slice(0, 5)), { boldFirst: true, center: [3] });
-  if (sol.length && tab.length) sol.forEach(t => P.text(t, { size: 8, color: [80, 86, 96], gap: 0.5 }));
+  if (tab.length) P.table([['Tipo', 20], ['Perigo / fonte', 42], ['Possíveis lesões ou agravos', 38], ['Nível', 19], ['Medidas de controle', 61]], tab.map(r => r.concat(['', '', '', '', '']).slice(0, 5)), { boldFirst: true, center: [3], size: 8 });
+  if (sol.length && tab.length) sol.forEach(t => P.text(t, { size: 8.5, color: [80, 86, 96], gap: 0.5 }));
   else if (sol.length) P.bullets(sol.join('\n'));
   P.section(sn++, 'EPI obrigatórios');
   const ke = [...kitEpisF(f).entries()].map(([id, q]) => [S.epis.find(p => p.id === id), q]).filter(x => x[0]);
-  if (ke.length) P.table([['EPI', 100], ['C.A.', 25], ['Qtd.', 20], ['Troca', 35]], ke.map(([p, q]) => [p.nome, p.ca || '—', String(q), num(p.vidaUtilDias) ? 'a cada ' + num(p.vidaUtilDias) + ' dias' : 'quando danificado']), { center: [1, 2, 3] });
+  if (ke.length) P.table([['EPI', 100], ['C.A.', 25], ['Qtd.', 20], ['Troca', 35]], ke.map(([p, q]) => [p.nome, p.ca || '—', String(q), num(p.vidaUtilDias) ? 'a cada ' + num(p.vidaUtilDias) + ' dias' : 'quando danificado']), { center: [1, 2, 3], size: 8.5 });
   else P.text('Nenhum kit de EPI cadastrado para esta função.', { color: [179, 38, 30] });
-  P.text(str(os.uniforme) || 'O EPI deve ser usado apenas para a finalidade a que se destina, guardado e conservado pelo empregado, e trocado sempre que estiver danificado.', { size: 8.5, gap: 1 });
+  P.text(str(os.uniforme) || 'O EPI deve ser usado apenas para a finalidade a que se destina, guardado e conservado pelo empregado, e trocado sempre que estiver danificado.', { size: 9, gap: 1 });
   if (str(os.exames).trim()) { P.section(sn++, 'Exames médicos (PCMSO)'); P.text(os.exames, { align: 'justify' }); }
   if (str(os.treinamentos).trim()) { P.section(sn++, 'Treinamentos exigidos'); P.bullets(os.treinamentos); }
   P.section(sn++, 'Procedimentos de segurança'); P.bullets(os.medidas);
