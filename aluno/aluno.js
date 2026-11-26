@@ -88,12 +88,13 @@ function home() {
   const ult = {}; A.trs.filter(r => str(r.inicio) <= hoje()).forEach(r => { const k = r.norma || r.tipoNome; if (!ult[k] || str(ult[k].termino) < str(r.termino)) ult[k] = r; });
   const val = r => !r.validade ? '<span class="badge b-mut">Sem validade</span>' : r.validade < hoje() ? `<span class="badge b-bad">Vencido ${fmtD(r.validade)}</span>` : `<span class="badge b-ok">Válido até ${fmtD(r.validade)}</span>`;
   app.innerHTML = `<h1>Olá, ${esc(str(A.f.nome || A.perfil.nome).split(' ')[0])}</h1><p class="note" style="margin:0">${esc([A.f.matricula, A.f.funcao].filter(Boolean).join(' · '))}</p>
-    <h3>Cursos</h3>${cursos.length ? cursos.map(m => { const { c, n, ok } = cursoInfo(m); const st = m.concluidoEm ? (c.pratica && !m.praticaOk ? '<span class="badge b-info">Falta a prática presencial</span>' : '<span class="badge b-ok">Concluído</span>') : m.prazo && m.prazo < hoje() ? `<span class="badge b-bad">Prazo vencido ${fmtD(m.prazo)}</span>` : m.prazo ? `<span class="badge b-warn">Até ${fmtD(m.prazo)}</span>` : '';
+    ${(() => { const pa = cursos.filter(precisaAssinar); return pa.length ? `<div class="card" style="border-color:var(--warn,#f2a900)"><b>✍️ Certificado para assinar</b><p class="note" style="margin:4px 0 8px">Você concluiu ${pa.length > 1 ? pa.length + ' cursos' : 'um curso'} e falta assinar o certificado.</p>${pa.map(m => `<button class="btn primary" style="margin:4px 0" data-ac="${esc(m.id)}">Assinar · ${esc(cursoInfo(m).c.nome)}</button>`).join('')}</div>` : ''; })()}<h3>Cursos</h3>${cursos.length ? cursos.map(m => { const { c, n, ok } = cursoInfo(m); const st = m.concluidoEm ? (c.pratica && !m.praticaOk ? '<span class="badge b-info">Falta a prática presencial</span>' : !m.assinCert ? '<span class="badge b-warn">Falta assinar o certificado</span>' : '<span class="badge b-ok">Concluído</span>') : m.prazo && m.prazo < hoje() ? `<span class="badge b-bad">Prazo vencido ${fmtD(m.prazo)}</span>` : m.prazo ? `<span class="badge b-warn">Até ${fmtD(m.prazo)}</span>` : '';
       return `<button class="item" data-c="${esc(m.id)}"><div class="ico">🎓</div><div class="main"><div class="t1">${esc(c.nome)}</div><div class="t2">${ok} de ${n} módulo(s) ${st}</div><div class="bar"><i style="width:${n ? Math.round(ok / n * 100) : 0}%"></i></div></div></button>`; }).join('') : '<div class="empty">Nenhum curso liberado para você.</div>'}
     <h3>Padrões operacionais para assinar (${pend.length})</h3>${pend.length ? pend.map(x => `<button class="item" data-p="${esc(x.p.id)}"><div class="ico">📄</div><div class="main"><div class="t1">${esc(x.p.codigo)} · ${esc(x.p.titulo)}</div><div class="t2">Revisão ${esc(x.p.rev)} ${x.st === 'rev' ? '<span class="badge b-warn">Revisão nova</span>' : x.st === 'recicl' ? '<span class="badge b-warn">Reciclagem</span>' : '<span class="badge b-bad">Pendente</span>'}</div></div></button>`).join('') : '<div class="empty">Nenhum padrão pendente. 👍</div>'}
     ${P.filter(x => x.st === 'ok').length ? `<h3>Padrões assinados</h3>${P.filter(x => x.st === 'ok').map(x => `<div class="item" style="cursor:default"><div class="main"><div class="t1">${esc(x.p.codigo)} · ${esc(x.p.titulo)}</div><div class="t2">Revisão ${esc(x.p.rev)} · assinado em ${fmtD(x.r.data)}</div></div><span class="badge b-ok">OK</span></div>`).join('')}` : ''}
     <h3>Meus treinamentos</h3>${Object.values(ult).length || A.ext.length ? Object.values(ult).map(r => `<div class="item" style="cursor:default"><div class="main"><div class="t1">${esc(r.norma || r.tipoNome)}</div><div class="t2">${esc(r.tipoNome)} · ${fmtD(r.termino)}</div></div>${val(r)}</div>`).join('') + A.ext.map(r => `<div class="item" style="cursor:default"><div class="main"><div class="t1">${esc(r.tipo)}</div><div class="t2">${esc(r.entidade || '')} · ${fmtD(r.termino)}</div></div>${val(r)}</div>`).join('') : '<div class="empty">Nenhum treinamento registrado.</div>'}`;
   $$('#app [data-c]').forEach(b => b.onclick = () => abrirCurso(b.dataset.c));
+  $$('#app [data-ac]').forEach(b => b.onclick = () => assinarCert(b.dataset.ac));
   $$('#app [data-p]').forEach(b => b.onclick = () => abrirPadrao(b.dataset.p));
 }
 
@@ -135,6 +136,7 @@ function previaCert(c, m) {
 }
 function abrirCurso(mid) {
   const m = A.mats.find(x => x.id === mid); if (!m) return home(); const { c, n, ok } = cursoInfo(m);
+  if (A.certAgora === mid && precisaAssinar(m)) return assinarCert(mid);
   iniciarTimer(m.id); window.scrollTo(0, 0);
   if (!m.inicioEm) { m.inicioEm = new Date().toISOString(); API.salvarMatricula(m.id, { inicioEm: m.inicioEm }).catch(() => {}); }
   const horas = Math.round(num(m.tempo) / 360) / 10, minH = num(c.minHoras);
@@ -153,7 +155,7 @@ function abrirCurso(mid) {
     try { await API.salvarMatricula(m.id, { assinCert: reg }); m.assinCert = reg; toast('Certificado assinado!', 'ok'); abrirCurso(m.id); } catch (e) { b.disabled = false; toast('Não foi possível salvar. Tente de novo.', 'bad'); } }; }
   $('#bk').onclick = () => { pararTimer(); home(); };
   $$('#app [data-m]').forEach(b => b.onclick = () => { if (!b.disabled) abrirModulo(m.id, +b.dataset.m); });
-  verificarConclusao(m);
+  verificarConclusao(m).then(() => { if (A.certAgora === m.id) assinarCert(m.id); });
 }
 function abrirModulo(mid, i) {
   const m = A.mats.find(x => x.id === mid); const { c } = cursoInfo(m); const md = c.mods[i]; const pr = (m.prog || {})[md.id] || {};
@@ -179,11 +181,24 @@ async function marcarVisto(m, md, x) {
   try { await API.salvarModulo(m.id, md.id, p2); } catch (e) { toast('Não foi possível salvar. Verifique a internet.', 'bad'); throw e; }
   await verificarConclusao(m);
 }
+const precisaAssinar = m => { const c = cursoInfo(m).c; return !!(m.concluidoEm && !m.assinCert && !(c.pratica && !m.praticaOk)); };
+/* tela de assinatura do certificado: abre sozinha assim que o curso é concluído */
+function assinarCert(mid) {
+  A.certAgora = null; pararTimer(); window.scrollTo(0, 0);
+  const m = A.mats.find(x => x.id === mid); if (!m) return home(); if (!precisaAssinar(m)) return abrirCurso(mid); const { c } = cursoInfo(m);
+  app.innerHTML = `<button class="back" id="bk">‹ Depois</button><div class="card" style="text-align:center;border-color:var(--ok)"><div style="font-size:40px">🎓</div><h2 style="margin:4px 0">Curso concluído!</h2><p class="note" style="margin:0">Falta só assinar o seu certificado.</p></div>
+    <div class="card"><b>Assinar certificado</b><p class="note">Confira os dados do seu certificado e assine no quadro. Depois, a empresa inclui as assinaturas do instrutor e do técnico de segurança e arquiva o documento.</p>${previaCert(c, m)}<div id="cert-pad"></div><button class="btn primary big" id="cert-go" style="margin-top:10px">Assinar certificado</button></div>`;
+  const pd = padAss($('#cert-pad'));
+  $('#bk').onclick = () => { toast('O certificado fica pendente até você assinar.', 'bad'); abrirCurso(mid); };
+  $('#cert-go').onclick = async () => { if (pd.vazio()) return toast('Faça a sua assinatura no quadro.', 'bad'); const b = $('#cert-go'); b.disabled = true;
+    const reg = { img: pd.img(), em: new Date().toISOString(), ua: navigator.userAgent, curso: c.nome };
+    try { await API.salvarMatricula(m.id, { assinCert: reg }); m.assinCert = reg; toast('Certificado assinado!', 'ok'); abrirCurso(m.id); } catch (e) { b.disabled = false; toast('Não foi possível salvar. Tente de novo.', 'bad'); } };
+}
 async function verificarConclusao(m) {
   const { c, n, ok } = cursoInfo(m); if (m.concluidoEm || !n || ok < n) return;
   if (num(c.minHoras) && num(m.tempo) < num(c.minHoras) * 3600) { toast(`Módulos concluídos. Faltam ${Math.ceil((num(c.minHoras) * 3600 - num(m.tempo)) / 360) / 10}h de estudo para concluir o curso.`, 'bad'); return; }
   m.concluidoEm = new Date().toISOString();
-  try { await API.salvarMatricula(m.id, { concluidoEm: m.concluidoEm }); toast(c.pratica ? 'Teoria concluída! Aguarde a prática presencial.' : 'Curso concluído! Parabéns.', 'ok'); } catch (e) { m.concluidoEm = null; }
+  try { await API.salvarMatricula(m.id, { concluidoEm: m.concluidoEm }); toast(c.pratica ? 'Teoria concluída! Aguarde a prática presencial.' : 'Curso concluído! Parabéns.', 'ok'); if (precisaAssinar(m)) A.certAgora = m.id; } catch (e) { m.concluidoEm = null; }
 }
 
 /* ---------- materiais ---------- */
@@ -251,8 +266,8 @@ function prova({ titulo, quiz, voltar, fim }) {
     try { await fim(nota, ok); } catch (e) { $('#env').disabled = false; return toast('Não foi possível enviar. Verifique a internet.', 'bad'); }
     window.scrollTo(0, 0);
     app.innerHTML = `<div class="card" style="text-align:center;border-color:${ok ? 'var(--ok)' : 'var(--bad)'}"><div style="font-size:44px">${ok ? '🎉' : '📚'}</div><h2 style="margin:6px 0">${ok ? 'Aprovado!' : 'Não foi desta vez'}</h2>
-      <p style="font-size:18px;margin:0">Nota: <b>${nota}%</b> (${certas} de ${Q.length})</p><p class="note">Mínimo: ${num(quiz.min)}%</p></div><button class="btn primary" id="vt">Continuar</button>`;
-    $('#vt').onclick = voltar;
+      <p style="font-size:18px;margin:0">Nota: <b>${nota}%</b> (${certas} de ${Q.length})</p><p class="note">Mínimo: ${num(quiz.min)}%</p></div><button class="btn primary" id="vt">${A.certAgora ? 'Assinar certificado' : 'Continuar'}</button>`;
+    $('#vt').onclick = () => A.certAgora ? assinarCert(A.certAgora) : voltar();
   };
 }
 
