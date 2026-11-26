@@ -34,6 +34,7 @@ service cloud.firestore {
     // nome da empresa para a página do candidato (sem login)
     match /config/publico { allow read: if true; allow write: if tem(['admin', 'gestao']) || admi(['rh']); }
     match /config/admissao { allow read: if admi(['rh', 'consulta']); allow write: if admi(['rh']); }
+    match /config/beneficios { allow read, write: if tem(['admin', 'gestao', 'gerente', 'rh']) || admi(['rh']); }
     match /config/regras  { allow read: if equipe(); allow write: if tem(['admin', 'gerente', 'gestao']); }
 
     match /usuarios/{uid} {
@@ -136,6 +137,10 @@ service cloud.firestore {
     }
     // salário: só o RH
     match /admissoes_priv/{tk} { allow read, write: if admi(['rh']); }
+    // folha mensal importada (salários, horas extras, faltas): só Admin, Gestão, Gerente e RH
+    function folhaOk() { return tem(['admin', 'gestao', 'gerente', 'rh']) || admi(['rh']); }
+    match /folha/{id} { allow read, write: if folhaOk(); }
+    match /folha_imp/{id} { allow read, write: if folhaOk(); }
     match /rh_docs/{id} { allow read: if admi(['rh', 'consulta']) || tem(['admin', 'gestao', 'gerente']); allow write: if admi(['rh']); }
 
     // documentação: quem consulta não vê nem baixa documentos restritos
