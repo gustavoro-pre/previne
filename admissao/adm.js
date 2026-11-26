@@ -185,6 +185,7 @@ function ouvir() {
 function render() {
   $$('#seg button').forEach(b => b.classList.toggle('on', b.dataset.tab === V.tab));
   const ae = document.activeElement; if (ae && ae.closest && ae.closest('#body') && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)) return;
+  if (V.criando && V.tab === 'nova') return; /* abrindo admissão: não apaga o formulário nem a mensagem de progresso */
   ({ and: rAnd, nova: rNova, conc: rConc, kpi: rKpi, mod: rMod })[V.tab]();
 }
 function cardAdm(a) {
@@ -260,19 +261,21 @@ async function criar() {
   const tk = ADM.rand(20); const agora = new Date().toISOString();
   const a = { nome, cpf, telefone: tel, funcao, areaId, area: ar ? ar.nome : '', subareaId: sid, subarea: sub ? sub.nome : '', unidade: $('#n-un').value.trim(), altura: $('#n-alt').value === '1', vinculo: $('#n-vin').value,
     status: 'aberto', abertoEm: agora, abertoPor: MEU, etapas: { integ: { agendada: $('#n-int').value } }, rev: {}, cand: { dados: {}, docs: {} }, obs: $('#n-obs').value.trim() };
-  const b = $('#n-save'); b.disabled = true;
+  /* lê tudo do formulário ANTES de gravar: a gravação dispara o snapshot, que redesenha a tela e limpa os campos */
+  const salTxt = $('#n-sal').value; const sal = numBR(salTxt); if (salTxt.trim() && sal == null) return toast('Salário inválido. Ex.: 2500,00', 'bad');
+  const cur = $$('.n-cur').filter(c => c.checked).map(c => c.dataset.cur); const usarPadrao = !!($('#n-padrao') && $('#n-padrao').checked);
+  const b = $('#n-save'); b.disabled = true; V.criando = true;
   try {
+    await db.doc('admissoes_priv/' + tk).set({ salario: sal != null ? sal : null, em: agora });
     await db.doc('admissoes/' + tk).set(a);
-    const sal = numBR($('#n-sal').value); await db.doc('admissoes_priv/' + tk).set({ salario: isFinite(sal) ? sal : null, em: agora });
     const obj = Object.assign({ id: tk }, a); D.adm.push(obj);
-    b.textContent = 'Gerando carta e termo LGPD…'; await gerarTextos(obj, isFinite(sal) ? sal : null);
-    const cur = $$('.n-cur').filter(c => c.checked).map(c => c.dataset.cur);
-    if ($('#n-padrao') && $('#n-padrao').checked) db.doc('config/admissao').set(Object.assign({}, D.cfg, { cursos: cur })).catch(() => {});
+    b.textContent = 'Gerando carta e termo LGPD…'; await gerarTextos(obj, sal);
+    if (usarPadrao) db.doc('config/admissao').set(Object.assign({}, D.cfg, { cursos: cur })).catch(() => {});
     let aviso = '';
     if (cur.length) { b.textContent = 'Liberando treinamentos…'; try { await liberarTrein(obj, cur); } catch (er) { aviso = ' Os treinamentos não foram liberados: ' + ((er && er.message) || er) + ' Tente de novo no detalhe.'; } }
     b.textContent = 'Gerando OS e termo de EPI (uns 20 s)…'; try { const m = await prepararOsEpi(obj); if (m.modelo) aviso += ' A OS usou o texto-modelo da função: revise o kit em Ferramentas & EPI e gere de novo no detalhe.'; } catch (er) { aviso += ' A OS e o termo de EPI não foram gerados: ' + ((er && er.message) || er) + ' Gere no detalhe.'; }
-    V.tab = 'and'; render(); detalhe(tk); toast('Admissão aberta: ' + (cur.length ? 'treinamentos liberados, ' : '') + 'OS e termo de EPI prontos para assinar. Envie o link ao candidato.' + aviso, aviso ? 'bad' : 'ok');
-  } catch (e) { b.disabled = false; toast('Não foi possível abrir: ' + ((e && e.message) || e), 'bad'); }
+    V.criando = false; V.tab = 'and'; render(); detalhe(tk); toast('Admissão aberta: ' + (cur.length ? 'treinamentos liberados, ' : '') + 'OS e termo de EPI prontos para assinar. Envie o link ao candidato.' + aviso, aviso ? 'bad' : 'ok');
+  } catch (e) { V.criando = false; b.disabled = false; toast('Não foi possível abrir: ' + ((e && e.message) || e), 'bad'); }
 }
 
 /* ---------- detalhe ---------- */
