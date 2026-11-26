@@ -136,6 +136,7 @@ service cloud.firestore {
     }
     // salário: só o RH
     match /admissoes_priv/{tk} { allow read, write: if admi(['rh']); }
+    match /rh_docs/{id} { allow read: if admi(['rh', 'consulta']) || tem(['admin', 'gestao', 'gerente']); allow write: if admi(['rh']); }
 
     // documentação: quem consulta não vê nem baixa documentos restritos
     // código e revisão aprovados dos modelos gerados pelo portal (OS, ficha de EPI…): todos da equipe leem

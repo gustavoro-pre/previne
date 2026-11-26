@@ -1357,6 +1357,22 @@ $('#u-q').addEventListener('input', renderFunc);
 $('#u-chips').addEventListener('click', e => { const b = e.target.closest('[data-uch]'); if (b) { uFilter = b.dataset.uch; renderFunc(); } });
 $('#u-new').onclick = () => openFunc(null);
 function fichaRows(f) { return S.ent.filter(e => e.funcionarioId === f.id).sort((a, b) => str(b.data).localeCompare(str(a.data))); }
+/* documentos pessoais que já estão no Drive do RH (pastas por funcionário); a lista é gerada a partir do Drive */
+const RHD_ESS = [['RG', 'RG'], ['CPF', 'CPF'], ['CTPS', 'CTPS'], ['PIS', 'PIS'], ['TITULO', 'Título de eleitor'], ['RESERVISTA', 'Reservista'], ['CNH', 'CNH'], ['RESIDENCIA', 'Comprovante de residência'], ['ESCOLARIDADE', 'Escolaridade'], ['FOTO', 'Foto'], ['CONTRATO', 'Contrato de experiência'], ['FICHA EMPREGADO', 'Ficha de empregado'], ['ESOCIAL', 'eSocial'], ['ASO', 'ASO'], ['INTEGRACAO', 'Integração'], ['OS', 'OS de segurança'], ['FICHA EPI', 'Ficha de EPI'], ['NR', 'Certificados NR'], ['CERTIFICADO CURSO', 'Outros certificados'], ['CASAMENTO', 'Certidão de casamento'], ['NASCIMENTO', 'Certidão de nascimento (filhos)'], ['CRC', 'CRC'], ['ATESTADO', 'Atestados'], ['RESCISAO', 'Rescisão']];
+const RHD_OBR = ['RG', 'CPF', 'CTPS', 'PIS', 'TITULO', 'RESIDENCIA', 'ESCOLARIDADE', 'FOTO', 'CONTRATO', 'FICHA EMPREGADO', 'ESOCIAL', 'ASO', 'OS', 'FICHA EPI'];
+async function rhDocs(f) {
+  const box = $('#uf-rhd'); if (!box) return;
+  let d = null; try { const s = await db.doc('rh_docs/' + f.id).get(); d = s.exists ? s.data() : null; } catch (e) { if (box.previousElementSibling) box.previousElementSibling.remove(); box.remove(); return; }
+  if (!d) { box.innerHTML = '<div class="note">Nenhuma pasta deste funcionário foi encontrada no Drive do RH.</div>'; return; }
+  const t = d.tipos || {}; const lk = id => 'https://drive.google.com/file/d/' + encodeURIComponent(id) + '/view';
+  const falta = RHD_OBR.filter(k => !t[k]);
+  const aso = t.ASO && t.ASO.d ? t.ASO.d : ''; const asoV = aso ? new Date(new Date(aso + 'T12:00').setFullYear(new Date(aso + 'T12:00').getFullYear() + 1)).toLocaleDateString('sv-SE') : '';
+  box.innerHTML = `<div class="actions" style="margin:0 0 8px;justify-content:flex-start">${(d.pastas || []).map((p, i) => `<a class="btn sm ghost" href="https://drive.google.com/drive/folders/${esc(p.id)}" target="_blank" rel="noopener">Abrir pasta${(d.pastas || []).length > 1 ? ' ' + (i + 1) : ''} no Drive</a>`).join('')}</div>`
+    + (aso ? `<p class="note" style="margin:0 0 6px">Último ASO no Drive: <b>${fmtD(aso)}</b> · próximo periódico até <b>${fmtD(asoV)}</b>${asoV < todayStr() ? ' <span class="badge b-bad">vencido</span>' : ''}</p>` : '')
+    + (falta.length ? `<p class="note" style="margin:0 0 8px">Faltando no Drive: <b>${falta.map(k => esc((RHD_ESS.find(x => x[0] === k) || [k, k])[1])).join(', ')}</b></p>` : '<p class="note" style="margin:0 0 8px">Todos os documentos obrigatórios estão no Drive.</p>')
+    + `<div class="tbwrap" style="margin:0"><table class="tb"><thead><tr><th>Documento</th><th class="n">Arquivos</th><th>Mais recente</th><th></th></tr></thead><tbody>${RHD_ESS.filter(([k]) => t[k] || RHD_OBR.includes(k)).map(([k, n]) => t[k] ? `<tr><td>${esc(n)}</td><td class="n">${num(t[k].n)}</td><td>${fmtD(t[k].d)}</td><td><a href="${lk(t[k].id)}" target="_blank" rel="noopener">abrir</a></td></tr>` : `<tr><td>${esc(n)}</td><td class="n">0</td><td colspan="2"><span class="badge b-bad">falta</span></td></tr>`).join('')}</tbody></table></div>
+    <p class="note" style="margin-top:6px">Os arquivos continuam no Drive do RH: o link abre para quem tem acesso à pasta. Lista atualizada em ${fmtD(str(d.em).slice(0, 10))}.</p>`;
+}
 function openFunc(id) {
   const f = id ? S.func.find(x => x.id === id) : null; if (id && !f) return;
   const v = k => esc(f ? f[k] : '');
@@ -1392,6 +1408,7 @@ function openFunc(id) {
     <div class="card" style="padding:6px 10px"><div class="tbwrap" style="margin:0"><table class="tb"><thead><tr><th>Data</th><th>EPI</th><th>CA</th><th class="n">Qtd</th><th>Motivo</th></tr></thead><tbody>
     ${ficha.length ? ficha.map(e => `<tr><td>${fmtD(e.data)}</td><td>${esc(e.epiNome)}${e.tamanho ? ' · ' + esc(e.tamanho) : ''}</td><td>${esc(e.ca)}${e.validadeCA && e.validadeCA < str(e.data).slice(0, 10) ? ' <span class="badge b-bad">vencido</span>' : ''}</td><td class="n">${num(e.qtd)}</td><td>${MOTGRP(e.motivo) === 'evit' ? `<span class="badge b-bad">${esc(MOT[e.motivo])}</span>` : esc(MOT[e.motivo] || e.motivo)}</td></tr>`).join('') : '<tr><td colspan="5" class="note">Nenhuma entrega registrada.</td></tr>'}
     </tbody></table></div></div>`}
+    ${MODO === 'treinamentos' ? '' : '<h3>Documentos pessoais (Drive do RH)</h3><div class="card" id="uf-rhd"><div class="note">Carregando…</div></div>'}
     <h3>Documentos</h3><div class="card" id="uf-docs">${(() => { const L = S.tr.filter(r => r.funcionarioId === f.id).sort((a, b) => str(a.inicio).localeCompare(str(b.inicio)));
       const ln = (k, t, sub, on) => `<label style="display:flex;gap:10px;align-items:center;color:inherit;font-size:15px;margin:6px 0"><input type="checkbox" data-doc="${k}" ${on ? 'checked' : ''} style="width:20px;height:20px"><span>${t}${sub ? `<div class="note">${sub}</div>` : ''}</span></label>`;
       return ln('ficha', 'Ficha de EPI (NR-06)', ficha.length + ' entrega(s) registrada(s)', true) + ln('os', 'OS de Segurança (NR-01)', esc(f.funcao || 'Sem função'), true)
@@ -1409,6 +1426,7 @@ function openFunc(id) {
   if (f) {
     if ($('#uf-plan')) $('#uf-plan').onclick = () => openPlano(f.id);
     if (typeof funcExtraBind === 'function' && !NO_TREIN) funcExtraBind(f);
+    if ($('#uf-rhd')) rhDocs(f);
     $('#uf-dall').onclick = () => $$('#uf-docs [data-doc]').forEach(c => c.checked = true);
     $('#uf-dgo').onclick = () => { const k = $$('#uf-docs [data-doc]').filter(c => c.checked).map(c => c.dataset.doc); if (!k.length) return toast('Marque ao menos um documento.', 'bad'); gerarDocsFunc(f, k); };
   }
