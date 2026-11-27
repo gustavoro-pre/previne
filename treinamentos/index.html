@@ -2705,10 +2705,34 @@ function listaDoRegistro(r) {
   return { d: { t: { nome: r.tipoNome, norma: r.norma }, ch: num(r.cargaHoraria), inicio: r.inicio, termino: r.termino, local: r.local, instrutor: str(r.instrutor), instrutorQualif: str(r.instrutorQualif), rt: str(r.rt), tst: str(r.tst), tstRegistro: str(r.tstRegistro), rtQualif: str(r.rtQualif), instrutorAssin: str(r.instrutorAssin), tstAssin: str(r.tstAssin || (S.emp || {}).tstAssin), cursoId: r.cursoId, aprov: (() => { const P = parts.length ? parts : [r]; const o = {}; certAprovadores(r).forEach(x => { const k = norm(x.nome).replace(/[^a-z0-9]+/g, '_'); if (P.every(p => (p.aprov || {})[k])) o[k] = (P[0].aprov || {})[k]; }); return o; })() }, parts: (parts.length ? parts : [r]).map(x => ({ nome: x.nome, matricula: x.matricula, funcao: x.funcao, assin: x.assinAluno && x.assinAluno.img })) };
 }
 /* certificados de uma lista de registros: frente + verso de cada um; a lista de presença da turma entra logo depois do último certificado daquela turma/tipo */
+/* página final de cada certificado: registro das assinaturas eletrônicas (quem assinou, quando, como, com qual código) */
+function assinInto(doc, r) {
+  const P = PDFW(doc); const e = S.emp || {}; P.fs = 9;
+  P.header('REGISTRO DE ASSINATURAS ELETRÔNICAS', 'Certificado de treinamento · ' + str(r.tipoNome), '');
+  P.box([['Participante', r.nome], ['CPF', r.cpf ? fmtCpfF(r.cpf) : '—'], ['Treinamento', [r.tipoNome, r.norma].filter(Boolean).join(' · ')], ['Carga horária', num(r.cargaHoraria) ? num(r.cargaHoraria) + ' h' : '—'], ['Período', fmtD(r.inicio) + (r.termino && r.termino !== r.inicio ? ' a ' + fmtD(r.termino) : '')], ['Emitido em', fmtDT(new Date().toISOString())]]);
+  P.text('Este certificado foi assinado eletronicamente pelas pessoas abaixo, no Portal PREVINE. Cada assinatura fica registrada com data, hora (horário de Brasília) e forma de autenticação, e o documento é identificado pelo código de verificação SHA-256, calculado sobre os dados do certificado (participante, CPF, treinamento, carga horária, período, conteúdo e responsáveis). Qualquer alteração nesses dados muda o código.', { align: 'justify', gap: 2 });
+  const lin = [];
+  const aa = r.assinAluno;
+  lin.push([r.nome, 'Participante', aa ? 'Assinatura desenhada no portal do aluno, após entrar com matrícula e senha pessoais' : 'Pendente: o participante ainda não assinou', aa ? fmtDT(aa.em) : '—']);
+  const vistos = new Set();
+  [[r.instrutor, 'Instrutor' + (r.instrutorQualif ? ' · ' + str(r.instrutorQualif) : '')], [r.tst, 'Técnico de Segurança do Trabalho' + (r.tstRegistro ? ' · ' + r.tstRegistro : '')], [r.rt, 'Responsável Técnico' + (r.rtQualif ? ' · ' + str(r.rtQualif) : '')]].forEach(([nm, papel]) => {
+    if (!str(nm).trim() || vistos.has(norm(nm))) return; vistos.add(norm(nm));
+    const ap = aprovDe(r, nm); const ok = ap && (!r.__hash || ap.hash === r.__hash);
+    lin.push([nm, papel, ap ? (ok ? 'De acordo eletrônico no portal, com login e senha pessoais' + (ap.lote ? ' (termo de de acordo ' + str(ap.lote).slice(0, 8) + ')' : '') : 'De acordo dado em versão anterior dos dados: precisa de novo de acordo') : 'Assinatura cadastrada pela empresa (sem de acordo eletrônico registrado)', ap ? fmtDT(ap.em) : '—']);
+  });
+  P.section(1, 'Assinaturas');
+  P.table([['Nome', 46], ['Papel', 42], ['Forma de assinatura', 66], ['Data e hora', 26]], lin, { size: 8 });
+  if (aa && aa.ua) P.text('Aparelho usado pelo participante: ' + str(aa.ua).slice(0, 180), { size: 7.5, color: [90, 96, 110], gap: 1 });
+  P.section(2, 'Verificação');
+  P.text('Código de verificação (SHA-256): ' + str(r.__hash || '—'), { size: 8.5, gap: 1 });
+  P.text('Registro: ' + str(r.id) + (r.turma ? ' · Turma ' + str(r.turma) : ''), { size: 8.5, gap: 2 });
+  P.text('Assinaturas eletrônicas nos termos da Medida Provisória nº 2.200-2/2001, art. 10, § 2º, e da Lei nº 14.063/2020, aceitas pelas partes como meio de comprovação de autoria e integridade. ' + str(e.nome || 'PREVINE INSTALAÇÃO E MANUTENÇÃO ELÉTRICA LTDA') + (e.cnpj ? ' – CNPJ ' + e.cnpj : '') + '.', { size: 8, color: [70, 76, 90], align: 'justify' });
+  P.font(7, false, [140, 146, 156]); doc.text('Registro de assinaturas eletrônicas · ' + str(r.nome) + ' · gerado em ' + fmtDT(new Date().toISOString()), P.L, 290);
+}
 function certsComLista(doc, regs, primeiraNova) {
   const grupo = r => (r.turma || r.id) + '|' + r.tipoId;
   regs.forEach((r, i) => {
-    certInto(doc, r, primeiraNova || i > 0);
+    certInto(doc, r, primeiraNova || i > 0); assinInto(doc, r);
     const prox = regs[i + 1];
     if (!prox || grupo(prox) !== grupo(r)) { const L = listaDoRegistro(r); const P = PDFW(doc); listaInto(P, L.d, L.parts); P.font(7, false, [140, 146, 156]); doc.text('Lista de presença · ' + str(r.tipoNome) + ' · gerada em ' + fmtDT(new Date().toISOString()), P.L, 290); }
   });
