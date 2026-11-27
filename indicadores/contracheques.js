@@ -92,7 +92,7 @@ function ligaCC() {
           }
         }
         st.innerHTML = `<span style="color:var(--ok)">Pronto: ${n} contracheques importados.</span>`; toast(`${n} contracheques importados.`, 'ok');
-      } catch (e) { st.innerHTML = '<span style="color:var(--bad)">Não foi possível gravar: ' + esc(e.message || e) + '. Seu usuário precisa ser Administrador, Gestão, Gerente ou RH.</span>'; }
+      } catch (e) { st.innerHTML = '<span style="color:var(--bad)">Não foi possível gravar: ' + esc(e.message || e) + '. Seu usuário precisa ter a permissão Vê salários.</span>'; }
     };
   };
 }

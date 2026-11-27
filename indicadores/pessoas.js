@@ -284,12 +284,12 @@ function ligaImport() {
       try {
         if (ja) { const velhos = (D.folha || []).filter(x => x.comp === r.comp); for (let i = 0; i < velhos.length; i++) { await db.doc('folha/' + velhos[i].id).delete(); if (i % 20 === 0) st.textContent = `Limpando a importação anterior… ${i}/${velhos.length}`; } }
         let i = 0; for (const m of M) { const x = m.x;
-          await db.doc('folha/' + r.comp + '_' + x.cod).set({ comp: r.comp, cod: x.cod, nome: x.nome, cpf: x.cpf, adm: x.adm, situacao: x.situacao, vinculo: str(x.vinculo), cargo: str(x.cargo), cbo: str(x.cbo), salario: num(x.salario), horasMes: num(x.horasMes), proventos: num(x.proventos), descontos: num(x.descontos), liquido: num(x.liquido), fgts: num(x.fgts), baseInss: num(x.baseInss), rub: x.rub, ag: agrega(x.rub), obs: str(x.obs), funcionarioId: m.f ? m.f.id : '', importadoEm: now, por, arquivo: file.name });
+          await db.doc('folha/' + r.comp + '_' + x.cod).set(JSON.parse(JSON.stringify({ comp: r.comp, cod: x.cod, nome: x.nome, cpf: x.cpf, adm: x.adm, situacao: x.situacao, vinculo: str(x.vinculo), cargo: str(x.cargo), cbo: str(x.cbo), salario: num(x.salario), horasMes: num(x.horasMes), proventos: num(x.proventos), descontos: num(x.descontos), liquido: num(x.liquido), fgts: num(x.fgts), baseInss: num(x.baseInss), rub: x.rub, ag: agrega(x.rub), obs: str(x.obs), funcionarioId: m.f ? m.f.id : '', importadoEm: now, por, arquivo: file.name })));
           if (++i % 10 === 0) { st.textContent = `Gravando… ${i}/${M.length}`; await new Promise(z => setTimeout(z, 60)); } }
         let k = 0; for (const u of upd) { try { await db.doc('funcionarios/' + u.f.id).update(u.o); k++; } catch (e) { console.warn('cadastro', u.f.nome, e); } if (k % 10 === 0) st.textContent = `Completando o cadastro… ${k}/${upd.length}`; }
         await db.doc('folha_imp/' + r.comp).set({ comp: r.comp, arquivo: file.name, n: M.length, semCadastro: sem.length, proventos: soma, cadastroCompletado: k, em: now, por });
         toast(`Folha de ${mesNome(r.comp)} importada: ${M.length} pessoas; ${k} cadastros completados.`, 'ok'); V.comp = r.comp; carregar();
-      } catch (e) { b.disabled = false; $('#fo-no').disabled = false; st.innerHTML = '<span style="color:var(--bad)">Não foi possível gravar: ' + esc(e.message || e) + '. Seu usuário precisa ser Administrador, Gestão, Gerente ou RH.</span>'; }
+      } catch (e) { b.disabled = false; $('#fo-no').disabled = false; st.innerHTML = '<span style="color:var(--bad)">Não foi possível gravar: ' + esc(e.message || e) + '. Seu usuário precisa ter a permissão Vê salários.</span>'; }
     };
   };
 }
