@@ -73,6 +73,12 @@ Notificações no celular: `.github/workflows/push.yml` (a cada 5 min, 6h–20h)
    ESCOPO NOVO pedido pelo Gustavo: ler as pastas RH e SEGURANÇA DO TRABALHO inteiras e trazer TODOS os documentos dos funcionários atuais e dependentes:
    ASO, integração, Take Care, Safety, certificados, treinamentos, carteirinha CRC, documentos pessoais e de dependentes (só os válidos, de funcionários atuais).
    Depois de montado o banco de dados ele vai excluir essas pastas.
+   USO DOS DOCUMENTOS ANTIGOS (pedido de 27/11, 17h40), depois de ler RH + SEGURANÇA DO TRABALHO e identificar cada documento por pessoa (CPF/nome):
+   a) Termo de EPI antigo assinado: anexar como o termo válido do funcionário antigo (substitui a falta de termo no portal).
+   b) Ficha de EPI antiga: lançar em `entregas` o que ele já recebeu (registro histórico, origem 'historico', SEM mexer no estoque). Ficha não vence.
+   c) Treinamentos do sistema antigo: lançar em `treinamentos` (origem 'historico', com o certificado anexado). Todas as NRs ficam como histórico;
+      as válidas recebem a validade (data do certificado + `validadeMeses` do tipo em `trein_tipos`, ou a validade escrita no certificado) para o controle de vencimento.
+   Tudo passa por planilha de revisão e OK do Gustavo antes de gravar (dado de funcionário).
 4. Leitura de e-mail (conta previneime@gmail.com): ler os documentos de admissão que chegam (da contabilidade), gravar no cadastro do funcionário
    e marcar campos de assinatura do funcionário e da empresa (Gustavo ou Thiago assina). Precisa do navegador/Apps Script. Ainda não começado.
 5. EAD: planilha dos 81 padrões (Drive, pastas PADRÃO <ÁREA>) feita como Sheets: https://claude.ai/artifact/B4tQ7WqExaitw9HsRs9nwF
