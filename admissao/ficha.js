@@ -104,7 +104,7 @@ function confBox(a, ro) {
       <td style="white-space:nowrap">${verBt}${edit}</td><td style="text-align:center"><input type="checkbox" data-fcok="${c.k}" ${conf ? 'checked' : ''} ${ro} style="width:20px;height:20px" aria-label="Conferido"></td></tr>`; }).join('');
   const st = E.completo ? `<span class="badge b-ok">Conferido por ${esc(E.por || '')} em ${fmtDH(E.em)}</span>` : `<span class="badge b-warn">${E.ok} de ${E.total} campos conferidos</span>`;
   return `<h3>Conferência dos dados com os documentos</h3><div class="card"><p class="note" style="margin:0 0 6px">${st} Compare o que o candidato digitou com o documento anexado. Se tiver erro de digitação, clique em Corrigir. A ficha cadastral mostra quem conferiu.</p>
-    <div class="tbwrap"><table class="tb"><thead><tr><th>Campo e valor digitado</th><th>Leitura automática</th><th></th><th>Conferido</th></tr></thead><tbody>${linhas}</tbody></table></div>
+    <div class="tbwrap"><table class="tb"><thead><tr><th>Campo e valor digitado</th><th>Leitura automática</th><th></th><th style="text-align:center">Conferido${ro ? '' : '<br><label style="font-weight:400;font-size:12px;display:inline-flex;gap:4px;align-items:center"><input type="checkbox" id="fc-todos" style="width:16px;height:16px"> todos</label>'}</th></tr></thead><tbody>${linhas}</tbody></table></div>
     ${ro ? '' : `<div class="actions" style="justify-content:flex-start;margin-top:8px"><button class="btn sm ghost" id="fc-ler" type="button">Ler os documentos e comparar</button><button class="btn sm primary" id="fc-ok" type="button">Salvar conferência</button></div><p class="note" id="fc-st" style="margin:4px 0 0"></p>`}</div>`;
 }
 function confWire(a) {
@@ -117,6 +117,7 @@ function confWire(a) {
     const conf = Object.assign({}, a.conf || {}, { campos, por: (window.__FB && window.__FB.perfil && window.__FB.perfil.nome) || MEU, em: new Date().toISOString() });
     try { await db.doc('admissoes/' + a.id).update({ conf }); a.conf = conf; const E = fcEstado(a); toast(E.completo ? 'Conferência completa.' : `Salvo: ${E.ok} de ${E.total} campos conferidos.`, 'ok'); SUJO = false; detalhe(a.id); } catch (e) { ob.disabled = false; toast('Não foi possível salvar.', 'bad'); } };
   $$('#sheet [data-fcok]').forEach(x => x.onchange = () => { SUJO = true; });
+  const td = $('#fc-todos'); if (td) { const L = $$('#sheet [data-fcok]'); td.checked = L.length && L.every(x => x.checked); td.onchange = () => { L.forEach(x => { x.checked = td.checked; }); SUJO = true; }; }
   $$('#sheet [data-fced]').forEach(b => b.onclick = () => { const c = FC_CAMPOS.find(z => z.k === b.dataset.fced); const dd = (a.cand || {}).dados || {}; const tr = b.closest('tr'); if (tr.querySelector('.fced')) return;
     const atual = c.k === 'nascimento' ? str(dd.nascimento).slice(0, 10) : str(dd[c.k]);
     tr.querySelector('td').insertAdjacentHTML('beforeend', `<div class="fced" style="display:flex;gap:6px;margin-top:6px"><input type="${c.ed}" value="${esc(atual)}" style="flex:1"><button class="btn sm primary" type="button">Salvar</button></div>`);
@@ -160,7 +161,7 @@ function regWire(a) {
 async function fcModelo() {
   let m = null; try { const d = await db.doc('config/modelos').get(); m = d.exists ? (d.data() || {})[FC_MODELO[0]] : null; } catch (e) {}
   if (m && m.codigo) return { codigo: m.codigo, rev: String(+m.rev || 0).padStart(2, '0'), data: fmtD(m.data), elab: str(m.elaborador) || '—', aprov: str(m.aprovador) || '—', prov: false };
-  return { codigo: FC_MODELO[2], rev: '00', data: '27/11/2026', elab: 'Gustavo Rogel', aprov: 'Cláudio', prov: true };
+  return { codigo: FC_MODELO[2], rev: '00', data: '27/11/2026', elab: 'Gustavo Rogel de Almeida', aprov: 'Claudio José de Almeida', prov: true };
 }
 async function fcLogo() { const lg = window.logoEmp ? window.logoEmp(D.emp) : D.emp || {}; if (/^data:image\/(png|jpeg)/.test(str(lg.logo))) return lg; try { const b = await (await fetch('/logo.png')).blob(); return { logo: await new Promise(r => { const f = new FileReader(); f.onload = () => r(f.result); f.readAsDataURL(b); }), logoW: 240, logoH: 193 }; } catch (e) { return {}; } }
 async function fichaPdf(a, o = {}) {
@@ -174,7 +175,7 @@ async function fichaPdf(a, o = {}) {
     doc.setTextColor(...FC_AZUL); doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.text(doc.splitTextToSize(empNome(), tw)[0], Lm + 33, 12.8);
     doc.setTextColor(90); doc.setFont('helvetica', 'normal'); doc.setFontSize(6.8); doc.text('CNPJ ' + empCnpj(), Lm + 33, 16.3); doc.text(doc.splitTextToSize(end, tw)[0], Lm + 33, 19.3);
     doc.setTextColor(20); doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.text('FICHA CADASTRAL DE ADMISSÃO', Lm + 33, 25.6); doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(90); doc.text('Área: Recursos Humanos', Lm + 33, 29.8);
-    doc.setFontSize(7); doc.setTextColor(20); [['Código', M.codigo], ['Revisão', M.rev + (M.data && M.data !== '—' ? ' · ' + M.data : '')], ['Elaborado', M.elab], ['Aprovado', M.aprov], ['Emitido', emit]].forEach(([k, v], i) => { doc.setFont('helvetica', 'bold'); doc.text(k + ':', bx + 2, 12.3 + i * 4.3); doc.setFont('helvetica', 'normal'); doc.text(doc.splitTextToSize(str(v), 40)[0], bx + 17, 12.3 + i * 4.3); }); };
+    doc.setFontSize(7); doc.setTextColor(20); [['Código', M.codigo], ['Revisão', M.rev + (M.data && M.data !== '—' ? ' · ' + M.data : '')], ['Elaborado por', M.elab], ['Aprovado por', M.aprov], ['Emitido', emit]].forEach(([k, v], i) => { doc.setFont('helvetica', 'bold'); doc.text(k + ':', bx + 2, 12.3 + i * 4.3); doc.setFont('helvetica', 'normal'); doc.text(doc.splitTextToSize(str(v), 39)[0], bx + 20, 12.3 + i * 4.3); }); };
   cab(); let y = 37;
   /* foto */
   const ft = (docs.foto || [])[0]; let fw = 0;
