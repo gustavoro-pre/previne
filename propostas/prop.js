@@ -46,7 +46,7 @@ let P = null, K = null, SUJO = false; /* proposta aberta, custos, alterações n
 async function carregar() {
   const [c, p, g] = await Promise.all([db.collection('clientes').get(), db.collection('propostas').get(), db.doc('config/propostas').get().catch(() => null)]);
   D.cli = c.docs.map(d => Object.assign({ id: d.id }, d.data())).sort((a, b) => str(a.nome).localeCompare(str(b.nome), 'pt'));
-  D.prop = p.docs.map(d => Object.assign({ id: d.id }, d.data())).sort((a, b) => str(b.codPT).localeCompare(str(a.codPT)));
+  D.prop = p.docs.map(d => Object.assign({ id: d.id }, d.data())).sort((a, b) => str(b.criadoEm).localeCompare(str(a.criadoEm)) || str(b.codPT).localeCompare(str(a.codPT)));
   D.cfg = (g && g.exists) ? g.data() : {};
 }
 function render() {
@@ -65,7 +65,7 @@ function lista() {
   const anos = [...new Set(D.prop.map(p => str(p.data).slice(0, 4)).filter(Boolean))].sort().reverse();
   const q = norm(V.busca);
   const L = D.prop.filter(p => (!V.st || (p.status || 'rascunho') === V.st) && (!V.cli || p.clienteId === V.cli) && (!V.ano || str(p.data).startsWith(V.ano))
-    && (!q || [p.codPT, p.codPC, p.controle, p.rc, p.cliente, p.objeto, p.unidade, p.area].some(x => norm(x).includes(q))));
+    && (!q || [p.codPT, p.codPC, p.seq, p.controle, p.rc, p.cliente, p.objeto, p.unidade, p.area].some(x => norm(x).includes(q))));
   const base = D.prop.filter(p => !V.ano || str(p.data).startsWith(V.ano));
   const cnt = s => base.filter(p => (p.status || 'rascunho') === s); const soma = A => A.reduce((a, p) => a + totalDe(p), 0);
   const g = cnt('ganha'), pd = cnt('perdida'), env = cnt('enviada'), el = base.filter(p => ['rascunho', 'revisao'].includes(p.status || 'rascunho'));
@@ -101,7 +101,8 @@ async function novaProposta() {
     gestorTec: { nome: '', contato: '' }, gestorCom: { nome: '', contato: '' }, validade: pad.validade || 30, pagamento: pad.pagamento || '45 dias após a aprovação da medição e a emissão da nota fiscal', faturamento: pad.faturamento || 'por medição mensal', lc116: pad.lc116 || '14.01', reajuste: '',
     tecnico: Object.assign({ objetivo: '', visita: '', prazo: '', nrs: 'NR-10', materiais: [], equipamentos: [], equipe: [], cronograma: [], docsRef: [] }, JSON.parse(JSON.stringify(PADRAO_T))), hh: [], anexos: { cliente: [], cotacoes: [] }, revisoes: [], hist: [] };
   try {
-    const { ano, n } = await proximoNumero(); p.codPT = `PT-${ano}-${n}`; p.codPC = `PC-${ano}-${n}`; p.controle = controlePara('');
+    const { ano, n } = await proximoNumero(); p.seq = `${ano}-${n}`; /* sequência só interna (ordem e contagem); o cliente vê o código aleatório */
+    const usados = new Set(D.prop.flatMap(x => [x.codPT, x.codPC])); let r; do r = aleat(4); while (usados.has(`PT-${ano.slice(2)}-${r}`)); p.codPT = `PT-${ano.slice(2)}-${r}`; p.codPC = `PC-${ano.slice(2)}-${r}`; p.controle = controlePara('');
     p.criadoEm = new Date().toISOString(); p.criadoPor = MEU; p.hist = [{ em: p.criadoEm, por: MEU, txt: 'Proposta criada.' }];
     const ref = await db.collection('propostas').add(p); if (veCustos()) await db.doc('prop_custos/' + ref.id).set({ mo: [], mat: [], eq: [], bdi: 0 });
     D.prop.unshift(Object.assign({ id: ref.id }, p)); toast(`Proposta ${p.codPT} / ${p.codPC} criada.`, 'ok'); abrir(ref.id);
@@ -135,7 +136,7 @@ function secId() {
   const c = cliBy(P.clienteId) || {}; const un = (c.unidades || []); const uSel = un.find(u => u.nome === P.unidade) || {};
   const gest = (D.cfg.gestores || []);
   return `<div class="card"><p class="ct">Identificação</p>
-    <div class="grid3"><div><label>Código técnico</label><input value="${esc(P.codPT)}" disabled></div><div><label>Código comercial</label><input value="${esc(P.codPC)}" disabled></div><div><label>Controle Previne</label><input value="${esc(P.controle)}" disabled></div></div>
+    <div class="grid3"><div><label>Código técnico</label><input value="${esc(P.codPT)}" disabled></div><div><label>Código comercial</label><input value="${esc(P.codPC)}" disabled></div><div><label>Controle Previne</label><input value="${esc(P.controle)}" disabled></div></div>${P.seq ? `<p class="note" style="margin:2px 0 0">Nº interno (sequência do ano, não aparece para o cliente): ${esc(P.seq)}</p>` : ''}
     <div class="grid2"><div><label>Cliente</label><select data-k="clienteId" ${ro() ? 'disabled' : ''}><option value="">— escolha —</option>${D.cli.map(x => `<option value="${x.id}" ${x.id === P.clienteId ? 'selected' : ''}>${esc(x.nome)}${x.sigla ? ' (' + esc(x.sigla) + ')' : ''}</option>`).join('')}</select><p class="hint">${podeCli() ? 'Não está na lista? Cadastre em <a href="#" id="go-cli">Clientes</a>.' : ''}</p></div>
       <div><label>Ref. do cliente (RC / solicitação)</label>${inp('rc', P.rc)}</div></div>
     <div class="grid3"><div><label>Unidade</label><input data-k="unidade" list="dl-un" value="${esc(P.unidade)}" ${ro() ? 'disabled' : ''}><datalist id="dl-un">${un.map(u => `<option value="${esc(u.nome)}">`).join('')}</datalist></div>
@@ -408,7 +409,7 @@ function config() {
   const c = D.cfg; const dc = c.docs || {}; const pd = c.padroes || {}; const ano = hoje().slice(0, 4); const ed = veCustos();
   const dis = ed ? '' : 'disabled';
   $('#body').innerHTML = `<div class="head"><h2>Configuração</h2></div>
-    <div class="card"><p class="ct">Numeração</p><p class="cs">Cada proposta recebe um número do sistema: PT-${ano}-NNN (técnica) e PC-${ano}-NNN (comercial), mais um controle interno aleatório com a sigla do cliente.</p>
+    <div class="card"><p class="ct">Numeração</p><p class="cs">Cada proposta recebe um código aleatório que o cliente vê: PT-${ano.slice(2)}-XXXX (técnica) e PC-${ano.slice(2)}-XXXX (comercial), com as mesmas 4 letras. A sequência do ano (${ano}-NNN) fica só no portal, para ordem e contagem. Há ainda o controle interno com a sigla do cliente.</p>
       <div class="grid3"><div><label>Última proposta de ${ano}</label><input id="cf-seq" inputmode="numeric" value="${esc(num((c.seq || {})[ano]))}" ${dis}></div><div></div><div></div></div><p class="hint">A próxima proposta criada recebe este número + 1.</p></div>
     <div class="card"><p class="ct">Quem assina os documentos comerciais</p><div class="grid3"><div><label>Elaborado por</label><input id="cf-el" value="${esc(dc.elab || 'Gustavo Rogel de Almeida')}" ${dis}></div><div><label>Verificado por</label><input id="cf-ve" value="${esc(dc.verif || 'Thiago Rogel de Almeida')}" ${dis}></div><div><label>Aprovado por</label><input id="cf-ap" value="${esc(dc.aprov || 'Cláudio José de Almeida')}" ${dis}></div></div>
       <div class="grid3"><div><label>Assina a carta</label><input id="cf-as" value="${esc(dc.assinante || 'Cláudio José de Almeida')}" ${dis}></div><div><label>Cargo</label><input id="cf-asc" value="${esc(dc.assinanteCargo || 'Sócio-Gerente')}" ${dis}></div><div><label>Telefone</label><input id="cf-ast" value="${esc(dc.assinanteTel || 'Cel.: (24) 98855-7269')}" ${dis}></div></div></div>
