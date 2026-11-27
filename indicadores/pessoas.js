@@ -41,11 +41,11 @@ const tabela = (cab, linhas, alinhaDir) => linhas.length ? `<div class="tbwrap" 
 
 /* ---------- hub da aba Pessoas ---------- */
 function tPesHub() {
-  const pf = podeFolha(); const subs = [['geral', 'Visão geral'], ['func', 'Funcionários']].concat(pf ? [['folha', 'Folha e horas'], ['abs', 'Absenteísmo']] : []);
+  const pf = podeFolha(); const subs = [['geral', 'Visão geral'], ['func', 'Funcionários']].concat(pf ? [['sal', 'Salários'], ['folha', 'Folha e horas'], ['abs', 'Absenteísmo']] : []);
   if (!subs.some(s => s[0] === V.pt)) V.pt = 'geral';
   $('#ind-body').innerHTML = `<div class="seg" id="pes-seg" style="background:#e9ecf1">${subs.map(([k, t]) => `<button data-pt="${k}" class="${V.pt === k && !V.pes ? 'on' : ''}">${t}</button>`).join('')}</div><div id="pes-body"></div>`;
   if (V.pes) return vida(V.pes);
-  ({ geral: tPes, func: tFunc, folha: tFolha, abs: tAbs })[V.pt]();
+  ({ geral: tPes, func: tFunc, sal: tSal, folha: tFolha, abs: tAbs })[V.pt]();
 }
 document.addEventListener('click', e => { const b = e.target.closest('[data-pt]'); if (!b) return; V.pt = b.dataset.pt; V.pes = ''; tPesHub(); window.scrollTo(0, 0); });
 
