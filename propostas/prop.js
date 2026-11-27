@@ -92,11 +92,16 @@ async function proximoNumero() {
   await db.runTransaction(async tx => { const s = await tx.get(ref); const d = s.exists ? s.data() : {}; const seq = Object.assign({}, d.seq || {}); n = num(seq[ano]) + 1; seq[ano] = n; tx.set(ref, { seq }, { merge: true }); });
   return { ano, n: String(n).padStart(3, '0') };
 }
-/* código da proposta: 3 primeiras letras da sigla do cliente + ano + 5 números da sequência do ano (ex.: AMS-2026-00012).
-   O mesmo código vale para a técnica e a comercial. Sem cliente ainda: PRV; ao escolher o cliente, as letras trocam (o número fica). */
+/* código da proposta: 3 primeiras letras da sigla do cliente + ano + 5 números aleatórios (ex.: AMS-2026-48213), sem repetir.
+   O mesmo código vale para a técnica e a comercial. Sem cliente ainda: PRV; ao escolher o cliente, as letras trocam (os números ficam). */
 const RX_COD = /^[A-Z0-9]{3}-\d{4}-\d{5}$/;
 const sig3 = sigla => { const t = str(sigla).toUpperCase().normalize('NFD').replace(/[^A-Z0-9]/g, ''); return t ? t.slice(0, 3).padEnd(3, 'X') : 'PRV'; };
-const codigoPara = (sigla, seq) => { const [ano, n] = str(seq).split('-'); return `${sig3(sigla)}-${ano}-${String(num(n)).padStart(5, '0')}`; };
+function codigoNovo(sigla, ano) {
+  const usados = new Set(D.prop.flatMap(x => [x.codPT, x.codPC]).filter(c => RX_COD.test(c || '')).map(c => c.slice(4)));
+  let r; do r = ano + '-' + String(crypto.getRandomValues(new Uint32Array(1))[0] % 100000).padStart(5, '0'); while (usados.has(r));
+  return sig3(sigla) + '-' + r;
+}
+const trocaSigla = (cod, sigla) => sig3(sigla) + cod.slice(3);
 const codTxt = p => p.codPT && p.codPT === p.codPC ? p.codPT : `${p.codPT || '—'} / ${p.codPC || '—'}`;
 function controlePara(sigla) { const s = str(sigla).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6) || 'PREV'; const usados = new Set(D.prop.map(p => p.controle)); let c; do c = s + '-' + aleat(6); while (usados.has(c)); return c; }
 
@@ -108,7 +113,7 @@ async function novaProposta() {
     tecnico: Object.assign({ objetivo: '', visita: '', prazo: '', nrs: 'NR-10', materiais: [], equipamentos: [], equipe: [], cronograma: [], docsRef: [] }, JSON.parse(JSON.stringify(PADRAO_T))), hh: [], anexos: { cliente: [], cotacoes: [] }, revisoes: [], hist: [] };
   try {
     const { ano, n } = await proximoNumero(); p.seq = `${ano}-${n}`;
-    p.codPT = p.codPC = codigoPara('', p.seq); p.controle = controlePara('');
+    p.codPT = p.codPC = codigoNovo('', ano); p.controle = controlePara('');
     p.criadoEm = new Date().toISOString(); p.criadoPor = MEU; p.hist = [{ em: p.criadoEm, por: MEU, txt: 'Proposta criada.' }];
     const ref = await db.collection('propostas').add(p); if (veCustos()) await db.doc('prop_custos/' + ref.id).set({ mo: [], mat: [], eq: [], bdi: 0 });
     D.prop.unshift(Object.assign({ id: ref.id }, p)); toast(`Proposta ${codTxt(p)} criada.`, 'ok'); abrir(ref.id);
@@ -221,7 +226,7 @@ function ligaEditor() {
   const B = $('#ed-body');
   B.querySelectorAll('[data-k]').forEach(el => el.addEventListener(el.tagName === 'SELECT' ? 'change' : 'input', () => {
     const k = el.dataset.k; setK(k, el.value);
-    if (k === 'clienteId') { const c = cliBy(el.value) || {}; P.cliente = c.nome || ''; if (c.sigla && (!P.controle || /^PREV-/.test(P.controle))) P.controle = controlePara(c.sigla); if (P.status === 'rascunho' && RX_COD.test(P.codPT || '') && P.codPT === P.codPC && P.seq) P.codPT = P.codPC = codigoPara(c.sigla, P.seq); editor(); }
+    if (k === 'clienteId') { const c = cliBy(el.value) || {}; P.cliente = c.nome || ''; if (c.sigla && (!P.controle || /^PREV-/.test(P.controle))) P.controle = controlePara(c.sigla); if (P.status === 'rascunho' && RX_COD.test(P.codPT || '') && P.codPT === P.codPC ) P.codPT = P.codPC = trocaSigla(P.codPT, c.sigla); editor(); }
   }));
   B.querySelectorAll('[data-lst]').forEach(el => el.oninput = () => { P.tecnico[el.dataset.lst] = el.value.split('\n').map(s => s.trim()).filter(Boolean); SUJO = true; });
   B.querySelectorAll('[data-lstc]').forEach(el => el.oninput = () => { P[el.dataset.lstc] = el.value.split('\n').map(s => s.trim()).filter(Boolean); SUJO = true; });
@@ -415,7 +420,7 @@ function config() {
   const c = D.cfg; const dc = c.docs || {}; const pd = c.padroes || {}; const ano = hoje().slice(0, 4); const ed = veCustos();
   const dis = ed ? '' : 'disabled';
   $('#body').innerHTML = `<div class="head"><h2>Configuração</h2></div>
-    <div class="card"><p class="ct">Numeração</p><p class="cs">Cada proposta recebe o código SIG-${ano}-00000: as 3 primeiras letras da sigla do cliente, o ano e 5 números da sequência do ano (ex.: AMS-${ano}-00012). O mesmo código vale para a técnica e a comercial. Enquanto o cliente não é escolhido, aparece PRV. Propostas antigas mantêm o código que já tinham.</p>
+    <div class="card"><p class="ct">Numeração</p><p class="cs">Cada proposta recebe o código SIG-${ano}-00000: as 3 primeiras letras da sigla do cliente, o ano e 5 números aleatórios, sem repetir (ex.: AMS-${ano}-48213). O mesmo código vale para a técnica e a comercial. Enquanto o cliente não é escolhido, aparece PRV. Propostas antigas mantêm o código que já tinham.</p>
       <div class="grid3"><div><label>Última proposta de ${ano}</label><input id="cf-seq" inputmode="numeric" value="${esc(num((c.seq || {})[ano]))}" ${dis}></div><div></div><div></div></div><p class="hint">A próxima proposta criada recebe este número + 1.</p></div>
     <div class="card"><p class="ct">Quem assina os documentos comerciais</p><div class="grid3"><div><label>Elaborado por</label><input id="cf-el" value="${esc(dc.elab || 'Gustavo Rogel de Almeida')}" ${dis}></div><div><label>Verificado por</label><input id="cf-ve" value="${esc(dc.verif || 'Thiago Rogel de Almeida')}" ${dis}></div><div><label>Aprovado por</label><input id="cf-ap" value="${esc(dc.aprov || 'Cláudio José de Almeida')}" ${dis}></div></div>
       <div class="grid3"><div><label>Assina a carta</label><input id="cf-as" value="${esc(dc.assinante || 'Cláudio José de Almeida')}" ${dis}></div><div><label>Cargo</label><input id="cf-asc" value="${esc(dc.assinanteCargo || 'Sócio-Gerente')}" ${dis}></div><div><label>Telefone</label><input id="cf-ast" value="${esc(dc.assinanteTel || 'Cel.: (24) 98855-7269')}" ${dis}></div></div></div>
