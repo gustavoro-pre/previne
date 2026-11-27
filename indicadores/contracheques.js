@@ -55,11 +55,11 @@ function ligaCC() {
   const inp = $('#cc-file'); if (!inp) return;
   inp.onchange = async () => {
     const files = [...inp.files]; inp.value = ''; if (!files.length) return; const box = $('#cc-prev'); box.innerHTML = '<p class="note">Lendo os PDFs…</p>';
-    let man = null; const mf = files.find(f => /\.json$/i.test(f.name)); if (mf) { try { man = JSON.parse(await mf.text()); } catch (e) { man = null; } }
+    let man = []; for (const mf of files.filter(f => /\.json$/i.test(f.name))) { try { const j = JSON.parse(await mf.text()); man = man.concat(Array.isArray(j) ? j : [j]); } catch (e) { } } if (!man.length) man = null;
     const lotes = [];
     try {
       for (const f of files.filter(f => /\.pdf$/i.test(f.name))) {
-        const buf = new Uint8Array(await f.arrayBuffer()); const mm = man && (Array.isArray(man) ? man : [man]).find(m => m.arquivo === f.name);
+        const buf = new Uint8Array(await f.arrayBuffer()); const mm = man && man.find(m => m.arquivo === f.name);
         const itens = mm ? mm.itens.map(x => Object.assign({}, x, { origem: x.arq })) : (await ccLer(buf, f.name)).map(x => Object.assign(x, { origem: f.name }));
         itens.forEach(x => { x.f = ccCasar(x); });
         lotes.push({ file: f, buf, itens }); box.innerHTML = `<p class="note">Lidos ${lotes.length} arquivo(s)…</p>`;
@@ -114,7 +114,12 @@ async function ccPdf(x) {
 async function ccBox(f) {
   const el = $('#vi-cc'); if (!el) return;
   let L = [];
-  try { L = (await db.collection('contracheques').where('funcionarioId', '==', f.id).get()).docs.map(d => Object.assign({ id: d.id }, d.data())); }
+  try {
+    const Q = [db.collection('contracheques').where('funcionarioId', '==', f.id).get()];
+    const cods = [...new Set((D.folha || []).filter(x => x.funcionarioId === f.id && x.cod).map(x => String(x.cod)))].slice(0, 10);
+    if (cods.length) Q.push(db.collection('contracheques').where('cod', 'in', cods).get());
+    const vis = {}; (await Promise.all(Q)).forEach(s => s.docs.forEach(d => { vis[d.id] = Object.assign({ id: d.id }, d.data()); })); L = Object.values(vis);
+  }
   catch (e) { el.innerHTML = '<p class="note">Não foi possível carregar os contracheques (' + esc(e.message || e) + ').</p>'; return; }
   if (!L.length) { el.innerHTML = '<p class="note">Nenhum contracheque importado para esta pessoa. Importe em Indicadores › Pessoas › Folha.</p>'; return; }
   L.sort((a, b) => str(b.comp).localeCompare(str(a.comp)) || (b.atual ? 1 : 0) - (a.atual ? 1 : 0) || str(a.tipo).localeCompare(str(b.tipo)));
