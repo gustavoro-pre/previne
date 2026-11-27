@@ -9,14 +9,23 @@
   const TAM_CALCA = Array.from({ length: 15 }, (_, i) => String(34 + i * 2));
   const TAM_CALCADO = Array.from({ length: 16 }, (_, i) => String(33 + i));
   const UFS = 'AC AL AP AM BA CE DF ES GO MA MT MS MG PA PB PR PE PI RJ RN RS RO RR SC SP SE TO'.split(' ');
+  /* dados da ficha de registro de empregado (CLT art. 41 / eSocial) */
   const CAMPOS = [
     ['nascimento', 'Data de nascimento', 'date', true], ['sexo', 'Sexo', ['Masculino', 'Feminino'], true], ['estadoCivil', 'Estado civil', ['Solteiro(a)', 'Casado(a)', 'União estável', 'Divorciado(a)', 'Viúvo(a)'], true],
-    ['mae', 'Nome da mãe', 'text', true], ['pai', 'Nome do pai', 'text', false], ['telefone', 'Celular (WhatsApp)', 'tel', true], ['email', 'E-mail', 'email', false],
+    ['naturalidade', 'Cidade onde nasceu', 'text', true], ['ufNasc', 'Estado onde nasceu', UFS, true], ['nacionalidade', 'Nacionalidade', ['Brasileira', 'Estrangeira'], true],
+    ['racaCor', 'Raça / cor (eSocial)', ['Branca', 'Preta', 'Parda', 'Amarela', 'Indígena', 'Prefiro não informar'], true], ['deficiencia', 'Pessoa com deficiência?', ['Não', 'Sim – física', 'Sim – auditiva', 'Sim – visual', 'Sim – intelectual', 'Sim – mais de uma'], true],
+    ['mae', 'Nome completo da mãe', 'text', true], ['pai', 'Nome completo do pai', 'text', false], ['conjuge', 'Nome do cônjuge (se casado ou em união estável)', 'text', false],
+    ['rgNum', 'RG: número', 'text', true], ['rgOrgao', 'RG: órgão emissor (ex.: DETRAN)', 'text', true], ['rgUf', 'RG: estado', UFS, true], ['rgData', 'RG: data de expedição', 'date', false],
+    ['tituloNum', 'Título de eleitor: número', 'text', true], ['tituloZona', 'Título: zona', 'text', true], ['tituloSecao', 'Título: seção', 'text', true],
+    ['reservistaNum', 'Reservista: número (homens)', 'text', false], ['cnhNum', 'CNH: número (se tiver)', 'text', false], ['cnhCat', 'CNH: categoria', ['A', 'B', 'AB', 'C', 'D', 'E', 'AC', 'AD', 'AE'], false], ['cnhVal', 'CNH: validade', 'date', false],
+    ['pis', 'PIS / NIS (se souber)', 'text', false], ['primeiroEmprego', 'É o seu primeiro emprego com carteira?', ['Não', 'Sim'], true],
+    ['telefone', 'Celular (WhatsApp)', 'tel', true], ['email', 'E-mail', 'email', false],
     ['cep', 'CEP', 'cep', true], ['rua', 'Rua / avenida', 'text', true], ['numero', 'Número', 'text', true], ['complemento', 'Complemento', 'text', false], ['bairro', 'Bairro', 'text', true], ['cidade', 'Cidade', 'text', true], ['uf', 'Estado', UFS, true],
     ['escolaridade', 'Escolaridade', ['Fundamental incompleto', 'Fundamental completo', 'Médio incompleto', 'Médio completo', 'Técnico', 'Superior incompleto', 'Superior completo', 'Pós-graduação'], true],
-    ['pis', 'PIS / NIS (se souber)', 'text', false], ['banco', 'Banco', 'text', false], ['pix', 'Chave PIX', 'text', false],
+    ['valeTransporte', 'Vai precisar de vale-transporte?', ['Não', 'Sim'], true],
+    ['banco', 'Banco', 'text', false], ['agencia', 'Agência', 'text', false], ['conta', 'Conta (com dígito)', 'text', false], ['pix', 'Chave PIX', 'text', false],
     ['tamCamisa', 'Tamanho de camisa', TAM_CAMISA, true], ['tamCalca', 'Tamanho de calça', TAM_CALCA, true], ['tamCalcado', 'Número do calçado', TAM_CALCADO, true],
-    ['emergNome', 'Contato de emergência (nome)', 'text', true], ['emergTel', 'Contato de emergência (telefone)', 'tel', true], ['dependentes', 'Dependentes (nome, parentesco e nascimento)', 'area', false]
+    ['emergNome', 'Contato de emergência (nome)', 'text', true], ['emergTel', 'Contato de emergência (telefone)', 'tel', true], ['dependentes', 'Dependentes: nome completo, parentesco, data de nascimento e CPF de cada um', 'area', false]
   ];
   const tk = (new URLSearchParams(location.search).get('c') || '').replace(/[^a-z0-9]/g, '');
   let A = null, CAND = null, ATIVO = 'dados', ocupado = false;

@@ -36,7 +36,9 @@ service cloud.firestore {
     match /config/assinaturas { allow read: if equipe(); allow write: if tem(['admin', 'gestao']); }
     // nome da empresa para a página do candidato (sem login)
     match /config/publico { allow read: if true; allow write: if tem(['admin', 'gestao']) || admi(['rh']); }
-    match /config/admissao { allow read: if admi(['rh', 'consulta']); allow write: if admi(['rh']); }
+    // quem dá o de acordo da contratação (aprovEmails) só é trocado por quem vê salários
+    match /config/admissao { allow read: if admi(['rh', 'consulta']);
+      allow write: if admi(['rh']) && (request.resource.data.get('aprovEmails', '') == (resource == null ? '' : resource.data.get('aprovEmails', '')) || folhaOk()); }
     match /config/beneficios { allow read, write: if tem(['admin', 'gestao', 'gerente', 'rh']) || admi(['rh']); }
     match /config/regras  { allow read: if equipe(); allow write: if tem(['admin', 'gerente', 'gestao']); }
 
@@ -142,8 +144,14 @@ service cloud.firestore {
     }
     // salário: só o RH
     // pedidos de envio da documentação de admissão à contabilidade (o script do Google lê e manda o e-mail)
-    match /envios_contab/{id} { allow read, write: if admi(['rh']);
-      match /p/{pid} { allow read, write: if admi(['rh']); } }
+    match /envios_contab/{id} {
+      function aprovOk() { return logado() && request.auth.token.email.lower() in get(/databases/$(database)/documents/config/admissao).data.get('aprovEmails', '').lower().split('[,; ]+'); }
+      function salOk(d) { return d.get('temSalario', false) == false || folhaOk(); }
+      allow read: if admi(['rh']) && salOk(resource.data);
+      allow create, delete: if admi(['rh']);
+      // o pedido fica em "aguardando de acordo" até Gustavo ou Josilaine (config/admissao.aprovEmails) aprovar
+      allow update: if admi(['rh']) && (resource.data.get('status', '') != 'aprovacao' || request.resource.data.status in ['aprovacao', 'cancelado'] || aprovOk());
+      match /p/{pid} { allow write: if admi(['rh']); allow read: if admi(['rh']) && salOk(get(/databases/$(database)/documents/envios_contab/$(id)).data); } }
     match /admissoes_priv/{tk} { allow read, write: if admi(['rh']) && folhaOk(); }
     // folha mensal importada (salários, horas extras, faltas): só Admin, Gestão, Gerente e RH
     // salários: só quem tem a permissão 'Vê salários' no cadastro de usuário

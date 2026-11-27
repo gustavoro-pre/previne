@@ -169,16 +169,18 @@ function rMod() {
     <div class="card"><p class="ct">Termo LGPD</p><p class="cs">Revise com o jurídico ou a contabilidade antes de usar.</p><textarea id="md-l" rows="16">${esc(D.cfg.lgpdTxt || ADM.LGPD_PADRAO)}</textarea></div>
     <div class="card"><p class="ct">E-mail à contabilidade</p><p class="cs">Vem preenchido no botão “Enviar à contabilidade”; dá para mudar em cada envio. Campos trocados automaticamente: {nome} {cpf} {funcao} {area} {unidade} {vinculo} {dataAdmissao} {empresa} {cnpj}</p>
       <div class="grid2"><div><label for="md-ep">Para (e-mails separados por vírgula)</label><input id="md-ep" value="${esc(D.cfg.contabEmail || '')}" placeholder="contabilidade@…"></div><div><label for="md-ec">Cópia (separe por vírgula)</label><input id="md-ec" value="${esc(D.cfg.contabCc || '')}"></div></div>
+      <div class="grid2"><div><label for="md-ap">De acordo da contratação: e-mails de quem aprova</label><input id="md-ap" value="${esc(D.cfg.aprovEmails || '')}" placeholder="email1@…, email2@…"></div><div><label for="md-an">Nomes (aparecem no aviso)</label><input id="md-an" value="${esc(D.cfg.aprovNomes || '')}" placeholder="Gustavo ou Josilaine"></div></div>
       <label for="md-ea">Assunto</label><input id="md-ea" value="${esc(D.cfg.contabAssunto || ASSUNTO_PADRAO)}">
       <label for="md-em">Mensagem</label><textarea id="md-em" rows="12">${esc(D.cfg.contabMsg || MSG_PADRAO)}</textarea></div>
     <div class="actions"><button class="btn ghost" id="md-r">Voltar aos textos padrão</button><button class="btn primary" id="md-s">Salvar modelos</button></div><p class="note">Vale para as próximas admissões. As já abertas mantêm o texto que o candidato recebeu, até você clicar em “Atualizar carta”.</p>`;
-  $('#md-s').onclick = async () => { try { const c = Object.assign({}, D.cfg, { cartaTxt: $('#md-c').value, lgpdTxt: $('#md-l').value, beneficiosTxt: $('#md-b').value, contabEmail: $('#md-ep').value.trim(), contabCc: $('#md-ec').value.trim(), contabAssunto: $('#md-ea').value.trim(), contabMsg: $('#md-em').value }); await db.doc('config/admissao').set(c); D.cfg = c; toast('Modelos salvos.', 'ok'); } catch (e) { toast('Não foi possível salvar.', 'bad'); } };
+  $('#md-s').onclick = async () => { try { const c = Object.assign({}, D.cfg, { cartaTxt: $('#md-c').value, lgpdTxt: $('#md-l').value, beneficiosTxt: $('#md-b').value, contabEmail: $('#md-ep').value.trim(), contabCc: $('#md-ec').value.trim(), contabAssunto: $('#md-ea').value.trim(), contabMsg: $('#md-em').value, aprovEmails: $('#md-ap').value.trim(), aprovNomes: $('#md-an').value.trim() }); await db.doc('config/admissao').set(c); D.cfg = c; toast('Modelos salvos.', 'ok'); } catch (e) { toast('Não foi possível salvar.', 'bad'); } };
   $('#md-r').onclick = () => { $('#md-c').value = ADM.CARTA_PADRAO; $('#md-l').value = ADM.LGPD_PADRAO; $('#md-b').value = ADM.BENEF_PADRAO; $('#md-ea').value = ASSUNTO_PADRAO; $('#md-em').value = MSG_PADRAO; toast('Textos padrão carregados. Clique em Salvar para valer.'); };
 }
 
 /* ---------- dados ---------- */
 function ouvir() {
-  db.collection('admissoes').onSnapshot(s => { D.adm = s.docs.map(d => Object.assign({}, d.data(), { id: d.id })); render(); if (ABERTO && !$('#modal').hidden) detalhe(ABERTO, true); }, () => toast('Sem permissão para ver as admissões.', 'bad'));
+  db.collection('admissoes').onSnapshot(s => { D.adm = s.docs.map(d => Object.assign({}, d.data(), { id: d.id })); render();
+    const dl = new URLSearchParams(location.search).get('a'); if (dl && !window.__deep && D.adm.some(x => x.id === dl)) { window.__deep = 1; setTimeout(() => detalhe(dl), 300); } if (ABERTO && !$('#modal').hidden) detalhe(ABERTO, true); }, () => toast('Sem permissão para ver as admissões.', 'bad'));
   db.collection('funcionarios').onSnapshot(s => { D.func = s.docs.map(d => Object.assign({}, d.data(), { id: d.id })); }, () => {});
   db.collection('areas').onSnapshot(s => { D.areas = s.docs.map(d => Object.assign({}, d.data(), { id: d.id })).sort((a, b) => str(a.nome).localeCompare(str(b.nome), 'pt')); render(); }, () => {});
   db.collection('kits').onSnapshot(s => { D.kits = s.docs.map(d => d.data()); }, () => {});
@@ -291,10 +293,10 @@ const fechar = () => { ABERTO = ''; SUJO = false; $('#modal').hidden = true; $('
 /* ---------- envio à contabilidade por e-mail ----------
    O RH escolhe documentos, data de admissão e data/hora do envio. O portal grava o pedido em envios_contab (com os arquivos em partes)
    e o script do Google (conta previneime@gmail.com) envia o e-mail na hora marcada e grava o resultado. */
-const ENV_ST = { agendado: ['Agendado', 'b-info'], enviado: ['Enviado', 'b-ok'], erro: ['Erro', 'b-bad'], cancelado: ['Cancelado', 'b-mut'] };
+const ENV_ST = { aprovacao: ['Aguardando de acordo', 'b-warn'], agendado: ['Agendado', 'b-info'], enviado: ['Enviado', 'b-ok'], erro: ['Erro', 'b-bad'], cancelado: ['Cancelado', 'b-mut'] };
 function envLista(a) {
   const L = (a.envios || []).slice().reverse(); if (!L.length) return '';
-  return `<div style="margin-top:8px">${L.map(x => { const st = ENV_ST[x.status] || ENV_ST.agendado; return `<div class="note" style="display:flex;gap:8px;align-items:center;padding:3px 0"><span class="badge ${st[1]}">${st[0]}</span><span style="flex:1">${x.status === 'enviado' ? 'Enviado em ' + fmtDH(x.enviadoEm) : x.status === 'erro' ? esc(x.erro || 'Falha no envio') : 'Para ' + fmtDH(x.quando)} · ${esc(x.para)} · ${x.n} arquivo(s) · admissão ${fmtD(x.dataAdmissao)}</span>${x.status === 'agendado' && PODE ? `<button class="link" data-envx="${esc(x.id)}" type="button">cancelar</button>` : ''}</div>`; }).join('')}</div>`;
+  return `<div style="margin-top:8px">${L.map(x => { const st = ENV_ST[x.status] || ENV_ST.agendado; return `<div class="note" style="display:flex;gap:8px;align-items:center;padding:3px 0"><span class="badge ${st[1]}">${st[0]}</span><span style="flex:1">${x.status === 'aprovacao' ? 'Aguardando de acordo de ' + esc(((D.cfg || {}).aprovNomes) || 'Gustavo ou Josilaine') + ' · envio marcado para ' + fmtDH(x.quando) : x.status === 'enviado' ? 'Enviado em ' + fmtDH(x.enviadoEm) + (x.aprovadoPor ? ' · de acordo de ' + esc(x.aprovadoPor) : '') : x.status === 'erro' ? esc(x.erro || 'Falha no envio') : 'Para ' + fmtDH(x.quando)} · ${esc(x.para)} · ${x.n} arquivo(s) · admissão ${fmtD(x.dataAdmissao)}</span>${x.status === 'aprovacao' && podeAprovar() ? `<button class="btn sm primary" data-envap="${esc(x.id)}" type="button">Dar de acordo</button>` : ''}${(x.status === 'agendado' || x.status === 'aprovacao') && PODE ? `<button class="link" data-envx="${esc(x.id)}" type="button">cancelar</button>` : ''}</div>`; }).join('')}</div>`;
 }
 async function envStatus(a) {
   const pend = (a.envios || []).filter(x => x.status === 'agendado'); const url = (D.cfg || {}).envioUrl || 'https://script.google.com/macros/s/AKfycbwxPg38bGnvm5053kBKgO8GYQFCpABP2NHzCD7p3caHa_m78ErgcV7o8V3DNdfFk6Az/exec'; if (!pend.length || !url) return;
@@ -304,69 +306,29 @@ async function envStatus(a) {
     db.doc('envios_contab/' + x.id).update({ status: s2.status, enviadoEm: s2.em || '', erro: s2.erro || '' }).catch(() => {}); }
   if (mudou && PODE) { const e = etp(a); const ult = (a.envios || []).filter(x => x.status === 'enviado').map(x => str(x.enviadoEm).slice(0, 10)).sort().pop(); const u = { envios: a.envios }; if (ult) { e.contab = { data: ult }; u.etapas = e; } await db.doc('admissoes/' + a.id).update(u).catch(() => {}); if (ABERTO === a.id) detalhe(a.id); }
 }
+const meuEmail = () => str((window.__FB || {}).email || ((window.__FB || {}).user || {}).email).toLowerCase();
+const aprovEmails = () => str((D.cfg || {}).aprovEmails).split(/[,;\s]+/).map(x => x.trim().toLowerCase()).filter(Boolean);
+const podeAprovar = () => aprovEmails().includes(meuEmail());
+async function aprovarEnvio(a, id) {
+  const x = (a.envios || []).find(y => y.id === id); if (!x) return;
+  if (!confirm(`Dar o de acordo para a contratação de ${a.nome} (${a.funcao})? O e-mail para a contabilidade sai ${new Date(x.quando) > new Date() ? 'em ' + fmtDH(x.quando) : 'em até 5 minutos'}.`)) return;
+  const quem = str(((window.__FB || {}).perfil || {}).nome) || meuEmail(); const agora = new Date().toISOString(); const quando = new Date(x.quando) > new Date() ? x.quando : agora;
+  try { await db.doc('envios_contab/' + id).update({ status: 'agendado', quando, aprovadoPor: quem, aprovadoEmail: meuEmail(), aprovadoEm: agora });
+    Object.assign(x, { status: 'agendado', quando, aprovadoPor: quem, aprovadoEm: agora }); await db.doc('admissoes/' + a.id).update({ envios: a.envios, aprovContratacao: { por: quem, email: meuEmail(), em: agora } });
+    toast('De acordo registrado. O envio à contabilidade está agendado.', 'ok'); detalhe(a.id); } catch (e) { console.error(e); toast('Não foi possível registrar o de acordo.', 'bad'); }
+}
 async function cancelarEnvio(a, id) {
   if (!confirm('Cancelar este envio agendado?')) return;
   try { await db.doc('envios_contab/' + id).update({ status: 'cancelado', canceladoPor: MEU, canceladoEm: new Date().toISOString() }); const x = (a.envios || []).find(y => y.id === id); if (x) x.status = 'cancelado'; await db.doc('admissoes/' + a.id).update({ envios: a.envios }); toast('Envio cancelado.', 'ok'); detalhe(a.id); } catch (e) { toast('Não foi possível cancelar.', 'bad'); }
 }
 const ASSUNTO_PADRAO = 'Admissão – {nome} – {funcao}';
-const MSG_PADRAO = 'Prezados,\n\nSegue a documentação para admissão de {nome}, CPF {cpf}.\n\nFunção: {funcao}\nÁrea: {area}\nUnidade: {unidade}\nVínculo: {vinculo}\nData de admissão: {dataAdmissao}\n\nEm anexo, a ficha cadastral (Excel) com os dados do funcionário.\n\nFicamos à disposição.\n\nAtenciosamente,\nRH – {empresa}';
+const MSG_PADRAO = 'Prezados,\n\nSegue a documentação para admissão de {nome}, CPF {cpf}.\n\nFunção: {funcao}\nÁrea: {area}\nUnidade: {unidade}\nVínculo: {vinculo}\nData de admissão: {dataAdmissao}\n\nEm anexo, a ficha cadastral com os dados do funcionário, conferidos com os documentos.\n\nFicamos à disposição.\n\nAtenciosamente,\nRH – {empresa}';
 const preencher = (t, a, dAdm) => str(t).replace(/\{(\w+)\}/g, (m, k) => ({ nome: a.nome, cpf: ADM.fmtCpf(a.cpf), funcao: a.funcao, area: [a.area, a.subarea].filter(Boolean).join(' / '), unidade: a.unidade || '—', vinculo: a.vinculo || 'CLT', dataAdmissao: dAdm ? fmtD(dAdm) : '[escolha a data]', empresa: empNome(), cnpj: empCnpj() })[k] ?? m);
-/* ---------- ficha cadastral em Excel (cabeçalho da empresa, foto e dados) ---------- */
-let EXJ = null;
-const exceljs = () => EXJ || (EXJ = new Promise((ok, er) => { if (window.ExcelJS) return ok(window.ExcelJS); const sc = document.createElement('script'); sc.src = 'https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js'; sc.onload = () => ok(window.ExcelJS); sc.onerror = () => { EXJ = null; er(new Error('Não carregou o gerador de Excel. Verifique a internet.')); }; document.head.appendChild(sc); }));
 const imgB64 = async blob => { // qualquer imagem -> JPEG base64 (ExcelJS aceita png/jpeg)
   const url = URL.createObjectURL(blob); try { const im = await new Promise((ok, er) => { const i = new Image(); i.onload = () => ok(i); i.onerror = er; i.src = url; });
     const cv = document.createElement('canvas'); const k = Math.min(1, 600 / Math.max(im.width, im.height)); cv.width = Math.round(im.width * k); cv.height = Math.round(im.height * k); const cx = cv.getContext('2d'); cx.fillStyle = '#fff'; cx.fillRect(0, 0, cv.width, cv.height); cx.drawImage(im, 0, 0, cv.width, cv.height);
     return { b64: cv.toDataURL('image/jpeg', .9).split(',')[1], w: cv.width, h: cv.height }; } finally { URL.revokeObjectURL(url); } };
-async function fichaXlsx(a, o = {}) {
-  const X = await exceljs(); const dd = (a.cand || {}).dados || {}, docs = (a.cand || {}).docs || {}; const dAdm = o.dataAdmissao || a.dataAdmissao || '';
-  const wb = new X.Workbook(); wb.creator = empNome(); const ws = wb.addWorksheet('Ficha cadastral', { pageSetup: { paperSize: 9, orientation: 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 1, margins: { left: .5, right: .5, top: .6, bottom: .6, header: .3, footer: .3 } }, views: [{ showGridLines: false }] });
-  ws.columns = [{ width: 26 }, { width: 30 }, { width: 22 }, { width: 22 }];
-  const AZ = 'FF1F3A5F', CINZA = 'FFF2F4F7', borda = { style: 'thin', color: { argb: 'FFC9D1DB' } }, B4 = { top: borda, left: borda, bottom: borda, right: borda };
-  // cabeçalho: logo + empresa
-  const lg = window.logoEmp ? window.logoEmp(D.emp) : (D.emp && D.emp.logo ? D.emp : window.LOGO_PADRAO || {});
-  const lsrc = /^data:image\/(png|jpeg);base64,/.test(str(lg.logo)) ? lg.logo : (window.LOGO_PADRAO || {}).logo;
-  for (let r = 1; r <= 4; r++) ws.getRow(r).height = 18;
-  if (lsrc) { const ext = /png/.test(lsrc.slice(0, 20)) ? 'png' : 'jpeg'; const id = wb.addImage({ base64: lsrc.split(',')[1], extension: ext }); const h = 64, w = Math.min(150, h * ((+lg.logoW || 240) / (+lg.logoH || 193))); ws.addImage(id, { tl: { col: 0.1, row: 0.2 }, ext: { width: w, height: h } }); }
-  ws.mergeCells('B1:D1'); ws.mergeCells('B2:D2'); ws.mergeCells('B3:D3'); ws.mergeCells('B4:D4');
-  ws.getCell('B1').value = empNome(); ws.getCell('B1').font = { bold: true, size: 13, color: { argb: AZ } };
-  ws.getCell('B2').value = 'CNPJ ' + empCnpj();
-  ws.getCell('B3').value = str((D.emp || {}).endereco) || 'Av. Homero Leite, 198, Saudade, Barra Mansa – RJ';
-  ws.getCell('B4').value = 'Recursos Humanos'; ['B2', 'B3', 'B4'].forEach(c => ws.getCell(c).font = { size: 10, color: { argb: 'FF555555' } });
-  ws.mergeCells('A6:D6'); const t = ws.getCell('A6'); t.value = 'FICHA CADASTRAL DE ADMISSÃO'; t.font = { bold: true, size: 14, color: { argb: 'FFFFFFFF' } }; t.alignment = { horizontal: 'center', vertical: 'middle' }; t.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: AZ } }; ws.getRow(6).height = 26;
-  let r = 8;
-  const secao = nome => { ws.mergeCells(`A${r}:D${r}`); const c = ws.getCell('A' + r); c.value = nome.toUpperCase(); c.font = { bold: true, size: 10, color: { argb: AZ } }; c.border = { bottom: { style: 'medium', color: { argb: AZ } } }; ws.getRow(r).height = 20; r++; };
-  const linha = (rot, val, larg) => { const c1 = ws.getCell('A' + r); c1.value = rot; c1.font = { bold: true, size: 10 }; c1.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: CINZA } }; c1.border = B4; c1.alignment = { vertical: 'middle' };
-    const fim = larg === false ? 'B' : 'D'; if (fim !== 'B') ws.mergeCells(`B${r}:${fim}${r}`); const c2 = ws.getCell('B' + r); c2.value = val == null || val === '' ? '—' : val; c2.border = B4; c2.alignment = { vertical: 'middle', wrapText: true }; c2.font = { size: 10 };
-    if (fim !== 'B') ['C', 'D'].forEach(k => ws.getCell(k + r).border = B4); const n = Math.ceil(str(c2.value).length / 70); ws.getRow(r).height = Math.max(18, 15 * n); r++; };
-  // foto (à direita dos dados da admissão)
-  const ft = (docs.foto || [])[0]; let fotoOk = false;
-  if (ft && /image/.test(str(ft.tipo) || 'image')) { try { const blob = await ADM.ler(ft, 'foto', getPart(a.id)); const im = await imgB64(blob); const id = wb.addImage({ base64: im.b64, extension: 'jpeg' }); const h = 150, w = Math.round(h * im.w / im.h); ws.addImage(id, { tl: { col: 3.08, row: r }, ext: { width: Math.min(w, 150), height: h } }); fotoOk = true; } catch (e) { console.warn('foto', e); } }
-  secao('Dados da admissão');
-  const adm = [['Nome', a.nome], ['CPF', ADM.fmtCpf(a.cpf)], ['Função', a.funcao], ['Área', [a.area, a.subarea].filter(Boolean).join(' / ')], ['Unidade', a.unidade], ['Vínculo', a.vinculo || 'CLT'], ['Data de admissão', dAdm ? fmtD(dAdm) : ''], ['Trabalho em altura', a.altura ? 'Sim' : 'Não']];
-  if (o.salario != null) adm.push(['Salário', brl(o.salario)]);
-  adm.forEach(([k, v]) => { const c1 = ws.getCell('A' + r); c1.value = k; c1.font = { bold: true, size: 10 }; c1.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: CINZA } }; c1.border = B4;
-    if (fotoOk) { ws.mergeCells(`B${r}:C${r}`); } else ws.mergeCells(`B${r}:D${r}`); const c2 = ws.getCell('B' + r); c2.value = v || '—'; c2.border = B4; c2.font = { size: 10 }; ws.getCell('C' + r).border = B4; if (!fotoOk) ws.getCell('D' + r).border = B4; ws.getRow(r).height = 19; r++; });
-  r++; secao('Dados pessoais');
-  [['Data de nascimento', dd.nascimento ? fmtD(dd.nascimento) : ''], ['Sexo', dd.sexo], ['Estado civil', dd.estadoCivil], ['Nome da mãe', dd.mae], ['Nome do pai', dd.pai], ['Escolaridade', dd.escolaridade], ['PIS / NIS', dd.pis]].forEach(x => linha(...x));
-  r++; secao('Contato e endereço');
-  [['Celular', dd.telefone || a.telefone], ['E-mail', dd.email], ['Endereço', [dd.rua, dd.numero, dd.complemento].filter(Boolean).join(', ')], ['Bairro', dd.bairro], ['Cidade / UF', [dd.cidade, dd.uf].filter(Boolean).join(' / ')], ['CEP', dd.cep]].forEach(x => linha(...x));
-  r++; secao('Dados bancários');
-  [['Banco', dd.banco], ['Agência / conta', [dd.agencia, dd.conta].filter(Boolean).join(' / ')], ['Chave PIX', dd.pix]].forEach(x => linha(...x));
-  r++; secao('Uniforme e EPI');
-  linha('Camisa / calça / calçado', [dd.tamCamisa, dd.tamCalca, dd.tamCalcado].map(v => v || '—').join('  ·  '));
-  r++; secao('Emergência e dependentes');
-  [['Contato de emergência', [dd.emergNome, dd.emergTel].filter(Boolean).join(' · ')], ['Dependentes', dd.dependentes]].forEach(x => linha(...x));
-  r++; secao('Documentos recebidos');
-  ADM.slotsDe(a).filter(sl => (docs[sl.id] || []).length).forEach(sl => linha(sl.t, (docs[sl.id] || []).length + ' arquivo(s)'));
-  r++; ws.mergeCells(`A${r}:D${r}`); const rod = ws.getCell('A' + r); rod.value = 'Gerado pelo portal PREVINE em ' + new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }) + '. Dados informados pelo candidato no link de admissão.'; rod.font = { italic: true, size: 8, color: { argb: 'FF888888' } };
-  ws.headerFooter.oddFooter = '&L&8' + empNome() + '&R&8Página &P de &N';
-  ws.pageSetup.printArea = 'A1:D' + r;
-  const buf = await wb.xlsx.writeBuffer();
-  return { nome: ('Ficha cadastral - ' + a.nome + '.xlsx').replace(/[\\/:*?"<>|]+/g, ' '), tipo: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', blob: new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }) };
-}
 const salarioDe = async a => { if (!VS()) return null; const p = await db.doc('admissoes_priv/' + a.id).get().catch(() => null); return p && p.exists && p.data().salario != null ? p.data().salario : null; };
-async function baixarFicha(a) { try { toast('Gerando a ficha…'); const f = await fichaXlsx(a, { salario: await salarioDe(a) }); const u = URL.createObjectURL(f.blob); const l = document.createElement('a'); l.href = u; l.download = f.nome; document.body.appendChild(l); l.click(); l.remove(); setTimeout(() => URL.revokeObjectURL(u), 4000); } catch (e) { console.error(e); toast('Não foi possível gerar a ficha: ' + (e.message || e), 'bad'); } }
 function envioContab(a) {
   const c = a.cand || {}, docs = c.docs || {}; const cfg = D.cfg || {};
   const cand = []; ADM.slotsDe(a).forEach(sl => (docs[sl.id] || []).forEach((arq, i) => cand.push({ k: 'c|' + sl.id + '|' + i, t: sl.t + ((docs[sl.id] || []).length > 1 ? ' (' + (i + 1) + ')' : ''), sub: arq.nome })));
@@ -381,9 +343,10 @@ function envioContab(a) {
       <label for="v-ass">Assunto</label><input id="v-ass" value="${esc(preencher(cfg.contabAssunto || ASSUNTO_PADRAO, a, a.dataAdmissao))}">
       <label for="v-msg">Mensagem</label><textarea id="v-msg" rows="8"></textarea></div>
     <div class="card"><p class="ct" style="margin:0 0 4px">Documentos do candidato</p>${cand.map(x => chk(x, true)).join('') || '<p class="note">Nenhum documento enviado.</p>'}
-      <p class="ct" style="margin:12px 0 4px">Documentos da empresa</p>${chk({ k: 'x|ficha', t: 'Ficha cadastral (Excel) – cabeçalho da empresa, foto e dados do funcionário' }, true)}${VS() ? `<label style="display:flex;gap:8px;align-items:center;color:inherit;font-size:13px;margin:0 0 6px 26px"><input type="checkbox" id="v-sal" checked style="width:16px;height:16px"> incluir o salário na ficha</label>` : ''}${ass.map(x => chk(x, /assinad/.test(x.t))).join('') || '<p class="note">Nenhum documento gerado.</p>'}
+      <p class="ct" style="margin:12px 0 4px">Documentos da empresa</p>${chk({ k: 'x|ficha', t: 'Ficha cadastral (PDF, modelo FOR-RH) – foto, dados e conferência com os documentos' }, true)}${fcEstado(a).completo ? '' : `<p class="note" style="color:#b42318;margin:0 0 6px 26px">Atenção: os dados ainda não foram conferidos com os documentos (${fcEstado(a).ok} de ${fcEstado(a).total}). A ficha sai marcada como “não conferida”.</p>`}${VS() ? `<label style="display:flex;gap:8px;align-items:center;color:inherit;font-size:13px;margin:0 0 6px 26px"><input type="checkbox" id="v-sal" checked style="width:16px;height:16px"> incluir o salário na ficha</label>` : ''}${ass.map(x => chk(x, /assinad/.test(x.t))).join('') || '<p class="note">Nenhum documento gerado.</p>'}
+      ${aprovEmails().length ? `<p class="note"><b>Antes do envio:</b> ${esc(str((D.cfg || {}).aprovNomes) || aprovEmails().join(', '))} recebe(m) um e-mail pedindo o de acordo da contratação. A contabilidade só recebe depois que um deles der o de acordo no portal.</p>` : ''}
       <p class="note">O e-mail sai de previneime@gmail.com. Limite de 25 MB por e-mail (os anexos são conferidos antes de agendar).</p></div>
-    <div class="actions"><button class="btn ghost" id="v-cancel" type="button">Voltar</button><button class="btn primary" id="v-ok" type="button">Agendar envio</button></div><p class="note" id="v-st"></p>`);
+    <div class="actions"><button class="btn ghost" id="v-cancel" type="button">Voltar</button><button class="btn primary" id="v-ok" type="button">${aprovEmails().length ? 'Pedir de acordo e agendar' : 'Agendar envio'}</button></div><p class="note" id="v-st"></p>`);
   const msgPad = () => preencher(cfg.contabMsg || MSG_PADRAO, a, $('#v-adm').value);
   let msgEditada = false; $('#v-msg').value = msgPad(); $('#v-msg').oninput = () => { msgEditada = true; };
   $('#v-adm').onchange = () => { if (!msgEditada) $('#v-msg').value = msgPad(); };
@@ -394,11 +357,12 @@ function envioContab(a) {
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(para)) return toast('Informe o e-mail da contabilidade.', 'bad');
     if (!dAdm) return toast('Escolha a data de admissão.', 'bad'); if (isNaN(quando)) return toast('Escolha o dia e a hora do envio.', 'bad');
     if (!sel.length) return toast('Marque ao menos um documento.', 'bad');
+    if (sel.includes('x|ficha') && !fcEstado(a).completo && !confirm('Os dados do candidato ainda não foram conferidos com os documentos. Enviar mesmo assim?')) return;
     const b = $('#v-ok'); b.disabled = true; const st = $('#v-st');
     try {
-      st.textContent = 'Juntando os documentos…'; const files = [];
+      st.textContent = 'Juntando os documentos…'; const files = []; let temSal = false;
       for (const k of sel) { const [t, x, i] = k.split('|');
-        if (t === 'x') { st.textContent = 'Gerando a ficha cadastral…'; files.push(await fichaXlsx(a, { dataAdmissao: dAdm, salario: $('#v-sal') && $('#v-sal').checked ? await salarioDe(a) : null })); continue; }
+        if (t === 'x') { st.textContent = 'Gerando a ficha cadastral…'; const sv = $('#v-sal') && $('#v-sal').checked ? await salarioDe(a) : null; if (sv != null) temSal = true; files.push(await fichaPdf(a, { dataAdmissao: dAdm, salario: sv })); continue; }
         if (t === 'c') { const arq = docs[x][+i]; const blob = await ADM.ler(arq, x, getPart(a.id)); const ext = (str(arq.nome).match(/\.[a-z0-9]+$/i) || [''])[0] || (/pdf/.test(arq.tipo) ? '.pdf' : '.jpg'); const tit = (ADM.SLOTS.find(z => z.id === x) || {}).t || x; files.push({ nome: (tit.split(' (')[0] + (docs[x].length > 1 ? ' ' + (+i + 1) : '') + ' - ' + a.nome + ext).replace(/[\\/:*?"<>|]+/g, ' '), tipo: arq.tipo, blob }); }
         else { CAPT = []; try { if (t === 't') await pdfTexto(a, x); else await pdfDoc(a, x); } finally { const cap = CAPT; CAPT = null; cap.forEach(f => files.push({ nome: f.nome.replace(/[\\/:*?"<>|]+/g, ' '), tipo: 'application/pdf', blob: f.blob })); } }
       }
@@ -409,11 +373,14 @@ function envioContab(a) {
         for (let p2 = 0; p2 < partes; p2++) await db.doc(`envios_contab/${ref.id}/p/${fi}_${p2}`).set({ f: fi, i: p2, d: b64.slice(p2 * 700000, (p2 + 1) * 700000) });
         meta.push({ nome: f.nome, tipo: f.tipo || 'application/octet-stream', partes, bytes: f.blob.size }); }
       const agora = new Date().toISOString();
-      await ref.set({ admissaoId: a.id, nome: a.nome, para, cc, assunto: $('#v-ass').value.trim() || 'Admissão – ' + a.nome, corpo: $('#v-msg').value, dataAdmissao: dAdm, quando: quando.toISOString(), status: 'agendado', arquivos: meta, criadoEm: agora, por: MEU });
-      const env = (a.envios || []).concat([{ id: ref.id, para, quando: quando.toISOString(), dataAdmissao: dAdm, n: meta.length, status: 'agendado' }]);
+      const apv = aprovEmails(); const stIni = apv.length ? 'aprovacao' : 'agendado';
+      const resumo = `Pedido de de acordo para contratação\n\nCandidato: ${a.nome}\nCPF: ${ADM.fmtCpf(a.cpf)}\nFunção: ${a.funcao}\nÁrea: ${[a.area, a.subarea].filter(Boolean).join(' / ')}\nUnidade: ${a.unidade || '—'}\nVínculo: ${a.vinculo || 'CLT'}\nData de admissão: ${fmtD(dAdm)}\nE-mail à contabilidade marcado para: ${fmtDH(quando.toISOString())} (${para})\nAnexos preparados: ${meta.length}\nDados conferidos com os documentos: ${fcEstado(a).completo ? 'sim, por ' + (fcEstado(a).por || '') : 'NÃO'}\nPedido por: ${str(((window.__FB || {}).perfil || {}).nome) || MEU}\n\nPara dar o de acordo, abra no portal: https://app.previneeletrica.com.br/admissao/?a=${a.id}\n(a ficha cadastral vai em anexo)`;
+      await ref.set({ admissaoId: a.id, nome: a.nome, para, cc, assunto: $('#v-ass').value.trim() || 'Admissão – ' + a.nome, corpo: $('#v-msg').value, dataAdmissao: dAdm, quando: quando.toISOString(), status: stIni, arquivos: meta, criadoEm: agora, por: MEU, temSalario: !!temSal,
+        aprovEmails: apv, aprovAssunto: `De acordo de contratação – ${a.nome} – ${a.funcao}`, aprovCorpo: resumo });
+      const env = (a.envios || []).concat([{ id: ref.id, para, quando: quando.toISOString(), dataAdmissao: dAdm, n: meta.length, status: stIni }]);
       await db.doc('admissoes/' + a.id).update({ envios: env, dataAdmissao: dAdm }); a.envios = env; a.dataAdmissao = dAdm;
       if (!cfg.contabEmail && PODE) db.doc('config/admissao').set({ contabEmail: para, contabCc: cc }, { merge: true }).then(() => { D.cfg.contabEmail = para; D.cfg.contabCc = cc; }).catch(() => {});
-      toast(quando - Date.now() < 5 * 60e3 ? 'Envio agendado: sai em até 5 minutos.' : 'Envio agendado para ' + fmtDH(quando.toISOString()) + '.', 'ok'); detalhe(a.id);
+      toast(stIni === 'aprovacao' ? 'Pedido de de acordo enviado por e-mail a ' + (str((D.cfg || {}).aprovNomes) || 'quem aprova') + '. O e-mail à contabilidade só sai depois do de acordo.' : quando - Date.now() < 5 * 60e3 ? 'Envio agendado: sai em até 5 minutos.' : 'Envio agendado para ' + fmtDH(quando.toISOString()) + '.', 'ok'); detalhe(a.id);
     } catch (e) { console.error(e); b.disabled = false; st.textContent = ''; toast('Não foi possível agendar: ' + (e.message || e), 'bad'); }
   };
 }
@@ -439,6 +406,7 @@ async function detalhe(id, refresh) {
     <h3>Dados do candidato</h3><div class="card">${Object.keys(dd).length ? `<dl class="kv">${[['Nascimento', fmtD(dd.nascimento)], ['Sexo', dd.sexo], ['Estado civil', dd.estadoCivil], ['Mãe', dd.mae], ['Pai', dd.pai], ['Celular', dd.telefone], ['E-mail', dd.email],
         ['Endereço', [dd.rua, dd.numero, dd.complemento, dd.bairro, dd.cidade && dd.cidade + '/' + dd.uf, dd.cep].filter(Boolean).join(', ')], ['Escolaridade', dd.escolaridade], ['PIS', dd.pis], ['Banco', [dd.banco, dd.agencia && 'ag. ' + dd.agencia, dd.conta && 'cc ' + dd.conta, dd.pix && 'PIX ' + dd.pix].filter(Boolean).join(' · ')],
         ['Tamanhos', `camisa ${dd.tamCamisa || '—'} · calça ${dd.tamCalca || '—'} · calçado ${dd.tamCalcado || '—'}`], ['Emergência', [dd.emergNome, dd.emergTel].filter(Boolean).join(' · ')], ['Dependentes', dd.dependentes]].filter(x => x[1]).map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join('')}</dl>` : '<p class="note" style="margin:0">O candidato ainda não preencheu os dados.</p>'}</div>
+    ${confBox(a, ro)}${typeof regBox === 'function' && Object.keys(dd).length ? regBox(a, ro) : ''}
     <h3>Etapas</h3>
     <div class="etf"><h4>ASO ${(e.aso || {}).data ? '<span class="badge b-ok">feito</span>' : ''}</h4><div class="grid2"><div><label for="e-asoag">Exame marcado para</label><input type="date" id="e-asoag" value="${esc((e.aso || {}).agendado || '')}" ${ro}></div><div><label for="e-aso">Data do ASO</label><input type="date" id="e-aso" value="${esc((e.aso || {}).data || '')}" ${ro}></div></div>
       ${(e.aso || {}).data ? `<p class="note" style="margin:6px 0 0">Vence em ${fmtD(addMonths(e.aso.data, 12))} (1 ano, automático).</p>` : ''}
@@ -446,7 +414,7 @@ async function detalhe(id, refresh) {
     <div class="etf"><h4>Integração</h4><div class="grid2"><div><label for="e-ia">Agendada para</label><input type="date" id="e-ia" value="${esc((e.integ || {}).agendada || '')}" ${ro}></div><div><label for="e-ir">Realizada em</label><input type="date" id="e-ir" value="${esc((e.integ || {}).realizada || '')}" ${ro}></div></div><p class="note" style="margin:6px 0 0">A integração não vence.</p></div>
     <div class="etf"><h4>Treinamentos admissionais</h4><div id="m-trein"><p class="note">Carregando…</p></div><div class="grid2"><div><label for="e-te">Enviados em</label><input type="date" id="e-te" value="${esc((e.trein || {}).enviado || '')}" ${ro}></div><div><label for="e-tc">Concluídos em</label><input type="date" id="e-tc" value="${esc((e.trein || {}).concluido || '')}" ${ro}></div></div></div>
     <div class="etf"><h4>Assinaturas e envio</h4><div class="grid3"><div><label for="e-epi">OS e ficha de EPI assinadas</label><input type="date" id="e-epi" value="${esc((e.epi || {}).data || '')}" ${ro}></div><div><label for="e-adm">Docs admissionais assinados</label><input type="date" id="e-adm" value="${esc((e.admiss || {}).data || '')}" ${ro}></div><div><label for="e-ct">Enviado à contabilidade</label><input type="date" id="e-ct" value="${esc((e.contab || {}).data || '')}" ${ro}></div></div>
-      ${envLista(a)}${PODE ? '<div class="actions" style="justify-content:flex-start;margin-top:6px"><button class="btn sm accent" id="e-env" type="button">Enviar à contabilidade por e-mail…</button><button class="btn sm ghost" id="e-fx" type="button">Baixar ficha cadastral (Excel)</button></div>' : ''}</div>
+      ${envLista(a)}${PODE ? '<div class="actions" style="justify-content:flex-start;margin-top:6px"><button class="btn sm accent" id="e-env" type="button">Enviar à contabilidade por e-mail…</button><button class="btn sm ghost" id="e-fx" type="button">Baixar ficha cadastral (PDF)</button></div>' : ''}</div>
     <div class="etf"><h4>Justificativa de atraso ${atrasado(a) ? `<span class="badge ${precisaJust(a) ? 'b-bad' : 'b-ok'}">${precisaJust(a) ? 'obrigatória' : 'preenchida'}</span>` : ''}</h4>
       <div class="grid2"><div><label for="e-jm">Motivo</label><select id="e-jm" ${ro}><option value="">—</option>${['Documentos do candidato', 'Agenda do ASO / clínica', 'Agenda da integração (cliente)', 'Treinamentos', 'Candidato desistiu ou sumiu', 'Aprovação interna', 'Outro'].map(m => `<option ${a.justMotivo === m ? 'selected' : ''}>${m}</option>`).join('')}</select></div><div><label for="e-j">Detalhe</label><input id="e-j" value="${esc(a.justificativa || '')}" ${ro} placeholder="${atrasado(a) ? 'Obrigatório: passou de ' + PRAZO + ' dias' : 'Só se passar de ' + PRAZO + ' dias'}"></div></div></div>
     <div class="grid2"><div${VS() ? '' : ' hidden'}><label for="e-sal">Salário (R$) · só quem vê salários</label><input id="e-sal" inputmode="decimal" placeholder="Carregando…" disabled></div><div><label for="e-obs">Observação (só RH)</label><input id="e-obs" value="${esc(a.obs || '')}" ${ro}></div></div>
@@ -476,9 +444,11 @@ async function detalhe(id, refresh) {
   const cp = $('#m-copy'); if (cp) cp.onclick = async () => { try { await navigator.clipboard.writeText(linkDe(a)); toast('Link copiado.', 'ok'); } catch (er) { $('#m-link').select(); toast('Selecione e copie o link.'); } };
   const sv = $('#e-save'); if (sv) sv.onclick = () => salvarEtapas(a);
   const en = $('#e-env'); if (en) en.onclick = () => envioContab(a);
-  const fx = $('#e-fx'); if (fx) fx.onclick = () => baixarFicha(a);
+  const fx = $('#e-fx'); if (fx) fx.onclick = () => baixarFichaPdf(a);
+  confWire(a); regWire(a);
   if (!refresh) envStatus(a);
   $$('[data-envx]').forEach(b => b.onclick = () => cancelarEnvio(a, b.dataset.envx));
+  $$('[data-envap]').forEach(b => b.onclick = () => aprovarEnvio(a, b.dataset.envap));
   const cc = $('#e-conc'); if (cc) cc.onclick = () => concluir(a);
   const cn = $('#e-canc'); if (cn) { let armed = false; cn.onclick = async () => { if (!armed) { armed = true; cn.textContent = 'Toque de novo para cancelar (o link deixa de funcionar)'; return; }
     try { await db.doc('admissoes/' + a.id).update({ status: 'cancelado', canceladoEm: new Date().toISOString(), canceladoPor: MEU });
