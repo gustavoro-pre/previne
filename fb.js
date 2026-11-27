@@ -3,10 +3,10 @@
 import { FIREBASE_CONFIG, VAPID_KEY } from './firebase-config.js';
 import { initializeApp, deleteApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut, sendPasswordResetEmail, createUserWithEmailAndPassword, setPersistence, browserLocalPersistence } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
-import { initializeFirestore, persistentLocalCache, persistentSingleTabManager, collection, doc, getDoc, getDocs, getDocFromServer, getDocFromCache, setDoc, updateDoc, deleteDoc, onSnapshot, query, where, orderBy, limit, writeBatch, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+import { initializeFirestore, persistentLocalCache, persistentSingleTabManager, collection, doc, getDoc, getDocs, getDocFromServer, getDocFromCache, setDoc, updateDoc, deleteDoc, onSnapshot, query, where, orderBy, limit, writeBatch, serverTimestamp, runTransaction } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
 const MOD = window.__MODULO || 'portal'; /* qual módulo carregou este arquivo */
-const MOD_NOME = { portal: 'PREVINE ELÉTRICA', ferramentas: 'Ferramentas & EPI', treinamentos: 'Treinamentos', indicadores: 'Indicadores', alocacao: 'Alocação em OM', admissao: 'Admissão', documentos: 'Documentação' };
+const MOD_NOME = { portal: 'PREVINE ELÉTRICA', ferramentas: 'Ferramentas & EPI', treinamentos: 'Treinamentos', indicadores: 'Indicadores', alocacao: 'Alocação em OM', admissao: 'Admissão', documentos: 'Documentação', propostas: 'Propostas' };
 const app = initializeApp(FIREBASE_CONFIG);
 const auth = getAuth(app);
 const fs = initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentSingleTabManager({ forceOwnership: true }) }) });
@@ -71,6 +71,7 @@ function papelNoModulo(d) {
   if (MOD === 'alocacao') return d.papel === 'gerente' ? 'adm' : 'nenhum';
   if (MOD === 'admissao') return ['rh', 'gerente'].includes(d.papel) ? 'rh' : 'nenhum';
   if (MOD === 'documentos') return d.papel === 'gerente' ? 'editor' : ['tst', 'rh'].includes(d.papel) ? 'consulta' : 'nenhum';
+  if (MOD === 'propostas') return d.papel === 'gerente' ? 'comercial' : 'nenhum';
   return 'nenhum';
 }
 function telaSemAcesso(u) {
@@ -116,7 +117,9 @@ function collRef(path, cons) {
     add: async d => { const r = docRef(doc(c).path); await r.set(d); return r; }
   };
 }
-const DB = { doc: docRef, collection: p => collRef(p) };
+/* transação (numeração sequencial): tx.get(ref) / tx.set(ref, d, o) com as refs do DB */
+const runTx = fn => runTransaction(fs, t => fn({ get: r => t.get(doc(fs, r.path)).then(wDoc), set: (r, d, o) => { o ? t.set(doc(fs, r.path), d, o) : t.set(doc(fs, r.path), d); }, update: (r, d) => { t.update(doc(fs, r.path), d); } })).catch(e => { throw mapErr(e); });
+const DB = { doc: docRef, collection: p => collRef(p), runTransaction: runTx };
 
 /* ---------- conexão / pendências ---------- */
 function updConn() {

@@ -21,6 +21,9 @@ service cloud.firestore {
     // perfil no módulo Documentação (sem perfil definido: Gerente edita; TST e RH consultam)
     function mdo() { return perfil().get('modulos', {}).get('documentos', ''); }
     function docm(ps) { return equipe() && (perfil().papel in ['admin', 'gestao'] || mdo() in ps || (mdo() == '' && ((perfil().papel == 'gerente' && 'editor' in ps) || (perfil().papel in ['tst', 'rh'] && 'consulta' in ps)))); }
+    // perfil no módulo Propostas (sem perfil definido: Gerente é comercial)
+    function mpr() { return perfil().get('modulos', {}).get('propostas', ''); }
+    function prop(ps) { return equipe() && (perfil().papel in ['admin', 'gestao'] || mpr() in ps || (mpr() == '' && perfil().papel == 'gerente' && 'comercial' in ps)); }
     function trein(ps) { return equipe() && (perfil().papel in ['admin', 'gestao'] || mt() in ps || (mt() == '' && ((perfil().papel == 'gerente' && 'gestor' in ps) || perfil().papel in ps))); }
 
     // configuração inicial (primeiro administrador): só pode ser criada uma vez
@@ -142,6 +145,13 @@ service cloud.firestore {
     // folha mensal importada (salários, horas extras, faltas): só Admin, Gestão, Gerente e RH
     // salários: só quem tem a permissão 'Vê salários' no cadastro de usuário
     function folhaOk() { return ativo() && perfil().get('verSalarios', false) == true; }
+    // Propostas: clientes, propostas, custos internos (só comercial), anexos e numeração
+    match /clientes/{id} { allow read: if prop(['comercial', 'tecnico', 'consulta']); allow write: if prop(['comercial']); }
+    match /propostas/{id} { allow read: if prop(['comercial', 'tecnico', 'consulta']); allow write: if prop(['comercial', 'tecnico']); }
+    match /prop_custos/{id} { allow read, write: if prop(['comercial']); }
+    match /prop_arq/{id} { allow read: if prop(['comercial', 'tecnico', 'consulta']); allow write: if prop(['comercial', 'tecnico']);
+      match /p/{i} { allow read: if prop(['comercial', 'tecnico', 'consulta']); allow write: if prop(['comercial', 'tecnico']); } }
+    match /config/propostas { allow read: if prop(['comercial', 'tecnico', 'consulta']); allow write: if prop(['comercial', 'tecnico']); }
     match /folha/{id} { allow read, write: if folhaOk(); }
     match /folha_imp/{id} { allow read, write: if folhaOk(); }
     match /contracheques/{id} { allow read, write: if folhaOk(); }
