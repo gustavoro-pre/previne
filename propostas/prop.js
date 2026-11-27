@@ -362,15 +362,36 @@ function mCliente(c) {
   const dis = ed ? '' : 'disabled';
   modal(`<div class="top"><h2>${c.id ? esc(c.nome) : 'Novo cliente'}</h2><button class="btn sm ghost" type="button" id="mx">Fechar</button></div>
     <div class="card"><div class="grid2"><div><label>Razão social / nome</label><input id="c-nome" value="${esc(c.nome)}" ${dis}></div><div><label>Sigla (usada no controle, ex.: AMSF)</label><input id="c-sig" value="${esc(c.sigla)}" maxlength="6" style="text-transform:uppercase" ${dis}></div></div>
-      <div class="grid3"><div><label>CNPJ</label><input id="c-cnpj" value="${esc(c.cnpj)}" ${dis}></div><div><label>Cidade</label><input id="c-cid" value="${esc(c.cidade)}" ${dis}></div><div><label>UF</label><input id="c-uf" value="${esc(c.uf)}" maxlength="2" ${dis}></div></div>
+      <div class="grid3"><div><label>CNPJ</label><div style="display:flex;gap:6px"><input id="c-cnpj" value="${esc(c.cnpj)}" inputmode="numeric" placeholder="00.000.000/0000-00" ${dis}>${ed ? '<button class="btn sm ghost" id="c-busca" type="button">Buscar</button>' : ''}</div></div><div><label>Cidade</label><input id="c-cid" value="${esc(c.cidade)}" ${dis}></div><div><label>UF</label><input id="c-uf" value="${esc(c.uf)}" maxlength="2" ${dis}></div></div>
+      <p class="note" id="c-rf" style="margin:2px 0 6px">${c.situacao ? `Receita Federal: ${esc(c.situacao)} · consultado em ${esc(str(c.receitaEm).slice(0, 10).split('-').reverse().join('/'))}` : 'Digite o CNPJ e clique em Buscar para trazer os dados da Receita Federal.'}</p>
+      <div class="grid2"><div><label>Nome fantasia</label><input id="c-fan" value="${esc(c.fantasia || '')}" ${dis}></div><div><label>CEP</label><input id="c-cep" value="${esc(c.cep || '')}" ${dis}></div></div>
+      <label>Endereço</label><input id="c-end" value="${esc(c.endereco || '')}" ${dis}>
+      <div class="grid2"><div><label>Telefone</label><input id="c-tel" value="${esc(c.telefone || '')}" ${dis}></div><div><label>E-mail (cadastro na Receita)</label><input id="c-em" value="${esc(c.email || '')}" ${dis}></div></div>
       <label>Segmento</label><input id="c-seg" value="${esc(c.segmento)}" placeholder="Siderurgia, automotivo, mineração…" ${dis}>
       <label>Unidades e áreas <span class="note">(uma unidade por linha; áreas depois de dois-pontos, separadas por vírgula)</span></label><textarea id="c-un" placeholder="Resende: Aciaria, Laminação, Utilidades&#10;Barra Mansa: Trefilaria, Laminação" ${dis}>${esc(unTxt)}</textarea>
       <label>Contatos <span class="note">(um por linha: nome ; cargo ; e-mail ; telefone ; unidade ; área)</span></label><textarea id="c-ct" ${dis}>${esc(ctTxt)}</textarea>
       <label>Observações</label><textarea id="c-obs" ${dis}>${esc(c.obs)}</textarea>
       ${ed ? '<div class="actions" style="margin-top:10px"><button class="btn primary" id="c-ok" type="button">Salvar cliente</button></div>' : ''}</div>`);
   $('#mx').onclick = fecha; const ok = $('#c-ok'); if (!ok) return;
+  let RF = { situacao: c.situacao || '', receitaEm: c.receitaEm || '', cnae: c.cnae || '', porte: c.porte || '' };
+  const tit = t => str(t).toLowerCase().replace(/(^|\s|\/|-)(\S)/g, (m, a, b) => a + b.toUpperCase()).replace(/\b(Da|De|Do|Das|Dos|E)\b/g, w => w.toLowerCase()).replace(/\b(Ltda|S\.?a|Me|Epp)\b/gi, w => w.toUpperCase());
+  const busca = async () => { const n = str($('#c-cnpj').value).replace(/\D/g, ''); if (n.length !== 14) return toast('CNPJ precisa ter 14 números.', 'bad');
+    const b = $('#c-busca'); b.disabled = true; b.textContent = 'Buscando…';
+    try { const r = await fetch('https://brasilapi.com.br/api/cnpj/v1/' + n); if (r.status === 404) throw new Error('CNPJ não encontrado na Receita.'); if (!r.ok) throw new Error('Consulta indisponível agora (' + r.status + '). Tente de novo.');
+      const j = await r.json(); const set = (id, v, sempre) => { const e = $(id); if (v && (sempre || !e.value.trim())) e.value = v; };
+      $('#c-cnpj').value = n.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
+      set('#c-nome', j.razao_social, true); set('#c-fan', j.nome_fantasia ? tit(j.nome_fantasia) : '', true); set('#c-cid', tit(j.municipio), true); set('#c-uf', j.uf, true);
+      set('#c-cep', str(j.cep).replace(/^(\d{5})(\d{3})$/, '$1-$2'), true);
+      set('#c-end', [[j.descricao_tipo_de_logradouro, j.logradouro].filter(Boolean).join(' '), j.numero, j.complemento, j.bairro].map(x => tit(str(x).trim())).filter(Boolean).join(', '), true);
+      const tel = str(j.ddd_telefone_1).replace(/\D/g, ''); set('#c-tel', tel.length >= 10 ? '(' + tel.slice(0, 2) + ') ' + tel.slice(2, -4) + '-' + tel.slice(-4) : '', true); set('#c-em', str(j.email).toLowerCase(), true);
+      set('#c-seg', j.cnae_fiscal_descricao, false);
+      if (!$('#c-sig').value.trim()) $('#c-sig').value = str(j.nome_fantasia || j.razao_social).normalize('NFD').replace(/[^A-Za-z ]/g, '').split(/\s+/).filter(w => w.length > 2 && !/^(LTDA|S A|SA|DE|DA|DO|DOS|DAS)$/i.test(w)).map(w => w[0]).join('').slice(0, 6).toUpperCase();
+      RF = { situacao: str(j.descricao_situacao_cadastral) + (j.descricao_identificador_matriz_filial ? ' · ' + str(j.descricao_identificador_matriz_filial).toLowerCase() : ''), receitaEm: new Date().toISOString(), cnae: str(j.cnae_fiscal) + ' ' + str(j.cnae_fiscal_descricao), porte: str(j.porte) };
+      $('#c-rf').innerHTML = `Receita Federal: <b>${esc(RF.situacao)}</b> · CNAE ${esc(RF.cnae)} · porte ${esc(RF.porte || '—')}`; if (!/ATIVA/i.test(j.descricao_situacao_cadastral)) toast('Atenção: CNPJ com situação ' + j.descricao_situacao_cadastral + ' na Receita.', 'bad'); else toast('Dados da Receita carregados. Confira e salve.', 'ok');
+    } catch (e) { toast(e.message || 'Não foi possível consultar.', 'bad'); } finally { b.disabled = false; b.textContent = 'Buscar'; } };
+  $('#c-busca').onclick = busca; $('#c-cnpj').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); busca(); } });
   ok.onclick = async () => {
-    const d = { nome: $('#c-nome').value.trim(), sigla: $('#c-sig').value.trim().toUpperCase().replace(/[^A-Z0-9]/g, ''), cnpj: $('#c-cnpj').value.trim(), cidade: $('#c-cid').value.trim(), uf: $('#c-uf').value.trim().toUpperCase(), segmento: $('#c-seg').value.trim(), obs: $('#c-obs').value.trim(),
+    const d = { nome: $('#c-nome').value.trim(), sigla: $('#c-sig').value.trim().toUpperCase().replace(/[^A-Z0-9]/g, ''), cnpj: $('#c-cnpj').value.trim(), cidade: $('#c-cid').value.trim(), uf: $('#c-uf').value.trim().toUpperCase(), segmento: $('#c-seg').value.trim(), obs: $('#c-obs').value.trim(), fantasia: $('#c-fan').value.trim(), cep: $('#c-cep').value.trim(), endereco: $('#c-end').value.trim(), telefone: $('#c-tel').value.trim(), email: $('#c-em').value.trim(), situacao: RF.situacao, receitaEm: RF.receitaEm, cnae: RF.cnae, porte: RF.porte,
       unidades: $('#c-un').value.split('\n').map(l => l.trim()).filter(Boolean).map(l => { const [n, a] = l.split(':'); return { nome: n.trim(), areas: str(a).split(',').map(s => s.trim()).filter(Boolean) }; }),
       contatos: $('#c-ct').value.split('\n').map(l => l.trim()).filter(Boolean).map(l => { const p = l.split(';').map(s => s.trim()); return { nome: p[0] || '', cargo: p[1] || '', email: p[2] || '', tel: p[3] || '', unidade: p[4] || '', area: p[5] || '' }; }) };
     if (!d.nome) return toast('Informe o nome do cliente.', 'bad'); if (!d.sigla) return toast('Informe a sigla (ex.: AMSF).', 'bad');
