@@ -24,7 +24,7 @@
       if (x === 0) return 'zero';
       const g = [[1e9, 'bilhão', 'bilhões'], [1e6, 'milhão', 'milhões'], [1e3, 'mil', 'mil'], [1, '', '']]; const p = []; let resto = x;
       for (const [b, s1, sn] of g) { const q = Math.floor(resto / b); resto %= b; if (!q) continue; if (b === 1e3 && q === 1) p.push('mil'); else p.push(ate999(q) + (s1 ? ' ' + (q === 1 ? s1 : sn) : '')); }
-      if (p.length > 1) { const ult = x % 1000; const sep = (ult && (ult < 100 || ult % 100 === 0)) ? ' e ' : ', '; return p.slice(0, -1).join(', ') + sep + p[p.length - 1]; }
+      if (p.length > 1) { const ult = x % 1000; const sep = (ult && (ult < 100 || ult % 100 === 0)) ? ' e ' : ' '; return p.slice(0, -1).join(' ') + sep + p[p.length - 1]; }
       return p[0];
     };
     const tot = Math.round(n(v) * 100), r = Math.floor(tot / 100), c = tot % 100; const p = [];
@@ -41,6 +41,7 @@
     const t = { mo: ajuste(mo), mat: ajuste(mat), eq: ajuste(eq) }; t.total = t.mo + t.mat + t.eq;
     if (P && P.modalidade === 'hh') { const h = (P.hh || []).reduce((a, x) => a + n(x.normal) * n(x.qtdEst), 0); if (h) { t.hhEst = h; } }
     if (P && n(P.valorFixo)) { t.total = n(P.valorFixo); }
+    t.bruto = t.total; t.desc = P && n(P.desconto) ? Math.round(t.total * n(P.desconto)) / 100 : 0; t.total = t.bruto - t.desc;
     return t;
   }
 
@@ -154,11 +155,13 @@
       let k = 2;
       if (hh) {
         const H = (P.hh || []).filter(x => s(x.funcao).trim());
-        corpo.push(H1(`${k}. Preços por homem-hora`), ...grade([4, 2, 2, 2], ['Função', 'HH normal', 'HH extra 50%', 'HH extra 100%'], H.map(x => [x.funcao, brl(x.normal), x.he50 ? brl(x.he50) : '—', x.he100 ? brl(x.he100) : '—']), ['left', 'right', 'right', 'right']));
+        const fd = 1 - n(P.desconto) / 100;
+        corpo.push(H1(`${k}. Preços por homem-hora`), ...grade([4, 2, 2, 2], ['Função', 'HH normal', 'HH extra 50%', 'HH extra 100%'], H.map(x => [x.funcao, brl(n(x.normal) * fd), x.he50 ? brl(n(x.he50) * fd) : '—', x.he100 ? brl(n(x.he100) * fd) : '—']), ['left', 'right', 'right', 'right']));
+        if (n(P.desconto)) corpo.push(NOTA(`Valores já com desconto comercial de ${qtd(P.desconto)}%.`));
         if (P.hhNota) corpo.push(Pp(P.hhNota));
         if (t.total) { corpo.push(H2('Estimativa de valor'), ...grade([6, 3], ['Grupo', 'Valor (R$)'], [['Mão de obra (estimativa de horas)', brl(t.hhEst || t.mo)], ...(t.mat ? [['Materiais', brl(t.mat)]] : []), ...(t.eq ? [['Equipamentos', brl(t.eq)]] : [])], ['left', 'right'], ['VALOR ESTIMADO', brl((t.hhEst || t.mo) + t.mat + t.eq)])); }
       } else {
-        corpo.push(H1(`${k}. Resumo de preços`), ...grade([6, 3], ['Grupo', 'Valor (R$)'], [['Mão de obra', brl(t.mo)], ['Materiais', brl(t.mat)], ['Equipamentos', brl(t.eq)]].filter(r => r[1] !== brl(0) || r[0] === 'Mão de obra'), ['left', 'right'], ['VALOR TOTAL', brl(t.total)]));
+        corpo.push(H1(`${k}. Resumo de preços`), ...grade([6, 3], ['Grupo', 'Valor (R$)'], [['Mão de obra', brl(t.mo)], ['Materiais', brl(t.mat)], ['Equipamentos', brl(t.eq)]].filter(r => r[1] !== brl(0) || r[0] === 'Mão de obra').concat(t.desc ? [['Subtotal', brl(t.bruto)], [`Desconto comercial (${qtd(P.desconto)}%)`, '− ' + brl(t.desc)]] : []), ['left', 'right'], ['VALOR TOTAL', brl(t.total)]));
         corpo.push(Pp('Valor total por extenso: ' + extenso(t.total) + '.', { spacing: { after: 160 } }));
         if (P.abrirCustos) {
           const lin = [];
@@ -166,6 +169,7 @@
           (K.mo || []).forEach(x => lin.push(['Mão de obra – ' + s(x.desc || x.funcao), s(x.un || 'h'), qtd(x.qtd), brl(n(x.unit) * pct), brl(n(x.qtd) * n(x.unit) * pct)]));
           (K.mat || []).forEach(x => lin.push(['Material – ' + s(x.desc), s(x.un), qtd(x.qtd), brl(n(x.unit) * pct), brl(n(x.qtd) * n(x.unit) * pct)]));
           (K.eq || []).forEach(x => lin.push(['Equipamento – ' + s(x.desc), s(x.un), qtd(x.qtd), brl(n(x.unit) * pct), brl(n(x.qtd) * n(x.unit) * pct)]));
+          if (t.desc) lin.push([`Desconto comercial (${qtd(P.desconto)}%)`, '', '', '', '− ' + brl(t.desc)]);
           corpo.push(H2(`${k}.1 Abertura de custos`), ...grade([5, 1.2, 1.2, 1.8, 1.8], ['Item', 'Unid.', 'Qtd.', 'Unitário (R$)', 'Total (R$)'], lin, ['left', 'center', 'center', 'right', 'right'], ['TOTAL', '', '', '', brl(t.total)]));
         }
       }
@@ -184,8 +188,10 @@
       k++; corpo.push(H1(`${k}. Aceite`), Pp('Declaramos de acordo com as condições desta proposta.', { spacing: { after: 480 }, keepNext: true }), Pp('_______________________________________________', { alignment: AlignmentType.CENTER, spacing: { after: 0 }, keepNext: true }), Pp(s(P.cliente) + ' – nome, cargo e data', { alignment: AlignmentType.CENTER }));
     }
     /* histórico de revisões */
-    const hist = (P.revisoes || []).concat([{ rev, data: P.data, txt: P.revMotivo || (rev === '00' ? 'Emissão inicial.' : 'Revisão da proposta.') }]).filter((x, i, a) => a.findIndex(y => y.rev === x.rev) === i);
-    corpo.push(new Paragraph({ children: [new PageBreak()] }), H1('Histórico de revisões'), ...grade([1.3, 1.7, 7.5], ['Revisão', 'Data', 'O que foi alterado'], hist.map(x => [s(x.rev), fmtD(x.data), s(x.txt)]), ['center', 'center', 'left']));
+    const meu = M => (M || []).filter(m => m.tipo === tipo);
+    const revs = (P.revisoes || []).map(r => ({ rev: r.rev, data: r.data, txt: r.txt, mud: meu(r.mudancas) })).concat([{ rev, data: P.data, txt: P.revMotivo || (rev === '00' ? 'Emissão inicial.' : 'Revisão da proposta.'), mud: meu(P.revMud) }]).filter((x, i, a) => a.findIndex(y => y.rev === x.rev) === i);
+    const linhasRev = []; revs.forEach(r => { if (!r.mud.length) linhasRev.push([s(r.rev), fmtD(r.data), r.rev === '00' ? 'Emissão inicial' : '—', r.rev === '00' ? s(r.txt) : s(r.txt) + (isT ? ' (sem alteração técnica)' : ' (sem alteração comercial)')]); else r.mud.forEach((m, i) => linhasRev.push([i ? '' : s(r.rev), i ? '' : fmtD(r.data), s(m.cat), s(m.txt)])); });
+    corpo.push(new Paragraph({ children: [new PageBreak()] }), H1('Controle de revisões'), ...grade([1, 1.5, 2.6, 6], ['Revisão', 'Data', 'Item alterado', 'Descrição da alteração'], linhasRev, ['center', 'center', 'left', 'left']));
 
     return new Document({
       creator: 'Portal Previne', title: `${cod} - ${titulo}`,

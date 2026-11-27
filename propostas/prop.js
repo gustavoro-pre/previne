@@ -129,6 +129,8 @@ function tabEd(key, cols, rows, alvo) {
     </tbody></table></div>${dis ? '' : `<button class="btn sm ghost" data-add="${alvo}|${key}" type="button" style="margin-top:6px">+ linha</button>`}`;
 }
 function totaisK() { return PropDoc.totais(P, K); }
+const DOCS_REV = { tec: 'Técnica', com: 'Comercial' };
+const CATS = { com: ['Desconto', 'Preço / valor', 'Prazo de pagamento', 'Faturamento', 'Validade', 'Reajuste', 'Modalidade de preço', 'Abertura de custos', 'Outra condição comercial'], tec: ['Escopo', 'Inclusão de item', 'Exclusão de item', 'Materiais', 'Equipamentos', 'Equipe', 'Prazo de execução', 'Cronograma', 'Premissas', 'Fornecimentos', 'Normas / SSMA', 'Documentos de referência', 'Outra alteração técnica'] };
 function secId() {
   const c = cliBy(P.clienteId) || {}; const un = (c.unidades || []); const uSel = un.find(u => u.nome === P.unidade) || {};
   const gest = (D.cfg.gestores || []);
@@ -158,16 +160,16 @@ function secTec() {
 function secPreco() {
   const t = totaisK(); const hh = P.modalidade === 'hh';
   let h = '';
-  if (hh) h += `<div class="card"><p class="ct">Preços por homem-hora (aparecem na proposta)</p>${tabEd('hh', TAB_HH, P.hh || [], 'H')}<label>Observação sobre o HH (opcional)</label>${area('hhNota', P.hhNota, 'Ex.: valores para jornada de 44 h semanais; adicional noturno de 20% sobre o HH normal.')}</div>`;
+  if (hh) h += `<div class="card"><p class="ct">Preços por homem-hora (aparecem na proposta)</p>${tabEd('hh', TAB_HH, P.hh || [], 'H')}<label>Observação sobre o HH (opcional)</label>${area('hhNota', P.hhNota, 'Ex.: valores para jornada de 44 h semanais; adicional noturno de 20% sobre o HH normal.')}${veCustos() ? '' : `<label>Desconto comercial (%)</label><input id="desc" inputmode="decimal" value="${esc(P.desconto ? fmtN(P.desconto) : '')}" ${ro() ? 'disabled' : ''}>`}</div>`;
   if (!veCustos()) return h + '<div class="card"><p class="note">Os custos internos só aparecem para o perfil Comercial.</p></div>';
   h += `<div class="card"><p class="ct">Custos internos ${hh ? '(estimativa)' : ''}</p><p class="cs">Itens lançados aqui não aparecem na proposta, a menos que "abrir custos" esteja marcado. Só o perfil Comercial vê esta parte.</p>
     ${Object.entries(TAB_C).map(([k, [tt, cols]]) => `<p class="lbl" style="margin-top:12px">${tt}</p>${tabEd(k, cols, K[k] || [], 'K')}`).join('')}
-    <div class="grid3" style="margin-top:12px"><div><label>BDI / margem sobre os itens (%)</label><input id="bdi" inputmode="decimal" value="${esc(fmtN(K.bdi))}" ${ro() ? 'disabled' : ''}></div><div></div><div></div></div>
+    <div class="grid3" style="margin-top:12px"><div><label>BDI / margem sobre os itens (%)</label><input id="bdi" inputmode="decimal" value="${esc(fmtN(K.bdi))}" ${ro() ? 'disabled' : ''}></div><div><label>Desconto comercial (%)</label><input id="desc" inputmode="decimal" value="${esc(P.desconto ? fmtN(P.desconto) : '')}" placeholder="0" ${ro() ? 'disabled' : ''}></div><div></div></div>
     <label class="chk"><input type="checkbox" id="abrir" ${P.abrirCustos ? 'checked' : ''} ${ro() || hh ? 'disabled' : ''}> Abrir custos na proposta comercial (mostra item a item)</label>
     <div class="tot" id="tots">${totHtml(t)}</div></div>`;
   return h;
 }
-const totHtml = t => `<div>Mão de obra<b>${brl(t.mo)}</b></div><div>Materiais<b>${brl(t.mat)}</b></div><div>Equipamentos<b>${brl(t.eq)}</b></div><div style="border-color:var(--ink)">Total da proposta<b>${brl(t.total)}</b></div>`;
+const totHtml = t => `<div>Mão de obra<b>${brl(t.mo)}</b></div><div>Materiais<b>${brl(t.mat)}</b></div><div>Equipamentos<b>${brl(t.eq)}</b></div>${t.desc ? `<div>Desconto ${fmtN(P.desconto)}%<b>− ${brl(t.desc)}</b></div>` : ''}<div style="border-color:var(--ink)">Total da proposta<b>${brl(t.total)}</b></div>`;
 function secCond() {
   return `<div class="card"><p class="ct">Condições comerciais</p>
     <div class="grid3"><div><label>Validade (dias)</label>${inp('validade', P.validade, 'inputmode="numeric"')}</div><div><label>Item da LC 116/2003</label>${inp('lc116', P.lc116)}</div><div><label>Reajuste (se houver)</label>${inp('reajuste', P.reajuste, 'placeholder="Ex.: IPCA a cada 12 meses"')}</div></div>
@@ -184,7 +186,14 @@ function secAnx() {
       ${ro() ? '' : `<div class="grid3" style="margin-top:8px"><div><label>Fornecedor</label><input id="ct-forn"></div><div><label>Valor cotado (R$)</label><input id="ct-val" inputmode="decimal"></div><div><label>&nbsp;</label><label class="btn sm" style="display:block;text-align:center;cursor:pointer;margin:0">+ Anexar cotação<input type="file" id="up-cot" multiple hidden></label></div></div>`}</div>`;
 }
 function secHist() {
-  return `<div class="card"><p class="ct">Revisões</p>${(P.revisoes || []).length ? `<div class="tbwrap"><table class="tb"><thead><tr><th>Rev.</th><th>Data</th><th>Motivo</th></tr></thead><tbody>${P.revisoes.map(r => `<tr><td>${esc(r.rev)}</td><td>${fmtD(r.data)}</td><td>${esc(r.txt)}</td></tr>`).join('')}<tr><td><b>${esc(P.rev)}</b></td><td>${fmtD(P.data)}</td><td>${esc(P.revMotivo || 'Atual')}</td></tr></tbody></table></div>` : '<p class="note">Revisão 00 (emissão inicial).</p>'}</div>
+  const linhas = (P.revisoes || []).map(r => ({ rev: r.rev, data: r.data, txt: r.txt, mud: r.mudancas || [] })).concat([{ rev: P.rev || '00', data: P.data, txt: P.revMotivo || 'Emissão inicial.', mud: P.revMud || [], atual: true }]);
+  const mudTxt = M => M.length ? M.map(m => `<div><span class="badge ${m.tipo === 'com' ? 'b-warn' : 'b-info'}">${DOCS_REV[m.tipo]}</span> <b>${esc(m.cat)}</b> – ${esc(m.txt)}</div>`).join('') : '<span class="note">—</span>';
+  const ed = !ro() && P.rev && P.rev !== '00';
+  return `<div class="card"><p class="ct">Controle de revisão</p><p class="cs">Cada alteração aparece no histórico de revisões do documento dela: as comerciais na proposta comercial, as técnicas na técnica.</p>
+    <div class="tbwrap"><table class="tb"><thead><tr><th>Rev.</th><th>Data</th><th>Motivo</th><th>Alterações</th></tr></thead><tbody>${linhas.map(r => `<tr><td><b>${esc(r.rev)}</b>${r.atual ? ' <span class="note">(atual)</span>' : ''}</td><td>${fmtD(r.data)}</td><td>${esc(r.txt)}</td><td style="font-size:13px">${mudTxt(r.mud)}</td></tr>`).join('')}</tbody></table></div></div>
+    ${ed ? `<div class="card"><p class="ct">Alterações da revisão ${esc(P.rev)}</p><p class="cs">Registre o que mudou em relação à revisão anterior. "Detectar alterações" compara com a versão emitida e preenche sozinho: confira e ajuste o texto.</p>
+      <div class="tbwrap" style="margin:0"><table class="tb it"><thead><tr><th style="width:15%">Documento</th><th style="width:25%">Item alterado</th><th>Descrição</th><th class="x"></th></tr></thead><tbody>${(P.revMud || []).map((m, i) => `<tr><td><select data-rm="${i}|tipo">${Object.entries(DOCS_REV).map(([k, t]) => `<option value="${k}" ${m.tipo === k ? 'selected' : ''}>${t}</option>`).join('')}</select></td><td><select data-rm="${i}|cat">${CATS[m.tipo || 'tec'].concat(CATS[m.tipo || 'tec'].includes(m.cat) ? [] : [m.cat]).filter(Boolean).map(c => `<option ${m.cat === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select></td><td><input data-rm="${i}|txt" value="${esc(m.txt)}"></td><td><button class="link" data-rmx="${i}" type="button">✕</button></td></tr>`).join('')}</tbody></table></div>
+      <div class="actions" style="justify-content:flex-start;gap:8px;margin-top:8px"><button class="btn sm" id="rm-auto" type="button">Detectar alterações</button><button class="btn sm ghost" id="rm-add" type="button">+ alteração</button></div></div>` : ''}
     <div class="card"><p class="ct">Histórico</p>${(P.hist || []).slice().reverse().map(h => `<div class="anx"><div class="main">${esc(h.txt)}<div class="note">${esc(h.por || '')} · ${new Date(h.em).toLocaleString('pt-BR')}</div></div></div>`).join('') || '<p class="note">—</p>'}</div>`;
 }
 const SECS = [['id', 'Identificação'], ['tec', 'Proposta técnica'], ['preco', 'Preço'], ['cond', 'Condições'], ['anx', 'Anexos'], ['hist', 'Histórico']];
@@ -220,8 +229,13 @@ function ligaEditor() {
   B.querySelectorAll('[data-del]').forEach(b => b.onclick = () => { const [a, key, i] = b.dataset.del.split('|'); alvo(a)[key].splice(+i, 1); SUJO = true; editor(); });
   B.querySelectorAll('[data-mod]').forEach(b => b.onclick = () => { if (ro()) return; P.modalidade = b.dataset.mod; if (P.modalidade === 'hh') P.abrirCustos = false; SUJO = true; editor(); });
   const bdi = $('#bdi'); if (bdi) bdi.oninput = () => { K.bdi = num(bdi.value); SUJO = true; $('#tots').innerHTML = totHtml(totaisK()); };
+  const dsc = $('#desc'); if (dsc) dsc.oninput = () => { P.desconto = num(dsc.value); SUJO = true; const tt = $('#tots'); if (tt) tt.innerHTML = totHtml(totaisK()); };
   const ab = $('#abrir'); if (ab) ab.onchange = () => { P.abrirCustos = ab.checked; SUJO = true; };
   const m2k = $('#mat2k'); if (m2k) m2k.onclick = () => { const have = new Set((K.mat || []).map(x => norm(x.desc))); (P.tecnico.materiais || []).filter(x => str(x.desc).trim() && !have.has(norm(x.desc))).forEach(x => (K.mat = K.mat || []).push({ desc: x.desc, un: x.un || 'un', qtd: x.qtd, unit: '' })); SUJO = true; V.sec = 'preco'; editor(); toast('Materiais copiados: preencha o preço unitário.', 'ok'); };
+  B.querySelectorAll('[data-rm]').forEach(el => el.addEventListener(el.tagName === 'SELECT' ? 'change' : 'input', () => { const [i, f] = el.dataset.rm.split('|'); P.revMud[+i][f] = el.value; if (f === 'tipo') { P.revMud[+i].cat = CATS[el.value][0]; editor(); } SUJO = true; }));
+  B.querySelectorAll('[data-rmx]').forEach(b => b.onclick = () => { P.revMud.splice(+b.dataset.rmx, 1); SUJO = true; editor(); });
+  const ra = $('#rm-add'); if (ra) ra.onclick = () => { (P.revMud = P.revMud || []).push({ tipo: 'com', cat: CATS.com[0], txt: '' }); SUJO = true; editor(); };
+  const rau = $('#rm-auto'); if (rau) rau.onclick = () => { const t = totaisK(); if (veCustos()) P.valorTotal = Math.round(num(P.modalidade === 'hh' ? (t.hhEst || t.total) : t.total) * 100) / 100; const D2 = diferencas(P.snap, foto()); const ja = new Set((P.revMud || []).map(m => norm(m.txt))); const novos = D2.filter(m => !ja.has(norm(m.txt))); P.revMud = (P.revMud || []).concat(novos); SUJO = true; editor(); toast(P.snap ? (novos.length ? novos.length + ' alteração(ões) encontrada(s).' : 'Nenhuma alteração nova encontrada.') : 'Sem versão anterior gravada para comparar: registre à mão.', novos.length ? 'ok' : ''); };
   const gc = $('#go-cli'); if (gc) gc.onclick = e => { e.preventDefault(); mCliente(null); };
   const uc = $('#up-cli'); if (uc) uc.onchange = () => anexar('cliente', [...uc.files]);
   const ut = $('#up-cot'); if (ut) ut.onchange = () => anexar('cotacoes', [...ut.files], { fornecedor: $('#ct-forn').value.trim(), valor: num($('#ct-val').value) });
@@ -262,6 +276,34 @@ async function gerar(tipo) {
   btn.disabled = false; btn.textContent = t0;
 }
 
+/* ---------- controle de revisão: foto da proposta emitida e comparação ---------- */
+const foto = () => JSON.parse(JSON.stringify({ t: P.tecnico || {}, hh: P.hh || [], modalidade: P.modalidade, abrirCustos: !!P.abrirCustos, desconto: num(P.desconto), valor: num(P.valorTotal), validade: P.validade, pagamento: P.pagamento, faturamento: P.faturamento, lc116: P.lc116, reajuste: P.reajuste, condExtra: P.condExtra || [], objeto: P.objeto }));
+function diferencas(a, b) {
+  const M = []; if (!a) return M; const add = (tipo, cat, txt) => M.push({ tipo, cat, txt });
+  const lst = (x, y, tipo, cat, nome) => { const A = (x || []).map(str), B = (y || []).map(str); B.filter(v => !A.includes(v)).forEach(v => add(tipo, cat === 'Escopo' ? 'Inclusão de item' : cat, `${nome}: incluído "${v}"`)); A.filter(v => !B.includes(v)).forEach(v => add(tipo, cat === 'Escopo' ? 'Exclusão de item' : cat, `${nome}: retirado "${v}"`)); };
+  const tab = (x, y, tipo, cat, nome, chave, q) => { const A = x || [], B = y || []; const k = r => norm(r[chave]); B.forEach(r => { const o = A.find(z => k(z) === k(r)); if (!o) { if (str(r[chave]).trim()) add(tipo, cat, `${nome}: incluído "${r[chave]}"${q && r[q] ? ' (' + fmtN(r[q]) + ')' : ''}`); } else if (q && num(o[q]) !== num(r[q])) add(tipo, cat, `${nome}: "${r[chave]}" de ${fmtN(o[q])} para ${fmtN(r[q])}`); }); A.forEach(r => { if (str(r[chave]).trim() && !B.some(z => k(z) === k(r))) add(tipo, cat, `${nome}: retirado "${r[chave]}"`); }); };
+  const ta = a.t || {}, tb = b.t || {};
+  if (str(a.objeto) !== str(b.objeto)) add('tec', 'Escopo', `Objeto alterado para "${b.objeto}"`);
+  if (str(ta.objetivo) !== str(tb.objetivo)) add('tec', 'Escopo', 'Objetivo do serviço reescrito');
+  lst(ta.incluidas, tb.incluidas, 'tec', 'Escopo', 'Atividades incluídas'); lst(ta.excluidas, tb.excluidas, 'tec', 'Escopo', 'Exclusões');
+  lst(ta.premissas, tb.premissas, 'tec', 'Premissas', 'Premissas'); lst(ta.fornPrevine, tb.fornPrevine, 'tec', 'Fornecimentos', 'Fornecimento PREVINE'); lst(ta.fornCliente, tb.fornCliente, 'tec', 'Fornecimentos', 'Fornecimento CONTRATANTE');
+  lst(ta.ssma, tb.ssma, 'tec', 'Normas / SSMA', 'SSMA'); lst(ta.entregaveis, tb.entregaveis, 'tec', 'Escopo', 'Entregáveis');
+  tab(ta.materiais, tb.materiais, 'tec', 'Materiais', 'Material', 'desc', 'qtd'); tab(ta.equipamentos, tb.equipamentos, 'tec', 'Equipamentos', 'Equipamento', 'desc', 'qtd'); tab(ta.equipe, tb.equipe, 'tec', 'Equipe', 'Equipe', 'funcao', 'qtd');
+  tab(ta.cronograma, tb.cronograma, 'tec', 'Cronograma', 'Etapa', 'etapa'); tab(ta.docsRef, tb.docsRef, 'tec', 'Documentos de referência', 'Documento', 'doc');
+  if (str(ta.prazo) !== str(tb.prazo)) add('tec', 'Prazo de execução', `Prazo de execução de "${ta.prazo || '—'}" para "${tb.prazo || '—'}"`);
+  if (str(ta.nrs) !== str(tb.nrs)) add('tec', 'Normas / SSMA', `Normas aplicáveis: ${tb.nrs || '—'}`);
+  if (num(a.desconto) !== num(b.desconto)) add('com', 'Desconto', `Desconto comercial de ${fmtN(b.desconto)}%${a.desconto ? ' (antes ' + fmtN(a.desconto) + '%)' : ''}`);
+  if (Math.abs(num(a.valor) - num(b.valor)) >= 0.01 && b.valor) add('com', 'Preço / valor', `Valor total de ${brl(a.valor)} para ${brl(b.valor)}`);
+  if (str(a.pagamento) !== str(b.pagamento)) add('com', 'Prazo de pagamento', `Condição de pagamento: ${b.pagamento}`);
+  if (str(a.faturamento) !== str(b.faturamento)) add('com', 'Faturamento', `Faturamento: ${b.faturamento}`);
+  if (num(a.validade) !== num(b.validade)) add('com', 'Validade', `Validade de ${a.validade} para ${b.validade} dias`);
+  if (str(a.reajuste) !== str(b.reajuste)) add('com', 'Reajuste', `Reajuste: ${b.reajuste || 'retirado'}`);
+  if (a.modalidade !== b.modalidade) add('com', 'Modalidade de preço', `Modalidade alterada para ${b.modalidade === 'hh' ? 'homem-hora' : 'preço global'}`);
+  if (a.abrirCustos !== b.abrirCustos) add('com', 'Abertura de custos', b.abrirCustos ? 'Custos abertos item a item' : 'Custos voltaram a aparecer só pelos totais');
+  tab(a.hh, b.hh, 'com', 'Preço / valor', 'HH', 'funcao', 'normal'); lst(a.condExtra, b.condExtra, 'com', 'Outra condição comercial', 'Condição');
+  return M;
+}
+
 /* ---------- status e revisão ---------- */
 function modal(html) { $('#sheet').innerHTML = html; $('#modal').hidden = false; $('#modal').onclick = e => { if (e.target.id === 'modal') fecha(); }; }
 const fecha = () => { $('#modal').hidden = true; };
@@ -269,11 +311,13 @@ function mStatus() {
   modal(`<div class="top"><h2>Status da proposta</h2><button class="btn sm ghost" type="button" id="mx">Fechar</button></div>
     <div class="card"><div class="grid2">${Object.entries(STATUS).map(([k, t]) => `<button class="btn ${P.status === k ? 'primary' : 'ghost'}" data-ns="${k}" type="button" style="margin:4px 0">${t}</button>`).join('')}</div>
     <label>Observação (motivo da perda, data de envio, número do pedido…)</label><input id="ns-obs"></div>
-    <div class="card"><p class="ct">Nova revisão</p><p class="cs">Use quando o cliente pedir mudança depois do envio. A revisão sobe de ${esc(P.rev || '00')} para ${z2(num(P.rev) + 1)}, os códigos continuam e o motivo entra no histórico de revisões dos dois documentos.</p>
+    <div class="card"><p class="ct">Nova revisão</p><p class="cs">Use quando o cliente pedir mudança depois do envio (desconto, prazo, escopo, materiais…). A revisão sobe de ${esc(P.rev || '00')} para ${z2(num(P.rev) + 1)}, os códigos continuam e cada alteração entra no controle de revisão do documento certo: técnica ou comercial.</p>
       <label>Motivo da revisão</label><input id="rv-mot" placeholder="Ex.: inclusão de pintura do portão a pedido do cliente"><button class="btn" id="rv-ok" type="button" style="margin-top:8px">Criar revisão ${z2(num(P.rev) + 1)}</button></div>`);
   $('#mx').onclick = fecha;
-  $$('[data-ns]').forEach(b => b.onclick = async () => { const ns = b.dataset.ns, obs = $('#ns-obs').value.trim(); const ant = P.status; P.status = ns; if (ns === 'enviada' && !P.enviadaEm) P.enviadaEm = hoje(); if (['ganha', 'perdida'].includes(ns)) P.decididaEm = hoje(); if (ns === 'perdida') P.motivoPerda = obs; fecha(); if (!(await salvar(`Status: ${STATUS[ant] || ant} → ${STATUS[ns]}${obs ? ' (' + obs + ')' : ''}.`))) P.status = ant; else toast('Status alterado para ' + STATUS[ns] + '.', 'ok'); });
-  $('#rv-ok').onclick = async () => { const m = $('#rv-mot').value.trim(); if (!m) return toast('Escreva o motivo da revisão.', 'bad'); P.revisoes = (P.revisoes || []).concat([{ rev: P.rev || '00', data: P.data, txt: P.revMotivo || (P.rev === '00' || !P.rev ? 'Emissão inicial.' : 'Revisão.') }]); P.rev = z2(num(P.rev) + 1); P.revMotivo = m; P.data = hoje(); P.status = 'revisao'; fecha(); await salvar(`Revisão ${P.rev}: ${m}`); };
+  $$('[data-ns]').forEach(b => b.onclick = async () => { const ns = b.dataset.ns, obs = $('#ns-obs').value.trim(); const ant = P.status; P.status = ns; if (ns === 'enviada' && !P.enviadaEm) P.enviadaEm = hoje(); if (ns === 'enviada' && !P.snap) P.snap = foto(); if (['ganha', 'perdida'].includes(ns)) P.decididaEm = hoje(); if (ns === 'perdida') P.motivoPerda = obs; fecha(); if (!(await salvar(`Status: ${STATUS[ant] || ant} → ${STATUS[ns]}${obs ? ' (' + obs + ')' : ''}.`))) P.status = ant; else toast('Status alterado para ' + STATUS[ns] + '.', 'ok'); });
+  $('#rv-ok').onclick = async () => { const m = $('#rv-mot').value.trim(); if (!m) return toast('Escreva o motivo da revisão.', 'bad');
+    P.revisoes = (P.revisoes || []).concat([{ rev: P.rev || '00', data: P.data, txt: P.revMotivo || (P.rev === '00' || !P.rev ? 'Emissão inicial.' : 'Revisão.'), mudancas: P.revMud || [] }]);
+    P.rev = z2(num(P.rev) + 1); P.revMotivo = m; P.revMud = []; P.snap = foto(); P.data = hoje(); P.status = 'revisao'; fecha(); V.sec = 'hist'; await salvar(`Revisão ${P.rev}: ${m}`); toast('Revisão ' + P.rev + ' criada. Faça as alterações e registre cada uma em Histórico (ou use "Detectar alterações").', 'ok'); };
 }
 
 /* ---------- anexos (guardados no Firestore em partes) ---------- */
