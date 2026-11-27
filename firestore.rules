@@ -155,6 +155,8 @@ service cloud.firestore {
       allow update: if admi(['rh']) && (resource.data.get('status', '') != 'aprovacao' || request.resource.data.status in ['aprovacao', 'cancelado'] || aprovOk());
       match /p/{pid} { allow write: if admi(['rh']); allow read: if admi(['rh']) && salOk(get(/databases/$(database)/documents/envios_contab/$(id)).data); } }
     // separação de EPI da mobilização: a Admissão (RH) mantém a lista; o almoxarifado marca o que separou e o que falta
+    // Inventário das pastas antigas do Drive (gravado pela conta de serviço no GitHub; pode ter texto de documentos pessoais)
+    match /drive_inv/{id} { allow read: if tem(['admin']); allow write: if false; }
     match /epi_separacao/{id} { allow read: if equipe(); allow write: if admi(['rh']) || tem(['admin', 'gerente', 'gestao', 'almox', 'tst']); }
     match /admissoes_priv/{tk} { allow read, write: if admi(['rh']) && folhaOk(); }
     // folha mensal importada (salários, horas extras, faltas): só Admin, Gestão, Gerente e RH

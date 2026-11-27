@@ -59,6 +59,23 @@ A conta previneime só LÊ o Firestore (Viewer). Funções principais:
 
 Notificações no celular: `.github/workflows/push.yml` (a cada 5 min, 6h–20h) roda `tools/push.mjs` com o segredo `FIREBASE_SA`.
 
+## Inventário das pastas antigas (novo, 27/11 noite) — substitui o OCR/cópias que estouravam a cota do Apps Script
+- LEITURA no GitHub: `.github/workflows/drive-inv.yml` (22h–5h, de hora em hora, ou manual) roda `tools/drive-inv.mjs` com a conta de serviço
+  (`FIREBASE_SA`, escopo drive.readonly). Varre as pastas compartilhadas com a conta de serviço (ou `config/inventario.pastas`), lê PDF/imagem
+  (pdftotext + tesseract), identifica a pessoa (CPF no texto > nome no caminho > nome no texto > pasta com nome de pessoa sem cadastro),
+  o tipo (ASO, NR, integração, Take Care, Safety, CRC, ficha/termo de EPI, documentos pessoais, salário…), datas e validade,
+  e grava em Firestore `drive_inv/{idArquivo}` (destino: pessoa / morto / morto_semcad / sem_id). Estado em `config/inventario_estado`.
+  Repositório público: o log só mostra contagens.
+- CÓPIAS no Apps Script: `tools/inventario.gs` (colar no projeto do script; `instalarInventario` = a cada 15 min; `pararRotinasAntigas` desliga
+  lerDocsRH/consolidarRH/consolidarMob/refazerMob). 1 chamada runQuery por rodada; cópias com DriveApp.makeCopy (não gastam UrlFetch).
+  Ativo → pasta da pessoa/RH ou Segurança/"Pastas antigas"; desligado → DOCUMENTAÇÃO PORTAL/ARQUIVO MORTO - EX-FUNCIONÁRIOS/NOME - CPF;
+  sem cadastro → .../_SEM CADASTRO NO PORTAL/NOME; salário → subpasta "Restrito - salário". Planilha "Inventário de cópias (origem → destino)".
+- Depende do Gustavo: (1) ativar a Google Drive API no projeto ferramentas-epi (console do Google Cloud); (2) compartilhar as pastas antigas
+  (RH, SEGURANÇA DO TRABALHO, Mobilização…) com o e-mail da conta de serviço, como Leitor; (3) publicar a regra `drive_inv` do Firestore;
+  (4) colar `tools/inventario.gs` no Apps Script e rodar `pararRotinasAntigas` e `instalarInventario` (ou eu faço quando o navegador voltar).
+- Conta de serviço não pode ser dona de arquivo em Drive de Gmail comum: por isso as cópias ficam no Apps Script (conta previneime).
+- Google Workspace (conta nova @previneeletrica.com.br, Drive compartilhado) avaliado: vale a pena DEPOIS da limpeza das pastas.
+
 ## Pendências (27/11/2026, fim da tarde)
 0. Regras do Firestore: publicar no console a regra nova `epi_separacao` (alerta de EPI da mobilização). Sem isso o cartão não aparece.
 1. Cota diária do Apps Script (urlfetch) estourou em 27/11 ~14h30: travou a cópia "11. Mobilização" (3.283/5.663) e o OCR do RH (3.080/5.261).

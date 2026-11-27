@@ -1,0 +1,32 @@
+name: Inventário das pastas antigas do Drive
+on:
+  schedule:
+    - cron: '7 1-8 * * *'   # 22h07 às 5h07 (horário de Brasília), de hora em hora; continua de onde parou
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: drive-inv
+  cancel-in-progress: false
+jobs:
+  inventario:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Ferramentas de leitura (PDF e OCR)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq poppler-utils tesseract-ocr tesseract-ocr-por >/dev/null
+      - name: Ler as pastas e montar o inventário
+        env:
+          FIREBASE_SA: ${{ secrets.FIREBASE_SA }}
+          LIMITE_MIN: '320'
+        run: |
+          cd tools
+          npm init -y >/dev/null
+          npm install firebase-admin@12 googleapis@144 --no-audit --no-fund >/dev/null
+          node drive-inv.mjs
