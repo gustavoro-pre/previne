@@ -82,6 +82,11 @@ Notificações no celular: `.github/workflows/push.yml` (a cada 5 min, 6h–20h)
    c) Treinamentos do sistema antigo: lançar em `treinamentos` (origem 'historico', com o certificado anexado). Todas as NRs ficam como histórico;
       as válidas recebem a validade (data do certificado + `validadeMeses` do tipo em `trein_tipos`, ou a validade escrita no certificado) para o controle de vencimento.
       Sem validade escrita no certificado: usar a validade padrão do tipo (`validadeMeses`) — aprovado pelo Gustavo em 27/11.
+   ARQUIVO MORTO (pedido de 27/11, 17h51): todos os arquivos de funcionários que JÁ SAÍRAM (status desligados no _controle_backup / portal)
+   vão para uma pasta separada "ARQUIVO MORTO - EX-FUNCIONÁRIOS/<NOME - CPF>" no Drive (cópia, nada apagado), e uma planilha de caminhos
+   (origem → destino, id do arquivo, data da cópia, conferido S/N) para depois apagar as origens. Mesma planilha de inventário do item 3.
+   IPAR: 12 IPARs convertidos para o layout Previne (IPAR-TRF-001…013, sem o 009; código antigo citado no controle de revisões) + modelo em branco,
+   entregues em 27/11 para aprovação. Depois do OK: subir no Drive/Documentação junto com os padrões.
    META: a partir da semana de 30/11/2026 todo mundo passa a ser controlado pelo portal; a documentação antiga continua guardada.
    Tudo passa por planilha de revisão e OK do Gustavo antes de gravar (dado de funcionário).
 4. Leitura de e-mail (conta previneime@gmail.com): ler os documentos de admissão que chegam (da contabilidade), gravar no cadastro do funcionário
