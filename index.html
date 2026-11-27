@@ -344,7 +344,7 @@ function renderUsers() {
     const em = str(F.email || (F.user || {}).email).toLowerCase(); const ap = str((c.data() || {}).aprovEmails).toLowerCase().split(/[,;\s]+/).filter(Boolean);
     if (!em || !ap.includes(em)) return;
     db.collection('envios_contab').where('status', '==', 'aprovacao').onSnapshot(q => { const nomes = q.docs.map(x => str(x.data().nome)); PADM = nomes.length;
-      const av = $('#p-aviso4'); av.hidden = !PADM; av.innerHTML = PADM ? `<span class="n">${PADM}</span><span>${PADM === 1 ? 'Contratação aguardando' : 'Contratações aguardando'} o seu de acordo: ${esc(nomes.slice(0, 3).join(', '))}${nomes.length > 3 ? '…' : ''}</span><span class="go">Ver agora</span>` : ''; renderMods(); }, e => console.warn(e));
+      const av = $('#p-aviso4'); av.href = PADM === 1 ? 'admissao/?aprov=' + q.docs[0].id : 'admissao/'; av.hidden = !PADM; av.innerHTML = PADM ? `<span class="n">${PADM}</span><span>${PADM === 1 ? 'Contratação aguardando' : 'Contratações aguardando'} o seu de acordo: ${esc(nomes.slice(0, 3).join(', '))}${nomes.length > 3 ? '…' : ''}</span><span class="go">Ver agora</span>` : ''; renderMods(); }, e => console.warn(e));
   }, () => {});
   /* pedidos de EPI ou ferramenta fora do previsto: quem aprova é Administrador ou Gerente */
   if (F.perfil && ['admin', 'gerente'].includes(F.perfil.papel)) { let SOL = [], DEC = new Set();

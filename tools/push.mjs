@@ -85,10 +85,10 @@ if (novosAdm.length && apEm.length) {
   const uids = (await db.collection('usuarios').get()).docs.filter(d => apEm.includes(String(d.data().email || '').toLowerCase()) && d.data().ativo !== false).map(d => d.id);
   const alvo = toks.filter(t => uids.includes(t.uid));
   const um = novosAdm[0].data();
-  const body = novosAdm.length === 1 ? `${um.nome} aguarda o seu de acordo para seguir à contabilidade.` : `${novosAdm.length} contratações aguardam o seu de acordo.`;
+  const body = novosAdm.length === 1 ? `${um.nome}: toque para ver a ficha cadastral e dar o de acordo.` : `${novosAdm.length} contratações aguardam o seu de acordo.`;
   console.log(`contratações: ${novosAdm.length} nova(s), ${alvo.length} aparelho(s)`);
   for (const t of alvo) {
-    try { await admin.messaging().send({ token: t.token, webpush: { headers: { Urgency: 'high', TTL: '86400' }, data: { title: 'De acordo de contratação', body, url: novosAdm.length === 1 ? '/admissao/?a=' + um.admissaoId : '/admissao/', tag: 'adm' } } }); }
+    try { await admin.messaging().send({ token: t.token, webpush: { headers: { Urgency: 'high', TTL: '86400' }, data: { title: 'De acordo de contratação', body, url: novosAdm.length === 1 ? '/admissao/?aprov=' + novosAdm[0].id : '/admissao/', tag: 'adm' } } }); }
     catch (e) { const c = e.errorInfo && e.errorInfo.code || e.code || ''; console.log('falha no envio:', c); if (/registration-token-not-registered|invalid-argument|invalid-registration-token/.test(c)) await db.doc('push_tokens/' + t.id).delete().catch(() => {}); }
   }
 }

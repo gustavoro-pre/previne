@@ -1,7 +1,7 @@
 name: Notificações de de acordo
 on:
   schedule:
-    - cron: '*/20 9-23 * * *'
+    - cron: '*/5 9-23 * * *'
   workflow_dispatch:
 permissions:
   contents: read

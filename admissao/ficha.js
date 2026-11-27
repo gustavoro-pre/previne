@@ -222,3 +222,34 @@ async function fichaPdf(a, o = {}) {
   return { nome: ('Ficha cadastral - ' + a.nome + '.pdf').replace(/[\\/:*?"<>|]+/g, ' '), tipo: 'application/pdf', blob };
 }
 async function baixarFichaPdf(a) { try { toast('Gerando a ficha…'); const f = await fichaPdf(a, { salario: await salarioDe(a) }); await baixar(f.nome, f.blob); } catch (e) { console.error(e); toast('Não foi possível gerar a ficha: ' + (e.message || e), 'bad'); } }
+
+/* ---------- tela do de acordo: abre pela notificação ou pelo e-mail (?aprov=<id do envio>) ---------- */
+async function lerArqEnvio(id, fi, tipo) {
+  const q = await db.collection('envios_contab/' + id + '/p').where('f', '==', fi).get();
+  const b64 = q.docs.map(d => d.data()).sort((x, y) => x.i - y.i).map(x => x.d).join('');
+  const bin = atob(b64); const u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return new Blob([u], { type: tipo || 'application/pdf' });
+}
+async function telaAprov(envId) {
+  const a = D.adm.find(x => (x.envios || []).some(e => e.id === envId)); if (!a) return toast('Pedido não encontrado.', 'bad');
+  ABERTO = ''; let ed = {}; try { ed = (await db.doc('envios_contab/' + envId).get()).data() || {}; } catch (e) { return toast('Sem acesso a este pedido.', 'bad'); }
+  const pend = ed.status === 'aprovacao';
+  sheet(`<div class="top"><h2>De acordo da contratação</h2><button class="x" id="ta-x" aria-label="Fechar">×</button></div>
+    <div class="card" style="${pend ? 'border:2px solid #d92d20;background:#fef3f2' : ''}"><b style="font-size:17px">${esc(a.nome)}</b>
+      <div class="t2">${esc(a.funcao || '')} · ${esc([a.area, a.subarea].filter(Boolean).join(' / '))}${a.unidade ? ' · ' + esc(a.unidade) : ''}</div>
+      <div class="t2">Vínculo ${esc(a.vinculo || 'CLT')} · ${esc(a.adicional || 'adicional não informado')}${a.altura ? ' · trabalho em altura' : ''}</div>
+      <div class="t2">Admissão em ${fmtD(ed.dataAdmissao)} · e-mail à contabilidade (${esc(ed.para || '')}) marcado para ${fmtDH(ed.quando)} · ${(ed.arquivos || []).length} anexo(s)</div>
+      <div class="t2">Dados conferidos com os documentos: ${fcEstado(a).completo ? 'sim, por ' + esc(fcEstado(a).por || '') : '<b style="color:#b42318">não</b>'}</div>
+      <p style="margin:8px 0 0">${pend ? '<span class="badge b-bad">Aguardando de acordo</span>' : `<span class="badge b-ok">${ed.aprovadoPor ? 'De acordo de ' + esc(ed.aprovadoPor) + ' em ' + fmtDH(ed.aprovadoEm) : esc(ed.status || '')}</span>`}</p>
+      <div class="actions" style="justify-content:flex-start;margin-top:10px">${pend && podeAprovar() ? '<button class="btn primary" id="ta-ok" type="button">Dar de acordo</button>' : ''}<button class="btn ghost" id="ta-det" type="button">Abrir a admissão</button><button class="btn ghost" id="ta-pdf" type="button">Baixar a ficha</button></div>
+      ${pend && !podeAprovar() ? '<p class="note">Só Gustavo ou Josilaine dão o de acordo.</p>' : ''}</div>
+    <h3>Ficha cadastral</h3><div id="ta-ficha" class="card" style="padding:6px"><p class="note">Carregando a ficha…</p></div>`);
+  $('#ta-x').onclick = () => fechar(); $('#ta-det').onclick = () => detalhe(a.id);
+  const ok = $('#ta-ok'); if (ok) ok.onclick = async () => { await aprovarEnvio(a, envId); telaAprov(envId); };
+  const fi = (ed.arquivos || []).findIndex(f => /^Ficha cadastral/.test(str(f.nome)));
+  let blob = null;
+  try { blob = fi >= 0 ? await lerArqEnvio(envId, fi, ed.arquivos[fi].tipo) : (await fichaPdf(a, { dataAdmissao: ed.dataAdmissao })).blob;
+    const lib = await fcPdfjs(); const pdf = await lib.getDocument({ data: new Uint8Array(await blob.arrayBuffer()) }).promise; const box = $('#ta-ficha'); if (!box) return; box.innerHTML = '';
+    for (let p = 1; p <= pdf.numPages; p++) { const pg = await pdf.getPage(p); const vp = pg.getViewport({ scale: 2 }); const cv = document.createElement('canvas'); cv.width = vp.width; cv.height = vp.height; cv.style.cssText = 'width:100%;height:auto;display:block;border:1px solid #e3e7ee;margin:0 0 8px'; await pg.render({ canvasContext: cv.getContext('2d'), viewport: vp }).promise; box.appendChild(cv); }
+  } catch (e) { console.error(e); const box = $('#ta-ficha'); if (box) box.innerHTML = '<p class="note">Não foi possível mostrar a ficha. Use “Baixar a ficha”.</p>'; }
+  $('#ta-pdf').onclick = async () => { if (!blob) return; await baixar('Ficha cadastral - ' + a.nome + '.pdf', blob); };
+}

@@ -180,7 +180,9 @@ function rMod() {
 /* ---------- dados ---------- */
 function ouvir() {
   db.collection('admissoes').onSnapshot(s => { D.adm = s.docs.map(d => Object.assign({}, d.data(), { id: d.id })); render();
-    const dl = new URLSearchParams(location.search).get('a'); if (dl && !window.__deep && D.adm.some(x => x.id === dl)) { window.__deep = 1; setTimeout(() => detalhe(dl), 300); } if (ABERTO && !$('#modal').hidden) detalhe(ABERTO, true); }, () => toast('Sem permissão para ver as admissões.', 'bad'));
+    const qs = new URLSearchParams(location.search), dl = qs.get('a'), dap = qs.get('aprov');
+    if (dap && !window.__deep && D.adm.some(x => (x.envios || []).some(e => e.id === dap))) { window.__deep = 1; setTimeout(() => telaAprov(dap), 300); }
+    else if (dl && !window.__deep && D.adm.some(x => x.id === dl)) { window.__deep = 1; setTimeout(() => detalhe(dl), 300); } if (ABERTO && !$('#modal').hidden) detalhe(ABERTO, true); }, () => toast('Sem permissão para ver as admissões.', 'bad'));
   db.collection('funcionarios').onSnapshot(s => { D.func = s.docs.map(d => Object.assign({}, d.data(), { id: d.id })); }, () => {});
   db.collection('areas').onSnapshot(s => { D.areas = s.docs.map(d => Object.assign({}, d.data(), { id: d.id })).sort((a, b) => str(a.nome).localeCompare(str(b.nome), 'pt')); render(); }, () => {});
   db.collection('kits').onSnapshot(s => { D.kits = s.docs.map(d => d.data()); }, () => {});
@@ -208,7 +210,7 @@ function rAnd() {
   const conf = L.filter(a => ADM.docsSt(a).pendRev.length).length, atr = L.filter(atrasado).length, semInt = L.filter(a => !fimMob(a)).length;
   const pAp = podeAprovar() ? D.adm.filter(a => (a.envios || []).some(x => x.status === 'aprovacao')) : [];
   const ban = pAp.length ? `<div class="card" style="border:2px solid #d92d20;background:#fef3f2;margin-bottom:12px"><b style="color:#b42318">${pAp.length === 1 ? 'Contratação aguardando o seu de acordo' : pAp.length + ' contratações aguardando o seu de acordo'}</b>
-    ${pAp.map(a => `<div style="display:flex;gap:8px;align-items:center;margin-top:6px"><span style="flex:1">${esc(a.nome)} · ${esc(a.funcao || '')}${a.area ? ' · ' + esc(a.area) : ''}</span><button class="btn sm primary" data-open="${esc(a.id)}" type="button">Abrir</button></div>`).join('')}</div>` : '';
+    ${pAp.map(a => `<div style="display:flex;gap:8px;align-items:center;margin-top:6px"><span style="flex:1">${esc(a.nome)} · ${esc(a.funcao || '')}${a.area ? ' · ' + esc(a.area) : ''}</span><button class="btn sm primary" data-taprov="${esc(((a.envios || []).find(x => x.status === 'aprovacao') || {}).id)}" type="button">Ver ficha e dar o de acordo</button></div>`).join('')}</div>` : '';
   $('#body').innerHTML = ban + `<div class="kpis k5" style="margin-bottom:12px">${kpi('Em andamento', L.length)}${kpi('Acima de ' + PRAZO + ' dias', atr, atr ? 'bad' : 'ok')}${kpi('Docs para conferir', conf, conf ? 'info' : '')}${kpi('Sem integração', semInt, semInt ? 'warn' : '')}${kpi('Prazo', PRAZO + ' dias')}</div>
     <input id="a-q" placeholder="Buscar nome, CPF, função ou área" value="${esc(V.q)}" style="margin-bottom:12px">
     ${L.length ? L.map(cardAdm).join('') : '<div class="empty">Nenhuma admissão em andamento. Abra uma em “Nova admissão”.</div>'}`;
@@ -301,7 +303,7 @@ const fechar = () => { ABERTO = ''; SUJO = false; $('#modal').hidden = true; $('
 const ENV_ST = { aprovacao: ['Aguardando de acordo', 'b-warn'], agendado: ['Agendado', 'b-info'], enviado: ['Enviado', 'b-ok'], erro: ['Erro', 'b-bad'], cancelado: ['Cancelado', 'b-mut'] };
 function envLista(a) {
   const L = (a.envios || []).slice().reverse(); if (!L.length) return '';
-  return `<div style="margin-top:8px">${L.map(x => { const st = ENV_ST[x.status] || ENV_ST.agendado; return `<div class="note" style="display:flex;gap:8px;align-items:center;padding:3px 0"><span class="badge ${st[1]}">${st[0]}</span><span style="flex:1">${x.status === 'aprovacao' ? 'Aguardando de acordo de ' + esc(((D.cfg || {}).aprovNomes) || 'Gustavo ou Josilaine') + ' · envio marcado para ' + fmtDH(x.quando) : x.status === 'enviado' ? 'Enviado em ' + fmtDH(x.enviadoEm) + (x.aprovadoPor ? ' · de acordo de ' + esc(x.aprovadoPor) : '') : x.status === 'erro' ? esc(x.erro || 'Falha no envio') : 'Para ' + fmtDH(x.quando)} · ${esc(x.para)} · ${x.n} arquivo(s) · admissão ${fmtD(x.dataAdmissao)}</span>${x.status === 'aprovacao' && podeAprovar() ? `<button class="btn sm primary" data-envap="${esc(x.id)}" type="button">Dar de acordo</button>` : ''}${(x.status === 'agendado' || x.status === 'aprovacao') && PODE ? `<button class="link" data-envx="${esc(x.id)}" type="button">cancelar</button>` : ''}</div>`; }).join('')}</div>`;
+  return `<div style="margin-top:8px">${L.map(x => { const st = ENV_ST[x.status] || ENV_ST.agendado; return `<div class="note" style="display:flex;gap:8px;align-items:center;padding:3px 0"><span class="badge ${st[1]}">${st[0]}</span><span style="flex:1">${x.status === 'aprovacao' ? 'Aguardando de acordo de ' + esc(((D.cfg || {}).aprovNomes) || 'Gustavo ou Josilaine') + ' · envio marcado para ' + fmtDH(x.quando) : x.status === 'enviado' ? 'Enviado em ' + fmtDH(x.enviadoEm) + (x.aprovadoPor ? ' · de acordo de ' + esc(x.aprovadoPor) : '') : x.status === 'erro' ? esc(x.erro || 'Falha no envio') : 'Para ' + fmtDH(x.quando)} · ${esc(x.para)} · ${x.n} arquivo(s) · admissão ${fmtD(x.dataAdmissao)}</span>${x.status === 'aprovacao' && podeAprovar() ? `<button class="btn sm primary" data-taprov="${esc(x.id)}" type="button">Ver ficha e dar o de acordo</button>` : ''}${(x.status === 'agendado' || x.status === 'aprovacao') && PODE ? `<button class="link" data-envx="${esc(x.id)}" type="button">cancelar</button>` : ''}</div>`; }).join('')}</div>`;
 }
 async function envStatus(a) {
   const pend = (a.envios || []).filter(x => x.status === 'agendado'); const url = (D.cfg || {}).envioUrl || 'https://script.google.com/macros/s/AKfycbwxPg38bGnvm5053kBKgO8GYQFCpABP2NHzCD7p3caHa_m78ErgcV7o8V3DNdfFk6Az/exec'; if (!pend.length || !url) return;
@@ -388,7 +390,7 @@ function envioContab(a) {
         meta.push({ nome: f.nome, tipo: f.tipo || 'application/octet-stream', partes, bytes: f.blob.size }); }
       const agora = new Date().toISOString();
       const apv = aprovEmails(); const stIni = apv.length ? 'aprovacao' : 'agendado';
-      const resumo = `Pedido de de acordo para contratação\n\nCandidato: ${a.nome}\nCPF: ${ADM.fmtCpf(a.cpf)}\nFunção: ${a.funcao}\nÁrea: ${[a.area, a.subarea].filter(Boolean).join(' / ')}\nUnidade: ${a.unidade || '—'}\nVínculo: ${a.vinculo || 'CLT'}\nAdicional: ${a.adicional || 'não informado'}\nData de admissão: ${fmtD(dAdm)}\nE-mail à contabilidade marcado para: ${fmtDH(quando.toISOString())} (${para})\nAnexos preparados: ${meta.length}\nDados conferidos com os documentos: ${fcEstado(a).completo ? 'sim, por ' + (fcEstado(a).por || '') : 'NÃO'}\nPedido por: ${str(((window.__FB || {}).perfil || {}).nome) || MEU}\n\nPara dar o de acordo, abra no portal: https://app.previneeletrica.com.br/admissao/?a=${a.id}\n(a ficha cadastral vai em anexo)`;
+      const resumo = `Pedido de de acordo para contratação\n\nCandidato: ${a.nome}\nCPF: ${ADM.fmtCpf(a.cpf)}\nFunção: ${a.funcao}\nÁrea: ${[a.area, a.subarea].filter(Boolean).join(' / ')}\nUnidade: ${a.unidade || '—'}\nVínculo: ${a.vinculo || 'CLT'}\nAdicional: ${a.adicional || 'não informado'}\nData de admissão: ${fmtD(dAdm)}\nE-mail à contabilidade marcado para: ${fmtDH(quando.toISOString())} (${para})\nAnexos preparados: ${meta.length}\nDados conferidos com os documentos: ${fcEstado(a).completo ? 'sim, por ' + (fcEstado(a).por || '') : 'NÃO'}\nPedido por: ${str(((window.__FB || {}).perfil || {}).nome) || MEU}\n\nPara ver a ficha e dar o de acordo, abra: https://app.previneeletrica.com.br/admissao/?aprov=${ref.id}\n(a ficha cadastral também vai em anexo)`;
       await ref.set({ admissaoId: a.id, nome: a.nome, para, cc, assunto: $('#v-ass').value.trim() || 'Admissão – ' + a.nome, corpo: $('#v-msg').value, dataAdmissao: dAdm, quando: quando.toISOString(), status: stIni, arquivos: meta, criadoEm: agora, por: MEU, temSalario: !!temSal,
         aprovEmails: apv, aprovAssunto: `De acordo de contratação – ${a.nome} – ${a.funcao}`, aprovCorpo: resumo });
       const env = (a.envios || []).concat([{ id: ref.id, para, quando: quando.toISOString(), dataAdmissao: dAdm, n: meta.length, status: stIni }]);
@@ -589,6 +591,7 @@ function rKpi() {
 
 /* ---------- eventos ---------- */
 document.addEventListener('click', e => {
+  const tp = e.target.closest('[data-taprov]'); if (tp) { e.stopPropagation(); telaAprov(tp.dataset.taprov); return; }
   const t = e.target.closest('#seg [data-tab]'); if (t) { V.tab = t.dataset.tab; render(); window.scrollTo(0, 0); return; }
   const o = e.target.closest('[data-open]'); if (o) { detalhe(o.dataset.open); return; }
   const a = D.adm.find(x => x.id === ABERTO); if (!a) { if (e.target.id === 'modal') fechar(); return; }
