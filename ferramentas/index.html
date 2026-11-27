@@ -2924,7 +2924,7 @@ function termoEpiInto(P, f) {
       const sn = await db.doc('admissoes/' + tk).get(); if (!sn.exists) return fim({ erro: 'Admissão não encontrada.' });
       const a = sn.data(), dd = (a.cand || {}).dados || {};
       const f = { id: a.funcionarioId || 'adm-' + tk, nome: str(a.nome), cpf: str(a.cpf || dd.cpf), matricula: str(a.matricula), funcao: str(a.funcao), area: str(a.area), areaId: str(a.areaId), subarea: str(a.subarea), subareaId: str(a.subareaId), subareas: a.subareaId ? [a.subareaId] : [], unidade: str(a.unidade), tamCamisa: str(dd.tamCamisa), tamCalca: str(dd.tamCalca), tamCalcado: str(dd.tamCalcado), altura: !!a.altura };
-      await loadPDF(); const P = PDFW(); const modelo = osInto(P, f); P.newPage(); termoEpiInto(P, f);
+      await loadPDF(); const P = PDFW(); const modelo = osInto(P, f); P.newPage(); fichaInto(P, f, entregadoresDe(f)[0] || ''); P.newPage(); termoEpiInto(P, f);
       P.footer('Admissão · ' + f.nome + ' · documento para assinatura eletrônica · gerado em ' + fmtDT(new Date().toISOString()));
       fim({ b64: P.doc.output('datauristring').split(',')[1], modelo: !!modelo, epis: kitEpisF(f).size, sigs: (P.sigs || []).filter(s => s.i === 0).map(s => ({ p: s.p, x: s.x, y: s.y, w: s.w })) });
     } catch (e) { fim({ erro: (e && e.message) || String(e) }); }

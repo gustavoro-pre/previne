@@ -36,7 +36,7 @@ function etapas(a) {
     { k: 'aso', t: 'ASO', st: aso.data && aso.apto !== false ? 'ok' : aso.data ? 'bad' : aso.agendado ? 'at' : '', s: aso.data ? (aso.apto === false ? 'inapto' : fmtD(aso.data).slice(0, 5)) : aso.agendado ? 'marcado ' + fmtD(aso.agendado).slice(0, 5) : '' },
     { k: 'integ', t: 'Integração', st: ig.realizada ? 'ok' : ig.agendada ? 'at' : '', s: ig.realizada ? fmtD(ig.realizada).slice(0, 5) : ig.agendada ? 'marcada ' + fmtD(ig.agendada).slice(0, 5) : '' },
     { k: 'trein', t: 'Treinamentos', st: tr.concluido ? 'ok' : tr.enviado ? 'at' : '', s: tr.concluido ? 'feitos' : tr.enviado ? 'enviados' : '' },
-    { k: 'epi', t: 'OS e termo EPI', st: (e.epi || {}).data || assinado(a, 'osepi') ? 'ok' : (a.assinar || {}).osepi ? 'at' : '', s: (e.epi || {}).data || assinado(a, 'osepi') ? 'assinados' : (a.assinar || {}).osepi ? 'aguardando assinatura' : '' },
+    { k: 'epi', t: 'OS, ficha e termo EPI', st: (e.epi || {}).data || assinado(a, 'osepi') ? 'ok' : (a.assinar || {}).osepi ? 'at' : '', s: (e.epi || {}).data || assinado(a, 'osepi') ? 'assinados' : (a.assinar || {}).osepi ? 'aguardando assinatura' : '' },
     { k: 'admiss', t: 'Docs admissionais', st: (e.admiss || {}).data ? 'ok' : '', s: (e.admiss || {}).data ? 'assinados' : '' },
     { k: 'contab', t: 'Contabilidade', st: (e.contab || {}).data ? 'ok' : '', s: (e.contab || {}).data ? 'enviado' : '' }
   ];
@@ -51,7 +51,7 @@ const waDe = a => { const t = ADM.dig(a.telefone); const msg = `Olá, ${str(a.no
 /* ---------- assinaturas no app ---------- */
 /* assinado quando a assinatura do candidato bate com a impressão (SHA-256) do documento que o RH gerou */
 const ehTexto = id => id === 'lgpd' || id === 'carta';
-const tituloDoc = (a, id) => id === 'osepi' ? 'Ordem de Serviço de Segurança e Termo de EPI' : str(((a.assinar || {})[id] || {}).titulo) || 'Documento';
+const tituloDoc = (a, id) => id === 'osepi' ? 'Ordem de Serviço de Segurança, Ficha de EPI e Termo de EPI' : str(((a.assinar || {})[id] || {}).titulo) || 'Documento';
 function assinado(a, id) { const s = ((a.cand || {}).assin || {})[id]; const d = !ehTexto(id) ? (a.assinar || {})[id] : ((a.textos || {})[id]); return !!(s && d && s.hash === d.hash); }
 const empNome = () => str(D.emp.nome) || 'PREVINE INSTALAÇÃO E MANUTENÇÃO ELÉTRICA LTDA';
 const empCnpj = () => str(D.emp.cnpj) || '03.052.261/0001-43';
@@ -95,7 +95,7 @@ async function baixarCerts(a, ids, btn) {
 }
 async function prepararOsEpi(a) {
   const m = await gerarOsEpi(a);
-  const arq = await ADM.gravar({ b64: m.b64, tipo: 'application/pdf', nome: 'OS e termo de EPI.pdf', q: { ok: true, prob: [] }, thumb: '' }, 'osepi', (id, d) => db.doc(`admissoes/${a.id}/d/${id}`).set({ d }));
+  const arq = await ADM.gravar({ b64: m.b64, tipo: 'application/pdf', nome: 'OS, ficha e termo de EPI.pdf', q: { ok: true, prob: [] }, thumb: '' }, 'osepi', (id, d) => db.doc(`admissoes/${a.id}/d/${id}`).set({ d }));
   arq.hash = await ADM.sha256(m.b64); arq.por = MEU; arq.modelo = m.modelo; arq.epis = m.epis; arq.sigs = m.sigs || [];
   const as = Object.assign({}, a.assinar || {}, { osepi: arq }); await db.doc('admissoes/' + a.id).update({ assinar: as }); a.assinar = as; return m;
 }
@@ -152,14 +152,14 @@ function assinBox(a, ro) {
   return `<div class="etf"><h4>Assinaturas do candidato (no app)</h4>
     ${row('Termo LGPD', sig('lgpd'), (a.textos || {}).lgpd ? '<span class="badge b-warn">Aguardando</span>' : '<span class="badge b-mut">Não gerado</span>', `<button class="btn sm ghost" data-pdft="lgpd">PDF</button>`)}
     ${row('Carta-convite', sig('carta'), (a.textos || {}).carta ? '<span class="badge b-warn">Aguardando</span>' : '<span class="badge b-mut">Não gerada</span>', `<button class="btn sm ghost" data-pdft="carta">PDF</button>`)}
-    ${row('OS de segurança e termo de EPI', sig('osepi'), os ? '<span class="badge b-warn">Aguardando</span>' : '<span class="badge b-mut">Não gerado</span>', os ? '<button class="btn sm ghost" id="as-osv">PDF</button>' : '')}
+    ${row('OS de segurança, ficha e termo de EPI', sig('osepi'), os ? '<span class="badge b-warn">Aguardando</span>' : '<span class="badge b-mut">Não gerado</span>', os ? '<button class="btn sm ghost" id="as-osv">PDF</button>' : '')}
     ${Object.keys(a.assinar || {}).filter(k => k !== 'osepi').map(k => row(esc(tituloDoc(a, k)), sig(k), '<span class="badge b-warn">Aguardando</span>', `<button class="btn sm ghost" data-pdfd="${esc(k)}">PDF</button>${ro || assinado(a, k) ? '' : `<button class="btn sm danger" data-rmd="${esc(k)}" title="Retirar">×</button>`}`)).join('')}
     ${os && os.modelo ? '<p class="note" style="margin:4px 0 0;color:var(--warn)">A OS usou o texto-modelo da função. Revise em Ferramentas & EPI → Cadastros → Kits e gere de novo.</p>' : ''}
     ${os && !os.epis ? '<p class="note" style="margin:4px 0 0;color:var(--bad)">Nenhum kit de EPI cadastrado para esta função.</p>' : ''}
     ${ro ? '' : `<div class="actions" style="margin-top:8px">${!(a.textos || {}).carta ? '<button class="btn sm primary" id="as-tx">Gerar carta e termo LGPD</button>' : assinado(a, 'carta') ? '' : '<button class="btn sm ghost" id="as-tx">Atualizar carta (salário/textos)</button>'}
-      <button class="btn sm ${os ? 'ghost' : 'primary'}" id="as-os">${os ? 'Gerar OS e termo de novo' : 'Gerar OS e termo de EPI para assinar'}</button></div>
+      <button class="btn sm ${os ? 'ghost' : 'primary'}" id="as-os">${os ? 'Gerar OS, ficha e termo de novo' : 'Gerar OS, ficha e termo de EPI para assinar'}</button></div>
       <div class="omrow" style="display:flex;gap:6px;margin-top:8px"><input id="as-tit" placeholder="Nome do documento (ex.: Contrato de trabalho)" style="flex:1"><button class="btn sm primary" id="as-anx">Anexar PDF para assinar</button></div>
-      <p class="note" style="margin:4px 0 0">O candidato assina o termo LGPD e a carta antes de enviar os documentos. A OS, o termo de EPI e os PDFs que você anexar (contrato de trabalho, acordos, termos) aparecem para ele assinar no link.</p>`}</div>`;
+      <p class="note" style="margin:4px 0 0">O candidato assina o termo LGPD e a carta antes de enviar os documentos. A OS, a ficha e o termo de EPI e os PDFs que você anexar (contrato de trabalho, acordos, termos) aparecem para ele assinar no link.</p>`}</div>`;
 }
 function rMod() {
   if (!PODE) { $('#body').innerHTML = '<div class="ro-banner">Seu perfil só consulta.</div>'; return; }
