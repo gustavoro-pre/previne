@@ -15,7 +15,7 @@ const LS = {}; const lib = (src, ok) => { if (ok()) return Promise.resolve(); if
 
 const A = { uid: null, perfil: null, f: null, emp: {}, mats: [], cursos: {}, pads: [], regs: [], trs: [], ext: [] };
 const gate = $('#gate'), app = $('#app');
-const showGate = html => { gate.innerHTML = `<div class="gbox"><div class="logo">${$('#logo').innerHTML}</div>${html}</div>`; gate.hidden = false; };
+const showGate = html => { gate.innerHTML = `<div class="gbox"><div class="glogo">${$('#logo').innerHTML}</div>${html}</div>`; gate.hidden = false; };
 const gmsg = (t, bad) => { const m = gate.querySelector('.msg'); if (m) { m.textContent = t; m.className = 'msg' + (bad ? ' bad' : ''); } };
 
 /* ---------- entrada ---------- */
@@ -32,12 +32,12 @@ function telaLogin(semAuto) {
 }
 function telaTrocar() {
   showGate(`<h1>Crie a sua senha</h1><p class="gsub">Primeiro acesso: troque a senha provisória por uma só sua (mínimo 6 caracteres).</p>
-    <form id="tf"><label for="t1">Nova senha</label><input id="t1" type="password" autocomplete="new-password" minlength="6" required>
+    <form id="tf">${API.temSenhaAtual() ? '' : '<label for="t0">Senha provisória (a que o RH passou)</label><input id="t0" type="password" autocomplete="current-password" required>'}<label for="t1">Nova senha</label><input id="t1" type="password" autocomplete="new-password" minlength="6" required>
     <label for="t2">Repita a nova senha</label><input id="t2" type="password" autocomplete="new-password" minlength="6" required>
     <button class="btn primary" type="submit">Salvar senha</button></form><p class="msg"></p>`);
   $('#tf').onsubmit = async e => { e.preventDefault(); const a = $('#t1').value, b = $('#t2').value;
     if (a.length < 6) return gmsg('Use pelo menos 6 caracteres.', true); if (a !== b) return gmsg('As senhas não são iguais.', true); if (/^\d{6}$/.test(a) && new Set(a).size < 3) return gmsg('Senha fácil demais. Escolha outra.', true);
-    gmsg('Salvando…'); try { await API.trocarSenha(a, A.uid); A.perfil.trocarSenha = false; gate.hidden = true; carregar(); } catch (er) { gmsg(er.message, true); } };
+    gmsg('Salvando…'); try { await API.trocarSenha(a, A.uid, $('#t0') ? $('#t0').value : ''); A.perfil.trocarSenha = false; gate.hidden = true; carregar(); } catch (er) { gmsg(er.message, true); } };
 }
 function telaBloq(t) { showGate(`<h1>Acesso não liberado</h1><p class="gsub">${t}</p><button class="btn ghost" id="bo" type="button">Sair</button>`); $('#bo').onclick = () => API.sair(); }
 $('#out').onclick = () => { if ($('#out').dataset.a) { API.sair(); return; } $('#out').dataset.a = 1; $('#out').textContent = 'Tocar de novo'; setTimeout(() => { delete $('#out').dataset.a; $('#out').textContent = 'Sair'; }, 3000); };
