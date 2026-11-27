@@ -59,18 +59,33 @@ A conta previneime só LÊ o Firestore (Viewer). Funções principais:
 
 Notificações no celular: `.github/workflows/push.yml` (a cada 5 min, 6h–20h) roda `tools/push.mjs` com o segredo `FIREBASE_SA`.
 
-## Pendências (27/11/2026)
-1. Cópia "11. Mobilização Documentos" (5.663 arquivos): terminar e rodar `refazerMob` uma vez quando a cópia acabar,
-   para reprocessar as pastas que não casaram. Listar ao Gustavo as pastas que não são de pessoa (ex.: "DOCUMENTOS HANNA", "PEDREIRO").
-2. Cópia RH (BM/NOVATOS/RESENDE): concluída (5.018 copiados). Falta conferir 222 itens sem registro e 21 "sem destino"
-   (NOVATOS/"CERTIFICADOS DE INTEGRAÇÃO 25.03.2026" e BM). Só depois disso dizer ao Gustavo quais pastas antigas ele pode apagar (ele apaga).
-3. OCR dos documentos do RH: montar a planilha de revisão (certificados NR com validade, CPF, nascimento) para ele aprovar antes de gravar.
-4. Admissão usada no teste completo do de acordo (27/11, a da TST): o teste deixou um envio de teste para a conta do script
-   e gravou data de admissão 01/12/2026. Depois do teste, tirar essa data e o envio de teste dessa admissão.
-5. RHiD: Gustavo vai mandar as perguntas ao suporte (integracao@controlid.com.br) e criar um usuário de integração.
-   Segredos esperados no GitHub: `RHID_EMAIL`, `RHID_SENHA`. API: `POST /login` → token Bearer; `GET /person`, `GET /apuracao_ponto` (até 90 dias),
-   AFD por equipamento (`/report/afd/download671`). Depois: rotina diária que grava marcações e apuração no portal.
-6. SOC (saúde ocupacional): perguntas enviadas pela clínica; esperar retorno sobre Exporta Dados/WebService.
-7. CRM: construir depois (o Gustavo pediu para esperar o limite diário renovar).
-8. Antigas: e-mail das NFs, OAuth do Conta Azul, lista de papéis dos padrões, valor do plano de saúde, OS por função para as outras funções,
+## Pendências (27/11/2026, fim da tarde)
+0. Regras do Firestore: publicar no console a regra nova `epi_separacao` (alerta de EPI da mobilização). Sem isso o cartão não aparece.
+1. Cota diária do Apps Script (urlfetch) estourou em 27/11 ~14h30: travou a cópia "11. Mobilização" (3.283/5.663) e o OCR do RH (3.080/5.261).
+   Quando renovar: terminar as duas, rodar `refazerMob`. Pastas sem destino na Mobilização (Gustavo viu o conteúdo):
+   PEDREIRO (admissões jul/2026: Leandro F. de Paula está no portal; Jorge A. Q. de Barros, Tarciso A. da Silva Jr., Wellington J. da Silva e Renato R. Gonçalves não),
+   CANCELADOS (6 pessoas que não estão no portal), DOCUMENTOS HANNA (certificados NR-34/12 assinados de funcionários ativos: copiar para a pasta de cada um).
+   Proposta aguardando OK: copiar HANNA/Leandro para a pasta de cada um e criar pastas "ex-funcionário / sem cadastro" para o resto. Nada é apagado.
+2. Cópia RH: os 21 "sem destino" são 15 certificados de integração de 25/03 (só 4 pessoas estão no portal: Davidson, Daniel Costa, Deivison, Francisco Justo)
+   + 6 arquivos gerais (listas, CONTRATO NOVO BM, DADOS PARA RHID). Os 222 "sem registro" precisam ser listados pelo script.
+3. OCR do RH: planilha de revisão entregue ao Gustavo (Revisao_OCR_RH.xlsx): 189 pessoas, CPF 187 (35 ambíguos), nascimento 187 (12 ambíguos),
+   132 dos 167 do portal batem pelo CPF; NRs quase não aparecem nessas pastas (só 40 pessoas). Gravar no portal só o que ele aprovar.
+   ESCOPO NOVO pedido pelo Gustavo: ler as pastas RH e SEGURANÇA DO TRABALHO inteiras e trazer TODOS os documentos dos funcionários atuais e dependentes:
+   ASO, integração, Take Care, Safety, certificados, treinamentos, carteirinha CRC, documentos pessoais e de dependentes (só os válidos, de funcionários atuais).
+   Depois de montado o banco de dados ele vai excluir essas pastas.
+4. Leitura de e-mail (conta previneime@gmail.com): ler os documentos de admissão que chegam (da contabilidade), gravar no cadastro do funcionário
+   e marcar campos de assinatura do funcionário e da empresa (Gustavo ou Thiago assina). Precisa do navegador/Apps Script. Ainda não começado.
+5. EAD: planilha dos 81 padrões (Drive, pastas PADRÃO <ÁREA>) feita como Sheets: https://claude.ai/artifact/B4tQ7WqExaitw9HsRs9nwF
+   Carga = 40 s por página, mín. 15 min, máx. 2 h, arredondada para cima de 15 em 15. PO-TRF-001 com páginas estimadas (arquivo traz contagem errada).
+   Gustavo vai preencher Área/Subárea/Função; depois cadastrar os padrões como cursos no EAD e programar por função.
+6. RHiD, SOC e CRM: como antes (aguardando Gustavo / clínica / limite diário).
+7. Antigas: e-mail das NFs, OAuth do Conta Azul, lista de papéis dos padrões, valor do plano de saúde, OS por função para as outras funções,
    separar o cinto dos kits da trefilaria, filtro de outliers em Folha/Salários, texto da carta-convite com salário visível para todo o RH.
+
+## Feito em 27/11 (tarde)
+- Propostas: código SIG-AAAA-XXXXX (3 letras da sigla do cliente, ano, 5 números aleatórios), sem "Controle Previne"; canceladas fora da lista;
+  botões Word e PDF (propostas/proppdf.js desenha o PDF a partir da mesma estrutura do PropDoc.build); todo texto justificado.
+  Proposta ROLTH (RBI-2026-57820) passada para o portal.
+- rel.js: botão "PDF do painel" automático em toda tela com .kpis (modelo REL-GER-002).
+- Admissão da Mariane (TST): envio de teste apagado; data de admissão 01/12 mantida (envio real feito à contabilidade).
+- EPI da mobilização: epi_separacao + cartão no painel de Ferramentas & EPI + badge "EPI x/y" na admissão.
