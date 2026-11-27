@@ -253,3 +253,24 @@ async function telaAprov(envId) {
   } catch (e) { console.error(e); const box = $('#ta-ficha'); if (box) box.innerHTML = '<p class="note">Não foi possível mostrar a ficha. Use “Baixar a ficha”.</p>'; }
   $('#ta-pdf').onclick = async () => { if (!blob) return; await baixar('Ficha cadastral - ' + a.nome + '.pdf', blob); };
 }
+
+/* ---------- ASO e integração: lê a data (e o apto/inapto) do arquivo anexado ---------- */
+const FC_MESES = { janeiro: 1, fevereiro: 2, marco: 3, abril: 4, maio: 5, junho: 6, julho: 7, agosto: 8, setembro: 9, outubro: 10, novembro: 11, dezembro: 12 };
+function fcDatas(txt) {
+  const hoje = new Date(Date.now() + 864e5).toISOString().slice(0, 10), min = (new Date().getFullYear() - 2) + '-01-01'; const L = [];
+  (txt.match(/\b(\d{1,2})\s?[\/.\-]\s?(\d{1,2})\s?[\/.\-]\s?(\d{2,4})\b/g) || []).forEach(m => { const p = m.split(/\s?[\/.\-]\s?/); let y = +p[2]; if (y < 100) y += 2000; const d = +p[0], mo = +p[1]; if (d >= 1 && d <= 31 && mo >= 1 && mo <= 12) L.push(`${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`); });
+  const n = str(txt).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  (n.match(/\b(\d{1,2})\s+de\s+([a-z]+)\s+de\s+(\d{4})\b/g) || []).forEach(m => { const [, d, me, y] = /(\d{1,2})\s+de\s+([a-z]+)\s+de\s+(\d{4})/.exec(m); if (FC_MESES[me]) L.push(`${y}-${String(FC_MESES[me]).padStart(2, '0')}-${String(+d).padStart(2, '0')}`); });
+  return L.filter(x => x >= min && x <= hoje).sort();
+}
+async function autoData(a, slot, file) {
+  try { toast('Lendo a data do arquivo…'); const txt = await fcTexto(file, file.type); const ds = fcDatas(txt); const n = fcN(txt);
+    const e = JSON.parse(JSON.stringify(etp(a))); e[slot] = Object.assign({}, e[slot]); let msg = '';
+    if (slot === 'aso') { const dt = ds[ds.length - 1]; const apto = /\bINAPTO\b/.test(n) ? false : /\bAPTO\b/.test(n) ? true : null;
+      if (dt && !e.aso.data) { e.aso.data = dt; e.aso.validade = addMonths(dt, 12); msg = 'Data do ASO lida do arquivo: ' + fmtD(dt); } else if (dt && e.aso.data !== dt) msg = 'O arquivo tem a data ' + fmtD(dt) + ', diferente da preenchida (' + fmtD(e.aso.data) + '). Confira.';
+      if (apto != null && e.aso.apto !== apto && !e.aso.aptoManual) { e.aso.apto = apto; msg += (msg ? ' · ' : '') + (apto ? 'apto' : 'INAPTO'); } }
+    else { const dt = ds[ds.length - 1]; if (dt && !e.integ.realizada && dt >= str(a.abertoEm).slice(0, 10)) { e.integ.realizada = dt; msg = 'Data da integração lida do arquivo: ' + fmtD(dt); } else if (dt && e.integ.realizada && e.integ.realizada !== dt) msg = 'O arquivo tem a data ' + fmtD(dt) + ', diferente da preenchida (' + fmtD(e.integ.realizada) + '). Confira.'; }
+    if (!msg) { toast('Não achei a data no arquivo. Preencha à mão.', 'bad'); return; }
+    await db.doc('admissoes/' + a.id).update({ etapas: e }); a.etapas = e; toast(msg + ' (confira)', 'ok'); SUJO = false; if (ABERTO === a.id) detalhe(a.id);
+  } catch (er) { console.warn(er); toast('Não consegui ler a data do arquivo. Preencha à mão.', 'bad'); }
+}

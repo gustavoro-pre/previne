@@ -478,6 +478,8 @@ async function detalhe(id, refresh) {
       toast('Admissão cancelada.', 'ok'); fechar(); } catch (er) { toast('Não foi possível cancelar.', 'bad'); } }; }
   const af = $('#e-asof'); if (af) af.onclick = () => anexar(a, 'aso');
   const inf = $('#e-intf'); if (inf) inf.onclick = () => anexar(a, 'integ');
+  /* as datas e escolhas das etapas salvam sozinhas ao mudar (o salário continua no botão Salvar) */
+  $$('#sheet input[id^="e-"], #sheet select[id^="e-"], #sheet textarea[id^="e-"]').filter(x => !['e-sal'].includes(x.id) && !x.disabled).forEach(x => x.addEventListener('change', async () => { if (await salvarEtapas(a, true)) { SUJO = false; toast('Salvo.', 'ok'); } }));
 }
 function lerEtapas(a) {
   const e = JSON.parse(JSON.stringify(etp(a)));
@@ -510,9 +512,9 @@ async function ver(a, slot, arq) {
 }
 function anexar(a, slot) {
   const i = document.createElement('input'); i.type = 'file'; i.accept = 'image/*,application/pdf';
-  i.onchange = async () => { const f = i.files[0]; if (!f) return; toast('Enviando…');
+  i.onchange = async () => { const f = i.files[0]; if (!f) return; toast('Enviando…'); if ((slot === 'aso' || slot === 'integ') && $('#e-aso')) await salvarEtapas(a, true);
     try { const prep = await ADM.preparar(f); const arq = await ADM.gravar(prep, slot, (id, d) => db.doc(`admissoes/${a.id}/p/${id}`).set({ d }));
-      if (slot === 'aso' || slot === 'integ') { const e = JSON.parse(JSON.stringify(etp(a))); e[slot] = Object.assign({}, e[slot]); e[slot].arq = (e[slot].arq || []).concat([arq]); await db.doc('admissoes/' + a.id).update({ etapas: e }); a.etapas = e; }
+      if (slot === 'aso' || slot === 'integ') { const e = JSON.parse(JSON.stringify(etp(a))); e[slot] = Object.assign({}, e[slot]); e[slot].arq = (e[slot].arq || []).concat([arq]); await db.doc('admissoes/' + a.id).update({ etapas: e }); a.etapas = e; autoData(a, slot, f); }
       else { const cand = JSON.parse(JSON.stringify(a.cand || { dados: {}, docs: {} })); cand.docs = cand.docs || {}; cand.docs[slot] = (cand.docs[slot] || []).concat([arq]); await db.doc('admissoes/' + a.id).update({ cand }); a.cand = cand; }
       toast(prep.q.ok ? 'Anexado.' : 'Anexado, mas a foto parece com problema: ' + prep.q.prob[0], prep.q.ok ? 'ok' : 'bad'); detalhe(a.id);
     } catch (er) { toast(er.message || 'Não foi possível anexar.', 'bad'); } };
