@@ -201,7 +201,7 @@ async function raizes() {
 const P = await pessoas();
 const R = await raizes();
 console.log('Itens compartilhados (pastas e arquivos):', R.length, '· pessoas no portal:', P.lista.length);
-if (!R.length) { console.log('Nada compartilhado com a conta de serviço ainda.'); process.exit(0); }
+if (!R.length) { console.log('Nada compartilhado com a conta de serviço ainda.'); console.log('::notice title=Inventario::nada compartilhado ainda'); process.exit(0); }
 
 const ja = new Map(); // id -> mod já processado
 (await db.collection('drive_inv').select('mod', 'v').get()).forEach(d => ja.set(d.id, d.data()));
@@ -261,4 +261,5 @@ while (pilha.length && tempo()) {
 }
 if (nLote) await lote.commit();
 await db.doc('config/inventario_estado').set({ ultima: new Date().toISOString(), completo: !pilha.length, pastasPendentes: pilha.length, cont }, { merge: true });
+console.log(`::notice title=Inventario::itens raiz ${R.length} · arquivos vistos ${cont.arquivos} · processados agora ${cont.novos} · ja feitos ${cont.pulados} · por CPF ${cont.cpf} · por nome ${cont.nome} · pasta sem cadastro ${cont.pasta} · sem identificacao ${cont.sem} · OCR ${cont.ocr} · erros ${cont.erros || 0} · pastas pendentes ${pilha.length}`);
 console.log('Resumo:', JSON.stringify(cont), pilha.length ? `· faltam ${pilha.length} pastas (continua na próxima rodada)` : '· varredura completa');
