@@ -157,8 +157,8 @@ function tPes() {
   $$('#ind-body [data-kb]').forEach(b => b.onclick = b.onkeydown = e => { if (e.type === 'keydown' && e.key !== 'Enter') return;
     const k = b.dataset.kb, alvo = ['dem12', 'dem3', 'precoce', 'empr', 'recont'].includes(k) ? $('#kb-det2') : $('#kb-det'); $$('#ind-body .kpi.on').forEach(x => x.classList.remove('on'));
     if (alvo.dataset.k === k) { alvo.innerHTML = ''; alvo.dataset.k = ''; return; } const [t, ex, html] = BASE[k](); alvo.dataset.k = k; b.classList.add('on');
-    alvo.innerHTML = `<div class="card" style="margin-top:10px;border-color:var(--acc,#1f4e9c)"><div class="head" style="margin:0 0 6px"><p class="ct" style="margin:0;margin-right:auto">Base: ${esc(t)}</p><button class="btn sm ghost" data-kbx="1">Fechar</button></div>${ex ? `<p class="note" style="margin-top:0">${ex}</p>` : ''}${html}</div>`;
-    alvo.querySelector('[data-kbx]').onclick = () => { alvo.innerHTML = ''; alvo.dataset.k = ''; b.classList.remove('on'); }; alvo.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); });
+    alvo.innerHTML = `<div class="card" style="margin-top:10px;border-color:var(--acc,#1f4e9c)"><div class="head" style="margin:0 0 6px"><p class="ct" style="margin:0;margin-right:auto">Base: ${esc(t)}</p><button class="btn sm ghost" data-kbxp="1" style="margin-right:6px">Exportar</button><button class="btn sm ghost" data-kbx="1">Fechar</button></div>${ex ? `<p class="note" style="margin-top:0">${ex}</p>` : ''}${html}</div>`;
+    alvo.querySelector('[data-kbx]').onclick = () => { alvo.innerHTML = ''; alvo.dataset.k = ''; b.classList.remove('on'); }; alvo.querySelector('[data-kbxp]').onclick = () => exportarBase(alvo, t, ex); alvo.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); });
   $('#pes-grp').onchange = e => { V.grp = e.target.value; tPes(); };
   $('#pes-dm').onchange = e => { V.dm = e.target.value; tPes(); };
   $$('#ind-body [data-dm]').forEach(b => b.onclick = () => { V.dm = b.dataset.dm; tPes(); $('#pes-dem').scrollIntoView({ behavior: 'smooth', block: 'start' }); });

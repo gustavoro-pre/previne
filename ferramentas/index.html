@@ -157,7 +157,7 @@ table.tb{width:100%;border-collapse:collapse;font-size:13px}
 .glogo{width:46px;height:46px;border-radius:10px;background:var(--accent);display:grid;place-items:center}
 .glogo:has(img){background:none;width:auto;height:auto;justify-content:start}.glogo img{display:block;max-height:64px;max-width:200px;width:auto;height:auto;object-fit:contain}
 .gmsg{font-size:14px;color:var(--ok);min-height:20px;margin:10px 0 0}.gmsg.bad{color:var(--bad)}
-#toportal{color:#fff;text-decoration:none;font-size:12px;font-weight:600;padding:4px 10px;background:rgba(255,255,255,.12);border-radius:99px;margin-right:6px;white-space:nowrap}
+#tovoltar{color:#fff;font:inherit;font-size:12px;font-weight:600;padding:4px 10px;background:rgba(255,255,255,.12);border:0;border-radius:99px;margin-right:6px;white-space:nowrap;cursor:pointer}#toportal{color:#fff;text-decoration:none;font-size:12px;font-weight:600;padding:4px 10px;background:rgba(255,255,255,.12);border-radius:99px;margin-right:6px;white-space:nowrap}
 #usermenu{background:rgba(255,255,255,.12);border:0;color:#fff;border-radius:99px;padding:4px 10px;font-size:12px;cursor:pointer;white-space:nowrap}
 #usermenu span{opacity:.7;margin-left:4px}
 .qframe{position:absolute;left:50%;top:50%;width:62%;aspect-ratio:1;transform:translate(-50%,-50%);border:3px solid var(--accent);border-radius:14px;box-shadow:0 0 0 999px rgba(0,0,0,.35);pointer-events:none}
@@ -173,7 +173,7 @@ table.tb{width:100%;border-collapse:collapse;font-size:13px}
   <div class="logo"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3a2a00" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.4-.6-.6-2.4z"/></svg></div>
   <div><div class="htitle">Ferramentas &amp; EPI</div><div class="hsub">Almoxarifado · cautelas, entregas e relatórios</div></div>
   <div class="conn" id="conn">Conectando…</div>
-  <a id="toportal" href="../" title="Voltar ao portal PREVINE">⌂ Portal</a>
+  <button id="tovoltar" type="button" title="Voltar à página anterior" onclick="(function(){var e=new CustomEvent('prev-voltar',{cancelable:true});if(!window.dispatchEvent(e))return;if(history.length>1)history.back();else location.href='../';})()">‹ Voltar</button><a id="toportal" href="../" title="Voltar ao portal PREVINE">⌂ Portal</a>
   <button id="usermenu" hidden type="button"><b></b><span>Sair</span></button>
 </div></header>
 
@@ -355,6 +355,7 @@ window.__FBMODE = true; window.__MODULO = 'ferramentas';
 window.claude = { use: n => new Promise(r => { const go = () => window.__fbUse ? r(window.__fbUse(n)) : setTimeout(go, 50); go(); }) };
 </script>
 <script type="module" src="../fb.js"></script>
+<script src="../rel.js?v=1" defer></script>
 <script>
 "use strict";
 const MODO = window.__MODULO || 'ferramentas'; /* ferramentas | treinamentos: o mesmo app atende os dois módulos */
@@ -817,7 +818,10 @@ $('#d-hist').onclick = () => {
     saveCSV('cautelas_' + todayStr() + '.csv', rows);
   };
 };
-async function saveCSV(name, rows) {
+/* toda exportação sai pelo gerador de relatórios da Previne (Excel ou PDF, com cabeçalho e número de controle) */
+const REL_NOMES = [[/^cautelas/, 'rel_cautelas', 'Relatório de cautelas de ferramentas'], [/^ficha_epi_/, 'rel_ficha_epi', 'Histórico de EPI do funcionário'], [/^entregas_epi/, 'rel_entregas_epi', 'Entregas de EPI'], [/^ocorrencias_ferramentas/, 'rel_ocorrencias', 'Ocorrências com ferramentas'], [/^matriz_treinamentos/, 'rel_matriz_trein', 'Matriz de treinamentos'], [/^deacordo/, 'rel_deacordo', 'Registro de de acordo dos certificados']];
+async function saveCSV(name, rows, meta) {
+  if (window.PrevRel) { const k = REL_NOMES.find(x => x[0].test(name)) || [null, 'relatorio', name.replace(/_\d{4}-\d{2}-\d{2}.*$|\.csv$/g, '').replace(/_/g, ' ')]; const o = Object.assign(PrevRel.deMatriz(rows), { modelo: k[1], titulo: k[2], arquivo: k[2] }, meta || {}); return PrevRel.escolher(o); }
   const csv = '﻿' + rows.map(r => r.map(v => { v = str(v); return /[";\r\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }).join(';')).join('\r\n');
   const dl = await use('downloads');
   if (dl) {

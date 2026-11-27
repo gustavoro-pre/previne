@@ -212,6 +212,7 @@ function apPlanilha(l) {
   const cab = ['Lote', 'Responsável', 'Data e hora', 'Papel', 'Código do certificado', 'Participante', 'CPF', 'Treinamento', 'Carga horária', 'Início', 'Término', 'Validade', 'Código de verificação (SHA-256)', 'Código do lote (SHA-256)'];
   const cel = v => `"${str(v).replace(/"/g, '""')}"`;
   const linhas = l.itens.map(it => [l.id, l.nome, fmtDT(l.em), it.papel, it.codigo, it.participante, it.cpf, it.treinamento, it.carga, fmtD(it.inicio), fmtD(it.termino), fmtD(it.validade), it.hash, l.hashLote].map(cel).join(';'));
+  if (window.PrevRel) return saveCSV('deacordo.csv', [cab].concat(l.itens.map(it => [l.id, l.nome, fmtDT(l.em), it.papel, it.codigo, it.participante, it.cpf, it.treinamento, it.carga, it.inicio, it.termino, it.validade, it.hash, l.hashLote])), { filtros: 'Responsável: ' + l.nome + ' · ' + fmtDT(l.em) });
   const blob = new Blob(['﻿' + [cab.map(cel).join(';')].concat(linhas).join('\r\n')], { type: 'text/csv;charset=utf-8' });
   use('downloads').then(dl => dl && dl.save({ filename: `De acordo - ${l.nome} - ${l.em.slice(0, 10)}.csv`, data: blob })).catch(() => {});
 }
@@ -223,6 +224,7 @@ async function apHistorico() {
   $$('[data-app]').forEach(b => b.onclick = () => apPlanilha(L.find(x => x.id === b.dataset.app)));
   if ($('#ap-all-csv')) $('#ap-all-csv').onclick = () => { const cab = ['Lote', 'Responsável', 'Data e hora', 'Papel', 'Código do certificado', 'Participante', 'CPF', 'Treinamento', 'Carga horária', 'Início', 'Término', 'Validade', 'Código de verificação (SHA-256)', 'Código do lote (SHA-256)']; const cel = v => `"${str(v).replace(/"/g, '""')}"`;
     const linhas = []; L.forEach(l => l.itens.forEach(it => linhas.push([l.id, l.nome, fmtDT(l.em), it.papel, it.codigo, it.participante, it.cpf, it.treinamento, it.carga, fmtD(it.inicio), fmtD(it.termino), fmtD(it.validade), it.hash, l.hashLote].map(cel).join(';'))));
+    if (window.PrevRel) { const R = []; L.forEach(l => l.itens.forEach(it => R.push([l.id, l.nome, fmtDT(l.em), it.papel, it.codigo, it.participante, it.cpf, it.treinamento, it.carga, it.inicio, it.termino, it.validade, it.hash, l.hashLote]))); return saveCSV('deacordo.csv', [cab].concat(R)); }
     use('downloads').then(dl => dl && dl.save({ filename: `Registro de de acordo - ${todayStr()}.csv`, data: new Blob(['﻿' + [cab.map(cel).join(';')].concat(linhas).join('\r\n')], { type: 'text/csv;charset=utf-8' }) })).catch(() => {}); };
 }
 /* ================= arquivos (anexos guardados no banco, em partes) ================= */

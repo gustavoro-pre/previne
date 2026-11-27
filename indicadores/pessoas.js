@@ -21,12 +21,20 @@ function abrirKG(b) {
   grid.querySelectorAll('.kpi.on').forEach(x => x.classList.remove('on'));
   if (det.dataset.k === k) { det.innerHTML = ''; det.dataset.k = ''; return; }
   const [t, ex, html] = fn(); det.dataset.k = k; b.classList.add('on');
-  det.innerHTML = `<div class="card" style="margin-top:10px;border-color:#1f4e9c"><div class="head" style="margin:0 0 6px"><p class="ct" style="margin:0;margin-right:auto">Base: ${esc(t)}</p><button class="btn sm ghost" data-kgx="1">Fechar</button></div>${ex ? `<p class="note" style="margin:0 0 8px">${ex}</p>` : ''}${html || '<p class="note">Nada para mostrar.</p>'}</div>`;
+  det.innerHTML = `<div class="card" style="margin-top:10px;border-color:#1f4e9c"><div class="head" style="margin:0 0 6px"><p class="ct" style="margin:0;margin-right:auto">Base: ${esc(t)}</p><button class="btn sm ghost" data-kgxp="1" style="margin-right:6px">Exportar</button><button class="btn sm ghost" data-kgx="1">Fechar</button></div>${ex ? `<p class="note" style="margin:0 0 8px">${ex}</p>` : ''}${html || '<p class="note">Nada para mostrar.</p>'}</div>`;
   det.querySelector('[data-kgx]').onclick = () => { det.innerHTML = ''; det.dataset.k = ''; b.classList.remove('on'); };
+  det.querySelector('[data-kgxp]').onclick = () => exportarBase(det, t, ex);
   det.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 document.addEventListener('click', e => { const b = e.target.closest('[data-kb^="kg"]'); if (b) abrirKG(b); });
 document.addEventListener('keydown', e => { if (e.key !== 'Enter' || !e.target.closest) return; const b = e.target.closest('[data-kb^="kg"]'); if (b) abrirKG(b); });
+function exportarBase(det, t, ex) { const tb = det.querySelector('table'); let rows;
+    if (tb) rows = [...tb.querySelectorAll('tr')].map(tr => [...tr.children].map(td => td.innerText.trim()));
+    else rows = [['Nome', 'Detalhe']].concat([...det.querySelectorAll('.ritem')].map(r => [str((r.querySelector('b') || r).innerText).trim(), str((r.querySelector('.note') || {}).innerText || '').trim()]));
+    if (rows.length < 2) return toast('Nada para exportar.', 'bad');
+    const tab = ({ pes: 'Pessoas', trein: 'Treinamentos', pad: 'Padrões', ferr: 'Ferramentas', epi: 'EPI' })[V.tab] || '';
+    PrevRel.escolher(Object.assign(PrevRel.deMatriz(rows.map(r => r.map(v => /^R\$\s?[\d.]+,\d{2}$/.test(v) ? v.replace(/R\$\s?/, '').replace(/\./g, '').replace(',', '.') : /^[\d.]+,\d+h$/.test(v) ? v.replace('h', '').replace(/\./g, '').replace(',', '.') : v))), { modelo: 'rel_indicador', titulo: 'Indicadores · ' + tab + ' · ' + t, arquivo: 'Indicador ' + t, filtros: ((AREA_FIXA || V.area) ? 'Área: ' + ((D.areas.find(x => x.id === (AREA_FIXA || V.area)) || {}).nome || (AREA_FIXA || V.area)) + ' · ' : '') + (ex ? ex.replace(/<[^>]+>/g, '') : '') }));
+}
 /* listas usadas nas bases */
 const listaP = (L, fx) => L.length ? `<div class="card" style="padding:4px 12px;max-height:520px;overflow:auto;margin:0">${L.map(f => `<button class="ritem lk" data-pessoa="${esc(f.id)}"><div class="main"><b>${esc(f.nome)}</b><div class="note">${fx ? fx(f) : esc([f.matricula, f.funcao, f.area].filter(Boolean).join(' · '))}</div></div></button>`).join('')}</div>` : '<p class="note">Ninguém.</p>';
 const tabela = (cab, linhas, alinhaDir) => linhas.length ? `<div class="tbwrap" style="margin:0;max-height:560px;overflow:auto"><table class="tb"><thead><tr>${cab.map((c, i) => `<th${(alinhaDir || []).includes(i) ? ' class="n"' : ''}>${esc(c)}</th>`).join('')}</tr></thead><tbody>${linhas.map(l => `<tr${l.pessoa ? ` data-pessoa="${esc(l.pessoa)}" style="cursor:pointer"` : ''}>${(l.c || l).map((v, i) => `<td${(alinhaDir || []).includes(i) ? ' class="n"' : ''}>${v}</td>`).join('')}</tr>`).join('')}</tbody></table></div>` : '<p class="note">Nada para mostrar.</p>';
@@ -52,7 +60,7 @@ function tFunc() {
       <div><label>Função</label><select id="fu-f">${opt(uniq('funcao'), V.ff, 'Todas as funções')}</select></div>
       <div><label>Situação</label><select id="fu-s">${[['ativos', 'Ativos'], ['desligados', 'Desligados'], ['todos', 'Todos'], ['afastados', 'Afastados'], ['ferias', 'De férias'], ['altura', 'Trabalham em altura']].map(([k, t]) => `<option value="${k}" ${V.fs === k ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
       <div><label>Vínculo</label><select id="fu-v"><option value="">CLT e PJ</option><option value="CLT" ${V.fv === 'CLT' ? 'selected' : ''}>CLT</option><option value="PJ" ${V.fv === 'PJ' ? 'selected' : ''}>PJ</option></select></div>
-      <div><button class="btn ghost" id="fu-csv" type="button" style="width:100%">Baixar lista (planilha)</button></div></div></div>
+      <div><button class="btn primary" id="fu-csv" type="button" style="width:100%">Exportar (Excel ou PDF)</button></div></div></div>
     <div id="fu-n" class="note" style="margin:0 0 6px"></div><div id="fu-list"></div>`;
   const lista = () => {
     const q = norm(V.fq), qd = soDig(V.fq);
@@ -66,13 +74,7 @@ function tFunc() {
   let L = lista();
   $('#fu-q').addEventListener('input', e => { V.fq = e.target.value; L = lista(); });
   [['#fu-a', 'fa'], ['#fu-f', 'ff'], ['#fu-s', 'fs'], ['#fu-v', 'fv']].forEach(([s, k]) => $(s).onchange = e => { V[k] = e.target.value; L = lista(); });
-  $('#fu-csv').onclick = () => {
-    const pf = podeFolha(); const ult = ultimaFolha();
-    const cab = ['Nome', 'Matrícula', pf ? 'CPF' : null, 'Função', 'Área', 'Subárea', 'Unidade', 'Vínculo', 'Admissão', 'Situação', 'Desligamento', pf ? 'Cargo (folha)' : null, pf ? 'Salário (folha)' : null].filter(Boolean);
-    const linhas = L.map(f => { const u = ult[f.id]; return [f.nome, f.matricula, pf ? fmtCpf(f.cpf || (u && u.cpf)) : null, f.funcao, f.area, f.subarea, f.unidade, f.vinculo || 'CLT', fmtD(f.admissao), f.ativo === false ? 'Desligado' : (f.situacao || 'Trabalhando'), f.demissao ? fmtD(f.demissao) : '', pf ? (u ? u.cargo : '') : null, pf ? (u ? String(num(u.salario)).replace('.', ',') : '') : null].filter((x, i) => cab[i] !== undefined && x !== null); });
-    const csv = '﻿' + [cab].concat(linhas).map(r => r.map(v => '"' + str(v === '—' ? '' : v).replace(/"/g, '""') + '"').join(';')).join('\r\n');
-    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' })); a.download = 'funcionarios.csv'; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 2000);
-  };
+  $('#fu-csv').onclick = () => exportarFunc(L, [V.fa && 'Área: ' + V.fa, V.ff && 'Função: ' + V.ff, 'Situação: ' + ({ ativos: 'ativos', desligados: 'desligados', todos: 'todos', afastados: 'afastados', ferias: 'de férias', altura: 'trabalham em altura' })[V.fs], V.fv && 'Vínculo: ' + V.fv, V.fq && 'Busca: ' + V.fq].filter(Boolean).join(' · '));
 }
 
 /* ---------- a vida do funcionário na empresa ---------- */
@@ -312,3 +314,61 @@ function tAbs() {
   $('#ab-comp').onchange = e => { V.comp = e.target.value; tAbs(); };
   PB().querySelectorAll('[data-acomp]').forEach(b => b.onclick = () => { V.comp = b.dataset.acomp; tAbs(); });
 }
+
+/* ---------- exportação da lista de funcionários: escolher colunas, indicadores individuais, Excel ou PDF ---------- */
+function kpisPessoa(f) {
+  const h = hoje(), d12 = addDays(-365), pf = podeFolha(); const o = {};
+  const G = grupos().filter(g => obrig(g, f)); const st = G.map(g => { const u = ultimo(f.id, g.k); return { g, s: u ? trState(u) : 'falta' }; });
+  o.nrExig = G.length; o.nrOk = st.filter(x => x.s === 'ok' || x.s === 'vence').length; o.nrPct = G.length ? o.nrOk / G.length : null;
+  o.nrVenc = st.filter(x => x.s === 'vencido').map(x => x.g.nome).join(', '); o.nrFalta = st.filter(x => x.s === 'falta').map(x => x.g.nome).join(', '); o.nrVence = st.filter(x => x.s === 'vence').map(x => x.g.nome).join(', ');
+  const T12 = D.tr.filter(r => r.funcionarioId === f.id && str(r.termino) >= d12 && str(r.termino) <= h); o.tr12 = T12.length; o.trH12 = T12.reduce((a, r) => a + num(r.cargaHoraria), 0) + D.ext.filter(x => x.funcionarioId === f.id && str(x.termino) >= d12).reduce((a, x) => a + num(x.cargaHoraria), 0);
+  const P = D.pad.filter(p => precisa(p, f)); const ps = P.map(p => ({ p, s: padSt(p, f.id).st })); o.padExig = P.length; o.padOk = ps.filter(x => x.s === 'ok').length; o.padPend = ps.filter(x => x.s !== 'ok').map(x => x.p.codigo).join(', ');
+  const E = D.ent.filter(e => e.funcionarioId === f.id && str(e.data).slice(0, 10) >= d12); o.epiQ = E.reduce((a, e) => a + (num(e.qtd) || 1), 0); o.epiR = E.reduce((a, e) => a + num(e.custo) * (num(e.qtd) || 1), 0); o.epiMau = E.filter(e => ['mau_uso', 'perda'].includes(e.motivo)).length;
+  o.epiUlt = D.ent.filter(e => e.funcionarioId === f.id).map(e => str(e.data).slice(0, 10)).sort().pop() || '';
+  const C = D.caut.filter(c => c.funcionarioId === f.id); const pend = C.flatMap(c => (c.itens || []).filter(i => !i.devolvido).map(i => ({ c, i })));
+  o.ferPosse = pend.length; o.ferAtraso = pend.filter(x => x.c.previsaoDevolucao && str(x.c.previsaoDevolucao) < h).length; o.ferLista = pend.map(x => x.i.codigo || x.i.descricao).join(', ');
+  o.ferOc = C.flatMap(c => c.itens || []).filter(i => ['mau_uso', 'dano', 'extraviada', 'extravio'].includes(str(i.estadoDevolucao))).length;
+  if (pf) { const FO = (D.folha || []).filter(x => x.funcionarioId === f.id).sort((a, b) => str(b.comp).localeCompare(str(a.comp))); const U = FO.slice(0, 12), U3 = FO.slice(0, 3); const sm = (L, k) => L.reduce((a, x) => a + num((x.ag || {})[k]), 0);
+    o.cargo = FO[0] ? FO[0].cargo : ''; o.sal = FO[0] ? num(FO[0].salario) : null; o.prov3 = U3.length ? U3.reduce((a, x) => a + num(x.proventos), 0) / U3.length : null; o.custo3 = U3.length ? U3.reduce((a, x) => a + num(x.proventos) + num(x.fgts), 0) / U3.length : null;
+    o.heH = sm(U, 'heh'); o.heR = sm(U, 'hev'); o.heMes = U.length ? o.heH / U.length : null; o.notH = sm(U, 'adNoth'); o.fH = sm(U, 'faltash'); o.afH = sm(U, 'afasth'); const hm = U.reduce((a, x) => a + (num(x.horasMes) || 220), 0); o.abs = hm ? o.fH / hm : null; o.meses = U.length; }
+  return o;
+}
+const COLS_F = [
+  ['Cadastro', [['nome', 'Nome', 'txt', 34, f => f.nome, 1], ['mat', 'Matrícula', 'txt', 11, f => f.matricula, 1], ['cpf', 'CPF', 'txt', 16, f => podeFolha() ? fmtCpf(f.cpf) : cpfMask(f.cpf), 1], ['funcao', 'Função', 'txt', 30, f => f.funcao, 1], ['area', 'Área', 'txt', 16, f => f.area, 1], ['sub', 'Subárea', 'txt', 18, f => f.subarea || subsDe(f).map(subNome).join(', '), 0], ['unid', 'Unidade', 'txt', 14, f => f.unidade, 0], ['vinc', 'Vínculo', 'txt', 9, f => f.vinculo || 'CLT', 0], ['adm', 'Admissão', 'data', 12, f => f.admissao, 1], ['casa', 'Tempo de casa (anos)', 'num', 12, f => { const v = anosEntre(f.admissao, f.ativo === false && f.demissao ? str(f.demissao).slice(0, 10) : ''); return v == null ? null : Math.round(v * 10) / 10; }, 1], ['nasc', 'Nascimento', 'data', 12, f => f.nascimento, 0], ['idade', 'Idade', 'int', 7, f => { const v = anosEntre(f.nascimento); return v == null ? null : Math.floor(v); }, 0], ['sit', 'Situação', 'txt', 13, f => f.ativo === false ? 'Desligado' : (f.situacao || 'Trabalhando'), 1], ['dem', 'Desligamento', 'data', 12, f => f.demissao, 0], ['demt', 'Tipo / motivo do desligamento', 'txt', 28, f => [f.demissaoTipo, f.demissaoMotivo].filter(Boolean).join(' · '), 0], ['alt', 'Trabalho em altura', 'txt', 9, f => f.altura ? 'Sim' : 'Não', 0], ['tam', 'Tamanhos (camisa / calça / calçado)', 'txt', 20, f => [f.tamCamisa || f.tamRoupa, f.tamCalca, f.tamCalcado].map(x => x || '—').join(' / '), 0]]],
+  ['Treinamentos e padrões', [['nrExig', 'NRs exigidas', 'int', 9, (f, k) => k.nrExig, 1], ['nrOk', 'NRs em dia', 'int', 9, (f, k) => k.nrOk, 1], ['nrPct', '% NRs em dia', 'pct', 10, (f, k) => k.nrPct, 1], ['nrVenc', 'NRs vencidas', 'txt', 22, (f, k) => k.nrVenc, 1], ['nrFalta', 'NRs que faltam', 'txt', 22, (f, k) => k.nrFalta, 0], ['nrVence', 'Vencem em 60 dias', 'txt', 22, (f, k) => k.nrVence, 0], ['tr12', 'Treinamentos (12 meses)', 'int', 11, (f, k) => k.tr12, 0], ['trH12', 'Horas de treinamento (12 meses)', 'h', 12, (f, k) => k.trH12, 0], ['padExig', 'Padrões exigidos', 'int', 9, (f, k) => k.padExig, 0], ['padOk', 'Padrões assinados', 'int', 9, (f, k) => k.padOk, 0], ['padPend', 'Padrões pendentes', 'txt', 24, (f, k) => k.padPend, 0]]],
+  ['EPI e ferramentas', [['epiQ', 'EPIs recebidos (12 meses)', 'int', 11, (f, k) => k.epiQ, 0], ['epiR', 'Gasto com EPI (12 meses)', 'brl', 13, (f, k) => k.epiR, 0], ['epiMau', 'Trocas por mau uso/perda (12 meses)', 'int', 12, (f, k) => k.epiMau, 0], ['epiUlt', 'Última entrega de EPI', 'data', 12, (f, k) => k.epiUlt, 0], ['ferPosse', 'Ferramentas em posse', 'int', 10, (f, k) => k.ferPosse, 0], ['ferLista', 'Quais ferramentas', 'txt', 24, (f, k) => k.ferLista, 0], ['ferAtraso', 'Ferramentas em atraso', 'int', 10, (f, k) => k.ferAtraso, 0], ['ferOc', 'Ocorrências (mau uso, dano, extravio)', 'int', 12, (f, k) => k.ferOc, 0]]],
+  ['Folha (Admin, Gestão, Gerente e RH)', [['cargo', 'Cargo na folha', 'txt', 26, (f, k) => k.cargo, 0], ['sal', 'Salário-base', 'brl', 13, (f, k) => k.sal, 0], ['prov3', 'Remuneração bruta média (3 meses)', 'brl', 14, (f, k) => k.prov3, 0], ['custo3', 'Custo médio c/ FGTS (3 meses)', 'brl', 14, (f, k) => k.custo3, 0], ['heH', 'Horas extras (12 meses)', 'h', 11, (f, k) => k.heH, 0], ['heMes', 'Horas extras por mês (média)', 'h', 11, (f, k) => k.heMes, 0], ['heR', 'Valor de horas extras (12 meses)', 'brl', 14, (f, k) => k.heR, 0], ['notH', 'Horas com adicional noturno (12 meses)', 'h', 12, (f, k) => k.notH, 0], ['fH', 'Faltas (h, 12 meses)', 'h', 10, (f, k) => k.fH, 0], ['abs', 'Absenteísmo (12 meses)', 'pct', 11, (f, k) => k.abs, 0], ['afH', 'Horas afastadas (12 meses)', 'h', 11, (f, k) => k.afH, 0], ['meses', 'Meses de folha considerados', 'int', 9, (f, k) => k.meses, 0]], 'folha']];
+const PRESETS = { padrao: null, cadastro: g => g === 'Cadastro', sst: g => g !== 'Folha (Admin, Gestão, Gerente e RH)' && g !== 'Cadastro', tudo: () => true };
+function exportarFunc(L, filtros) {
+  const pf = podeFolha(); const grupos_ = COLS_F.filter(g => !g[2] || pf);
+  let sel; try { sel = JSON.parse(localStorage.getItem('prev_exp_func') || 'null'); } catch (e) { sel = null; }
+  const marcado = c => sel ? sel.includes(c[0]) : !!c[5];
+  const box = document.createElement('div'); box.className = 'card'; box.id = 'fx-box'; box.style.borderColor = '#1f4e9c';
+  box.innerHTML = `<div class="head" style="margin:0 0 6px"><p class="ct" style="margin:0;margin-right:auto">Exportar ${L.length} funcionário(s)</p><button class="btn sm ghost" type="button" id="fx-x">Fechar</button></div>
+    <p class="note" style="margin:0 0 8px">Sai com o cabeçalho da Previne e o número de controle do documento. Usa os filtros da lista${filtros ? ` (${esc(filtros)})` : ''}. Marque o que deve vir na planilha.</p>
+    <div class="actions" style="justify-content:flex-start;gap:6px;flex-wrap:wrap;margin:0 0 8px"><span class="note">Prontos:</span><button class="btn sm ghost" type="button" data-pr="cadastro">Só cadastro</button><button class="btn sm ghost" type="button" data-pr="sst">Cadastro + SST</button><button class="btn sm ghost" type="button" data-pr="tudo">Tudo</button></div>
+    ${grupos_.map(([g, C], gi) => `<details ${gi < 2 ? 'open' : ''} style="margin:6px 0"><summary style="cursor:pointer;font-weight:600">${esc(g)} <button class="link" type="button" data-gall="${gi}" style="margin-left:8px;font-size:13px">marcar todos</button></summary>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:2px 12px;margin:6px 0 0">${C.map(c => `<label style="display:flex;gap:8px;align-items:center;margin:0;font-weight:400;color:inherit;font-size:14px"><input type="checkbox" data-col="${c[0]}" data-g="${gi}" ${marcado(c) || c[0] === 'nome' ? 'checked' : ''} ${c[0] === 'nome' ? 'disabled' : ''} style="width:17px;height:17px"> ${esc(c[1])}</label>`).join('')}</div></details>`).join('')}
+    <div class="grid3" style="align-items:end;margin-top:8px"><div><label>Título</label><input id="fx-tit" value="Relação de funcionários"></div><div><label>Ordenar por</label><select id="fx-ord"><option value="nome">Nome</option><option value="area">Área e nome</option><option value="funcao">Função e nome</option><option value="adm">Admissão</option></select></div><div><label>Linha de totais</label><select id="fx-tot"><option value="1">Sim</option><option value="">Não</option></select></div></div>
+    <div class="actions" style="justify-content:flex-start;gap:8px;margin-top:10px"><button class="btn primary" type="button" data-fx="xlsx">Baixar Excel</button><button class="btn ghost" type="button" data-fx="pdf">Baixar PDF</button></div><p class="note" id="fx-st" style="margin:6px 0 0"></p>`;
+  const old = $('#fx-box'); if (old) old.remove(); $('#fu-n').before(box); box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  $('#fx-x').onclick = () => box.remove();
+  box.querySelectorAll('[data-gall]').forEach(b => b.onclick = e => { e.preventDefault(); const ins = box.querySelectorAll(`[data-g="${b.dataset.gall}"]`); const tudo = [...ins].every(i => i.checked); ins.forEach(i => { if (!i.disabled) i.checked = !tudo; }); });
+  box.querySelectorAll('[data-pr]').forEach(b => b.onclick = () => { const fn = PRESETS[b.dataset.pr]; box.querySelectorAll('[data-col]').forEach(i => { if (i.disabled) return; const g = grupos_[+i.dataset.g][0]; const c = grupos_[+i.dataset.g][1].find(x => x[0] === i.dataset.col); i.checked = b.dataset.pr === 'cadastro' ? (fn(g) && !!c[5]) || (g === 'Cadastro' && c[5]) : fn(g) && (g !== 'Cadastro' || !!c[5]); }); });
+  box.querySelectorAll('[data-fx]').forEach(b => b.onclick = async () => {
+    const ids = [...box.querySelectorAll('[data-col]')].filter(i => i.checked).map(i => i.dataset.col); try { localStorage.setItem('prev_exp_func', JSON.stringify(ids)); } catch (e) {}
+    const C = grupos_.flatMap(g => g[1]).filter(c => ids.includes(c[0])); const precisaK = C.some(c => c[4].length > 1);
+    const ord = $('#fx-ord').value; const O = L.slice().sort((a, b) => ord === 'area' ? (str(a.area).localeCompare(str(b.area), 'pt') || str(a.nome).localeCompare(str(b.nome), 'pt')) : ord === 'funcao' ? (str(a.funcao).localeCompare(str(b.funcao), 'pt') || str(a.nome).localeCompare(str(b.nome), 'pt')) : ord === 'adm' ? str(a.admissao).localeCompare(str(b.admissao)) : str(a.nome).localeCompare(str(b.nome), 'pt'));
+    const linhas = O.map(f => { const k = precisaK ? kpisPessoa(f) : {}; return C.map(c => { const v = c[4](f, k); return v === '' ? null : v; }); });
+    const st = $('#fx-st'); st.textContent = 'Gerando…'; box.querySelectorAll('[data-fx]').forEach(x => x.disabled = true);
+    try { await PrevRel.exportar({ modelo: 'rel_funcionarios', titulo: $('#fx-tit').value.trim() || 'Relação de funcionários', cols: C.map(c => ({ t: c[1], tipo: c[2], w: c[3] })), linhas, filtros, arquivo: $('#fx-tit').value.trim() || 'Relacao de funcionarios', formato: b.dataset.fx, totais: !!$('#fx-tot').value, nota: C.some(c => ['heH', 'fH', 'abs', 'heR'].includes(c[0])) ? 'Horas e valores da folha: últimos 12 meses importados. ' : '' }); st.textContent = 'Pronto: arquivo baixado.'; }
+    catch (e) { st.textContent = 'Não foi possível gerar: ' + (e.message || e); }
+    box.querySelectorAll('[data-fx]').forEach(x => x.disabled = false);
+  });
+}
+/* botão "‹ Voltar" do topo: dentro dos Indicadores volta um passo na tela antes de sair da página */
+window.addEventListener('prev-voltar', e => {
+  if (V.tab === 'pes' && V.pes) { e.preventDefault(); V.pes = ''; tPesHub(); window.scrollTo(0, 0); return; }
+  if (V.tab === 'pad' && V.nav && V.nav.length) { e.preventDefault(); V.nav.pop(); render(); window.scrollTo(0, 0); return; }
+  if (V.tab === 'pes' && V.pt && V.pt !== 'geral') { e.preventDefault(); V.pt = 'geral'; tPesHub(); window.scrollTo(0, 0); return; }
+});

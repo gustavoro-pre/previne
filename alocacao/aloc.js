@@ -342,8 +342,9 @@ const loadXLSX = () => loadScript('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist
 async function baixar(nome, blob) { const dl = await claude.use('downloads'); if (!dl) return toast('Download indisponível neste aparelho.', 'bad');
   try { await dl.save({ filename: nome, data: blob }); toast('Arquivo pronto.', 'ok'); } catch (e) { if (!(e && e.code === 'declined')) toast('Não foi possível salvar o arquivo.', 'bad'); } }
 async function exportXls(L) {
-  try { await loadXLSX(); } catch (e) { return toast(e.message, 'bad'); }
+  if (!window.PrevRel) try { await loadXLSX(); } catch (e) { return toast(e.message, 'bad'); }
   const rows = L.map(a => ({ Data: fmtD(a.data), Dia: DSEM[dow(a.data)], Matrícula: a.matricula, Funcionário: a.nome, 'OM fixa': a.fixaNumero || 'Volante', 'OM destino': a.omNumero || 'SEM OM', Local: a.local, Entrada: a.inicio, Saída: a.fim, Horas: +horas(a.inicio, a.fim).toFixed(2), Tipo: TIPOS[a.tipo] || a.tipo, Apontado: apontado(a.fid, a.data) ? 'Sim' : 'Não', Obs: a.obs || '' }));
+  if (window.PrevRel) { const cab = rows.length ? Object.keys(rows[0]) : ['Data']; return PrevRel.escolher(Object.assign(PrevRel.deMatriz([cab].concat(rows.map(r => cab.map(k => r[k])))), { modelo: 'rel_deslocamentos', titulo: 'Deslocamentos (alocação em OM)', arquivo: 'Deslocamentos', filtros: 'Período: ' + fmtD(V.dDe) + ' a ' + fmtD(V.dAte) })); }
   const ws = XLSX.utils.json_to_sheet(rows); ws['!cols'] = [10, 5, 11, 32, 10, 11, 26, 7, 7, 6, 13, 9, 24].map(w => ({ wch: w }));
   const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Deslocamentos');
   const out = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });

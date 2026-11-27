@@ -155,7 +155,7 @@ table.tb{width:100%;border-collapse:collapse;font-size:13px}
 .glogo{width:46px;height:46px;border-radius:10px;background:var(--accent);display:grid;place-items:center}
 .glogo:has(img){background:none;width:auto;height:auto;justify-content:start}.glogo img{display:block;max-height:64px;max-width:200px;width:auto;height:auto;object-fit:contain}
 .gmsg{font-size:14px;color:var(--ok);min-height:20px;margin:10px 0 0}.gmsg.bad{color:var(--bad)}
-#toportal{color:#fff;text-decoration:none;font-size:12px;font-weight:600;padding:4px 10px;background:rgba(255,255,255,.12);border-radius:99px;margin-right:6px;white-space:nowrap}
+#tovoltar{color:#fff;font:inherit;font-size:12px;font-weight:600;padding:4px 10px;background:rgba(255,255,255,.12);border:0;border-radius:99px;margin-right:6px;white-space:nowrap;cursor:pointer}#toportal{color:#fff;text-decoration:none;font-size:12px;font-weight:600;padding:4px 10px;background:rgba(255,255,255,.12);border-radius:99px;margin-right:6px;white-space:nowrap}
 #usermenu{background:rgba(255,255,255,.12);border:0;color:#fff;border-radius:99px;padding:4px 10px;font-size:12px;cursor:pointer;white-space:nowrap}
 #usermenu span{opacity:.7;margin-left:4px}
 .qframe{position:absolute;left:50%;top:50%;width:62%;aspect-ratio:1;transform:translate(-50%,-50%);border:3px solid var(--accent);border-radius:14px;box-shadow:0 0 0 999px rgba(0,0,0,.35);pointer-events:none}
@@ -188,7 +188,7 @@ button.br{cursor:pointer}
   <div class="logo"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3a2a00" stroke-width="2.2" stroke-linecap="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg></div>
   <div><div class="htitle">Indicadores</div><div class="hsub">KPIs por área e pessoa</div></div>
   <div class="conn" id="conn">Conectando…</div>
-  <a id="toportal" href="../" title="Voltar ao portal PREVINE">⌂ Portal</a>
+  <button id="tovoltar" type="button" title="Voltar à página anterior" onclick="(function(){var e=new CustomEvent('prev-voltar',{cancelable:true});if(!window.dispatchEvent(e))return;if(history.length>1)history.back();else location.href='../';})()">‹ Voltar</button><a id="toportal" href="../" title="Voltar ao portal PREVINE">⌂ Portal</a>
   <button id="usermenu" hidden type="button"><b></b><span>Sair</span></button>
 </div></header>
 <main>
@@ -205,8 +205,9 @@ window.__FBMODE = true; window.__MODULO = 'indicadores';
 window.claude = { use: n => new Promise(r => { const go = () => window.__fbUse ? r(window.__fbUse(n)) : setTimeout(go, 50); go(); }) };
 </script>
 <script type="module" src="../fb.js"></script>
-<script src="ind.js?v=2"></script>
+<script src="../rel.js?v=1" defer></script>
+<script src="ind.js?v=3"></script>
 <script src="folha-parse.js?v=1"></script>
-<script src="pessoas.js?v=1"></script>
+<script src="pessoas.js?v=2"></script>
 </body>
 </html>
