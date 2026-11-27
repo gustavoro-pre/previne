@@ -135,36 +135,44 @@ function datasDoc(texto) {
 
 /* ---------- texto do arquivo ---------- */
 function rodar(cmd, args, timeout = 120e3) { try { return execFileSync(cmd, args, { timeout, maxBuffer: 64 << 20, stdio: ['ignore', 'pipe', 'ignore'] }).toString(); } catch (e) { return ''; } }
-async function baixar(f) {
-  const dst = path.join(TMP, 'a');
+async function baixar(f, dir) {
+  const dst = path.join(dir, 'a');
   const r = await drive.files.get({ fileId: f.id, alt: 'media', supportsAllDrives: true }, { responseType: 'arraybuffer' });
   fs.writeFileSync(dst, Buffer.from(r.data)); return dst;
 }
 async function textoDe(f) {
-  const mime = f.mimeType || '';
+  const mime = f.mimeType || ''; const dir = fs.mkdtempSync(path.join(TMP, 'w'));
   try {
     if (mime === 'application/vnd.google-apps.document') {
       const r = await drive.files.export({ fileId: f.id, mimeType: 'text/plain' }, { responseType: 'text' }); return { tx: String(r.data).slice(0, 20000), via: 'texto' };
     }
+    if (mime === 'application/vnd.google-apps.spreadsheet') {
+      const r = await drive.files.export({ fileId: f.id, mimeType: 'text/csv' }, { responseType: 'text' }); return { tx: String(r.data).slice(0, 20000), via: 'planilha' };
+    }
     if (+f.size > MAX_BAIXAR) return { tx: '', via: 'grande' };
     if (mime === 'application/pdf') {
-      const a = await baixar(f);
+      const a = await baixar(f, dir);
       let tx = rodar('pdftotext', ['-l', '3', '-layout', a, '-']);
       if (tx.replace(/\s/g, '').length >= 60) return { tx, via: 'pdf' };
-      rodar('pdftoppm', ['-r', '200', '-l', '2', '-gray', '-png', a, path.join(TMP, 'p')]);
-      tx = fs.readdirSync(TMP).filter(x => /^p-\d+\.png$/.test(x)).sort().map(x => { const t = rodar('tesseract', [path.join(TMP, x), '-', '-l', 'por']); fs.rmSync(path.join(TMP, x)); return t; }).join('\n');
+      rodar('pdftoppm', ['-r', '170', '-l', '2', '-gray', '-png', a, path.join(dir, 'p')]);
+      tx = fs.readdirSync(dir).filter(x => /^p-\d+\.png$/.test(x)).sort().map(x => rodar('tesseract', [path.join(dir, x), '-', '-l', 'por'])).join('\n');
       return { tx, via: 'ocr' };
     }
     if (/^image\/(jpeg|png|tiff|bmp|webp)$/.test(mime)) {
-      const a = await baixar(f); return { tx: rodar('tesseract', [a, '-', '-l', 'por']), via: 'ocr' };
+      const a = await baixar(f, dir); return { tx: rodar('tesseract', [a, '-', '-l', 'por']), via: 'ocr' };
     }
     if (/wordprocessingml|msword/.test(mime)) {
-      const a = await baixar(f); fs.renameSync(a, a + '.docx');
-      rodar('soffice', ['--headless', '--convert-to', 'txt:Text', '--outdir', TMP, a + '.docx'], 180e3);
-      const t = path.join(TMP, 'a.txt'); const tx = fs.existsSync(t) ? fs.readFileSync(t, 'utf8') : ''; try { fs.rmSync(t); fs.rmSync(a + '.docx'); } catch (e) {}
-      return { tx: tx.slice(0, 20000), via: 'docx' };
+      const a = await baixar(f, dir); fs.renameSync(a, a + '.docx');
+      rodar('soffice', ['--headless', '--convert-to', 'txt:Text', '--outdir', dir, a + '.docx'], 180e3);
+      const t = path.join(dir, 'a.txt'); return { tx: fs.existsSync(t) ? fs.readFileSync(t, 'utf8').slice(0, 20000) : '', via: 'docx' };
+    }
+    if (/spreadsheetml|ms-excel/.test(mime)) {
+      const a = await baixar(f, dir); fs.renameSync(a, a + '.xlsx');
+      rodar('soffice', ['--headless', '--convert-to', 'csv', '--outdir', dir, a + '.xlsx'], 180e3);
+      const t = path.join(dir, 'a.csv'); return { tx: fs.existsSync(t) ? fs.readFileSync(t, 'utf8').slice(0, 20000) : '', via: 'xlsx' };
     }
   } catch (e) { return { tx: '', via: 'erro' }; }
+  finally { try { fs.rmSync(dir, { recursive: true, force: true }); } catch (e) {} }
   return { tx: '', via: 'so-nome' };
 }
 
@@ -183,7 +191,7 @@ async function raizes() {
   if (Array.isArray(cfg.pastas) && cfg.pastas.length) return cfg.pastas.map(p => ({ id: p.id || p, name: p.nome || '' }));
   const out = []; let pageToken;
   do {
-    const r = await drive.files.list({ q: "sharedWithMe and mimeType = 'application/vnd.google-apps.folder' and trashed = false", pageSize: 200, pageToken, fields: 'nextPageToken, files(id, name)' });
+    const r = await drive.files.list({ q: "sharedWithMe and trashed = false", pageSize: 1000, pageToken, fields: 'nextPageToken, files(id, name, mimeType, size, md5Checksum, modifiedTime)' });
     out.push(...(r.data.files || [])); pageToken = r.data.nextPageToken;
   } while (pageToken);
   return out.filter(f => !IGNORAR.has(f.id));
@@ -192,8 +200,8 @@ async function raizes() {
 /* ---------- principal ---------- */
 const P = await pessoas();
 const R = await raizes();
-console.log('Pastas raiz compartilhadas:', R.length, '· pessoas no portal:', P.lista.length);
-if (!R.length) { console.log('Nenhuma pasta compartilhada com a conta de serviço ainda.'); process.exit(0); }
+console.log('Itens compartilhados (pastas e arquivos):', R.length, '· pessoas no portal:', P.lista.length);
+if (!R.length) { console.log('Nada compartilhado com a conta de serviço ainda.'); process.exit(0); }
 
 const ja = new Map(); // id -> mod já processado
 (await db.collection('drive_inv').select('mod', 'v').get()).forEach(d => ja.set(d.id, d.data()));
@@ -201,45 +209,55 @@ const VERSAO = 1;
 
 const cont = { arquivos: 0, novos: 0, pulados: 0, cpf: 0, nome: 0, pasta: 0, sem: 0, ocr: 0 };
 let lote = db.batch(), nLote = 0;
-const gravar = async (id, o) => { lote.set(db.doc('drive_inv/' + id), o, { merge: true }); if (++nLote >= 200) { await lote.commit(); lote = db.batch(); nLote = 0; } };
+const gravar = async (id, o) => { lote.set(db.doc('drive_inv/' + id), o, { merge: true }); if (++nLote >= 200) { const l = lote; lote = db.batch(); nLote = 0; await l.commit(); } };
 
-const pilha = R.map(r => ({ id: r.id, caminho: [r.name], pessoaPasta: pareceNomeDePessoa(r.name) }));
+const pilha = R.filter(r => r.mimeType === 'application/vnd.google-apps.folder' || !r.mimeType).map(r => ({ id: r.id, caminho: [r.name], pessoaPasta: pareceNomeDePessoa(r.name) }));
+const soltos = R.filter(r => r.mimeType && r.mimeType !== 'application/vnd.google-apps.folder');
 const vistas = new Set();
+async function processar(f, pz) {
+  cont.arquivos++;
+  const ant = ja.get(f.id);
+  if (ant && ant.mod === f.modifiedTime && ant.v === VERSAO) { cont.pulados++; return; }
+  const caminho = pz.caminho.join(' / ');
+  const { tx, via } = await textoDe(f); if (via === 'ocr') cont.ocr++;
+  // quem é: CPF no texto > nome no nome do arquivo/pastas > nome no texto > pasta com nome de pessoa (sem cadastro)
+  let p = acharPorCpf(tx, P), metodo = p ? 'cpf' : '';
+  if (!p) { p = acharPorNome(f.name + ' ' + caminho, P); if (p) metodo = 'nome-caminho'; }
+  if (!p) { p = acharPorNome(tx.slice(0, 4000), P); if (p) metodo = 'nome-texto'; }
+  const tipo = tipoDe(f.name, caminho, tx);
+  const { data, validade } = datasDoc(tx);
+  const limpo = tx.replace(/\s+/g, ' ').trim();
+  const o = {
+    id: f.id, arquivo: f.name, caminho, pasta: caminho, mime: f.mimeType, tam: +f.size || 0, md5: f.md5Checksum || '', mod: f.modifiedTime, v: VERSAO,
+    tipo, area: SEG.has(tipo) ? 'Segurança' : 'RH', nrs: nrsDe(f.name + ' ' + tx.slice(0, 4000)), data, validade,
+    salario: tipo === 'CONTRACHEQUE / SALARIO' || /SALARIO|REMUNERACAO/.test(norm(tx).slice(0, 4000)),
+    via, tx: limpo.slice(0, 4000), resumo: limpo.slice(0, 300), proc: new Date().toISOString(),
+    pkey: '', pnome: '', pcpf: '', pst: '', metodo: '', destino: 'sem_id', acao: 'revisar'
+  };
+  if (p) {
+    Object.assign(o, { pkey: p.k, pnome: p.nome, pcpf: p.cpf, pst: p.st, metodo, destino: p.st === 'desligados' ? 'morto' : 'pessoa', acao: 'copiar' });
+    cont[metodo === 'cpf' ? 'cpf' : 'nome']++;
+  } else if (pz.pessoaPasta) {
+    // pasta com nome de pessoa que não está no portal: ex-funcionário sem cadastro → arquivo morto
+    Object.assign(o, { pnome: pz.pessoaPasta, metodo: 'pasta', destino: 'morto_semcad', acao: 'copiar' });
+    cont.pasta++;
+  } else cont.sem++;
+  await gravar(f.id, o); cont.novos++;
+}
+async function emParalelo(itens, pz, n = 4) {
+  let i = 0;
+  await Promise.all(Array.from({ length: n }, async () => { while (i < itens.length && tempo()) { const f = itens[i++]; try { await processar(f, pz); } catch (e) { cont.erros = (cont.erros || 0) + 1; } } }));
+}
+await emParalelo(soltos, { caminho: ['(arquivos compartilhados soltos)'], pessoaPasta: '' });
 while (pilha.length && tempo()) {
   const pz = pilha.pop(); if (vistas.has(pz.id) || IGNORAR.has(pz.id)) continue; vistas.add(pz.id);
   let filhos; try { filhos = await listarFilhos(pz.id); } catch (e) { continue; }
+  const arqs = [];
   for (const f of filhos) {
-    if (!tempo()) break;
-    if (f.mimeType === 'application/vnd.google-apps.folder') { pilha.push({ id: f.id, caminho: pz.caminho.concat(f.name), pessoaPasta: pareceNomeDePessoa(f.name) || pz.pessoaPasta }); continue; }
-    if (f.mimeType === 'application/vnd.google-apps.shortcut') continue;
-    cont.arquivos++;
-    const ant = ja.get(f.id);
-    if (ant && ant.mod === f.modifiedTime && ant.v === VERSAO) { cont.pulados++; continue; }
-    const caminho = pz.caminho.join(' / ');
-    const { tx, via } = await textoDe(f); if (via === 'ocr') cont.ocr++;
-    // quem é: CPF no texto > nome no nome do arquivo/pastas > nome no texto > pasta com nome de pessoa (sem cadastro)
-    let p = acharPorCpf(tx, P), metodo = p ? 'cpf' : '';
-    if (!p) { p = acharPorNome(f.name + ' ' + caminho, P); if (p) metodo = 'nome-caminho'; }
-    if (!p) { p = acharPorNome(tx.slice(0, 4000), P); if (p) metodo = 'nome-texto'; }
-    const tipo = tipoDe(f.name, caminho, tx);
-    const { data, validade } = datasDoc(tx);
-    const o = {
-      id: f.id, arquivo: f.name, caminho, mime: f.mimeType, tam: +f.size || 0, md5: f.md5Checksum || '', mod: f.modifiedTime, v: VERSAO,
-      tipo, area: SEG.has(tipo) ? 'Segurança' : 'RH', nrs: nrsDe(f.name + ' ' + tx.slice(0, 4000)), data, validade,
-      salario: tipo === 'CONTRACHEQUE / SALARIO' || /SALARIO|REMUNERACAO/.test(norm(tx).slice(0, 4000)),
-      via, tx: tx.replace(/\s+/g, ' ').trim().slice(0, 4000), proc: new Date().toISOString(),
-      pkey: '', pnome: '', pcpf: '', pst: '', metodo: '', destino: 'sem_id', acao: 'revisar'
-    };
-    if (p) {
-      Object.assign(o, { pkey: p.k, pnome: p.nome, pcpf: p.cpf, pst: p.st, metodo, destino: p.st === 'desligados' ? 'morto' : 'pessoa', acao: 'copiar' });
-      cont[metodo === 'cpf' ? 'cpf' : 'nome']++;
-    } else if (pz.pessoaPasta) {
-      // pasta com nome de pessoa que não está no portal: ex-funcionário sem cadastro → arquivo morto
-      Object.assign(o, { pnome: pz.pessoaPasta, metodo: 'pasta', destino: 'morto_semcad', acao: 'copiar' });
-      cont.pasta++;
-    } else cont.sem++;
-    await gravar(f.id, o); cont.novos++;
+    if (f.mimeType === 'application/vnd.google-apps.folder') pilha.push({ id: f.id, caminho: pz.caminho.concat(f.name), pessoaPasta: pareceNomeDePessoa(f.name) || pz.pessoaPasta });
+    else if (f.mimeType !== 'application/vnd.google-apps.shortcut') arqs.push(f);
   }
+  await emParalelo(arqs, pz);
 }
 if (nLote) await lote.commit();
 await db.doc('config/inventario_estado').set({ ultima: new Date().toISOString(), completo: !pilha.length, pastasPendentes: pilha.length, cont }, { merge: true });

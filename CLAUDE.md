@@ -60,7 +60,7 @@ A conta previneime só LÊ o Firestore (Viewer). Funções principais:
 Notificações no celular: `.github/workflows/push.yml` (a cada 5 min, 6h–20h) roda `tools/push.mjs` com o segredo `FIREBASE_SA`.
 
 ## Inventário das pastas antigas (novo, 27/11 noite) — substitui o OCR/cópias que estouravam a cota do Apps Script
-- LEITURA no GitHub: `.github/workflows/drive-inv.yml` (22h–5h, de hora em hora, ou manual) roda `tools/drive-inv.mjs` com a conta de serviço
+- LEITURA no GitHub: `.github/workflows/drive-inv.yml` (de hora em hora o dia todo, uma rodada por vez, + ao dar push no script, ou manual) roda `tools/drive-inv.mjs` com a conta de serviço
   (`FIREBASE_SA`, escopo drive.readonly). Varre as pastas compartilhadas com a conta de serviço (ou `config/inventario.pastas`), lê PDF/imagem
   (pdftotext + tesseract), identifica a pessoa (CPF no texto > nome no caminho > nome no texto > pasta com nome de pessoa sem cadastro),
   o tipo (ASO, NR, integração, Take Care, Safety, CRC, ficha/termo de EPI, documentos pessoais, salário…), datas e validade,
@@ -73,6 +73,9 @@ Notificações no celular: `.github/workflows/push.yml` (a cada 5 min, 6h–20h)
 - Depende do Gustavo: (1) ativar a Google Drive API no projeto ferramentas-epi (console do Google Cloud); (2) compartilhar as pastas antigas
   (RH, SEGURANÇA DO TRABALHO, Mobilização…) com o e-mail da conta de serviço, como Leitor; (3) publicar a regra `drive_inv` do Firestore;
   (4) colar `tools/inventario.gs` no Apps Script e rodar `pararRotinasAntigas` e `instalarInventario` (ou eu faço quando o navegador voltar).
+- ESCOPO (27/11, 19h14): Gustavo vai compartilhar o Drive INTEIRO. Funcionário ativo → pasta dele; inativo → arquivo morto; lista de origens para excluir depois.
+  Todo o resto → planilha "Mapa geral do Drive" (função `mapaGeral` em inventario.gs, `instalarMapa` = a cada 2 h): abas Pastas e Arquivos,
+  com "O que fazer" e "Finalidade" para o Gustavo preencher. Sem gastar tokens do Claude nem a cota de UrlFetch.
 - Conta de serviço não pode ser dona de arquivo em Drive de Gmail comum: por isso as cópias ficam no Apps Script (conta previneime).
 - Google Workspace (conta nova @previneeletrica.com.br, Drive compartilhado) avaliado: vale a pena DEPOIS da limpeza das pastas.
 

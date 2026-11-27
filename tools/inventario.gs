@@ -106,3 +106,60 @@ function pararRotinasAntigas() {
   const parar = ['lerDocsRH', 'consolidarRH', 'consolidarMob', 'refazerMob'];
   ScriptApp.getProjectTriggers().forEach(t => { if (parar.indexOf(t.getHandlerFunction()) >= 0) { ScriptApp.deleteTrigger(t); Logger.log('Parado: ' + t.getHandlerFunction()); } });
 }
+
+/* ---------- Mapa geral do Drive: tudo que NÃO é de funcionário, para o Gustavo dizer o que fazer e a finalidade ----------
+ * Planilha "Mapa geral do Drive" (pasta DOCUMENTAÇÃO PORTAL), duas abas:
+ *  - Pastas: uma linha por pasta (quantos arquivos, tipos, tamanho, última alteração) + colunas para preencher:
+ *    "O que fazer" (lista) e "Finalidade". Decidir por pasta vale para todos os arquivos dela.
+ *  - Arquivos: uma linha por arquivo (só acrescenta os novos; o que foi preenchido nunca é apagado).
+ * 1 chamada ao Firestore por rodada. Instalar com instalarMapa (a cada 2 horas).
+ */
+const MAPA_NOME = 'Mapa geral do Drive';
+const MAPA_ACOES = ['Manter onde está', 'Mover para Documentação (ISO)', 'Mover para pasta da área', 'Arquivo morto', 'Excluir depois', 'Ver depois'];
+const MAPA_CAB_P = ['Pasta (caminho)', 'Arquivos', 'Tipos encontrados', 'Tamanho (MB)', 'Última alteração', 'O que fazer', 'Finalidade', 'Observação'];
+const MAPA_CAB_A = ['Pasta (caminho)', 'Arquivo', 'Tipo detectado', 'Data no documento', 'Tamanho (KB)', 'Última alteração', 'Link', 'ID', 'Início do texto', 'O que fazer', 'Finalidade'];
+
+function instalarMapa() {
+  ScriptApp.getProjectTriggers().forEach(t => { if (t.getHandlerFunction() === 'mapaGeral') ScriptApp.deleteTrigger(t); });
+  ScriptApp.newTrigger('mapaGeral').timeBased().everyHours(2).create();
+  mapaGeral();
+}
+function mapaGeral() {
+  const body = { structuredQuery: { from: [{ collectionId: 'drive_inv' }],
+    where: { fieldFilter: { field: { fieldPath: 'acao' }, op: 'EQUAL', value: { stringValue: 'revisar' } } },
+    select: { fields: ['id', 'arquivo', 'pasta', 'tipo', 'data', 'tam', 'mod', 'resumo'].map(f => ({ fieldPath: f })) } } };
+  const r = UrlFetchApp.fetch(BASE + ':runQuery', { method: 'post', contentType: 'application/json', payload: JSON.stringify(body),
+    headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() }, muteHttpExceptions: true });
+  if (r.getResponseCode() !== 200) throw new Error('Firestore ' + r.getResponseCode() + ': ' + r.getContentText().slice(0, 300));
+  const docs = JSON.parse(r.getContentText()).filter(x => x.document).map(x => val({ mapValue: { fields: x.document.fields || {} } }));
+  const ss = mapaPlanilha();
+  // Arquivos: acrescenta só os novos
+  const shA = ss.getSheetByName('Arquivos'); const ja = new Set(); const nA = shA.getLastRow();
+  if (nA > 1) shA.getRange(2, 8, nA - 1, 1).getValues().forEach(v => v[0] && ja.add(String(v[0])));
+  const novos = docs.filter(d => !ja.has(d.id)).sort((a, b) => String(a.pasta).localeCompare(String(b.pasta)) || String(a.arquivo).localeCompare(String(b.arquivo)))
+    .map(d => [d.pasta || '', d.arquivo || '', d.tipo || '', invData(d.data), Math.round((+d.tam || 0) / 1024), invData(String(d.mod || '').slice(0, 10)),
+      'https://drive.google.com/file/d/' + d.id + '/view', d.id, d.resumo || '', '', '']);
+  for (let i = 0; i < novos.length; i += 2000) shA.getRange(shA.getLastRow() + 1, 1, Math.min(2000, novos.length - i), MAPA_CAB_A.length).setValues(novos.slice(i, i + 2000));
+  // Pastas: refaz os números, preserva o que foi preenchido
+  const shP = ss.getSheetByName('Pastas'); const nP = shP.getLastRow(); const prev = {};
+  if (nP > 1) shP.getRange(2, 1, nP - 1, MAPA_CAB_P.length).getValues().forEach(v => prev[v[0]] = [v[5], v[6], v[7]]);
+  const ag = {};
+  docs.forEach(d => { const k = d.pasta || '(sem pasta)'; const g = ag[k] = ag[k] || { n: 0, tipos: {}, tam: 0, mod: '' };
+    g.n++; g.tipos[d.tipo || 'OUTROS'] = (g.tipos[d.tipo || 'OUTROS'] || 0) + 1; g.tam += +d.tam || 0; if (String(d.mod) > g.mod) g.mod = String(d.mod); });
+  const linhas = Object.keys(ag).sort().map(k => { const g = ag[k]; const p = prev[k] || ['', '', ''];
+    return [k, g.n, Object.keys(g.tipos).sort((a, b) => g.tipos[b] - g.tipos[a]).map(t => t + ' (' + g.tipos[t] + ')').join(', '), Math.round(g.tam / 1048576 * 10) / 10, invData(g.mod.slice(0, 10)), p[0], p[1], p[2]]; });
+  if (nP > 1) shP.getRange(2, 1, nP - 1, MAPA_CAB_P.length).clearContent();
+  if (linhas.length) shP.getRange(2, 1, linhas.length, MAPA_CAB_P.length).setValues(linhas);
+  const regra = SpreadsheetApp.newDataValidation().requireValueInList(MAPA_ACOES, true).setAllowInvalid(true).build();
+  shP.getRange(2, 6, Math.max(linhas.length, 1), 1).setDataValidation(regra);
+  if (shA.getLastRow() > 1) shA.getRange(2, 10, shA.getLastRow() - 1, 1).setDataValidation(regra);
+  Logger.log('Mapa: ' + docs.length + ' arquivos em ' + linhas.length + ' pastas · novos: ' + novos.length);
+}
+function mapaPlanilha() {
+  const it = DriveApp.getFolderById(PASTA.raiz).getFilesByName(MAPA_NOME);
+  if (it.hasNext()) return SpreadsheetApp.open(it.next());
+  const ss = SpreadsheetApp.create(MAPA_NOME); DriveApp.getFileById(ss.getId()).moveTo(DriveApp.getFolderById(PASTA.raiz));
+  const p = ss.getSheets()[0]; p.setName('Pastas'); const a = ss.insertSheet('Arquivos');
+  [[p, MAPA_CAB_P], [a, MAPA_CAB_A]].forEach(([sh, cab]) => { sh.getRange(1, 1, 1, cab.length).setValues([cab]).setFontWeight('bold').setBackground('#1f4e9c').setFontColor('#ffffff'); sh.setFrozenRows(1); });
+  return ss;
+}
