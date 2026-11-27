@@ -46,7 +46,7 @@
   }
 
   function build(P, tipo, opt) {
-    const d = X(); opt = opt || {}; const K = opt.custos || {}; const F = opt.cfg || {};
+    opt = opt || {}; const d = opt.lib || X(); const K = opt.custos || {}; const F = opt.cfg || {};
     const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, AlignmentType, BorderStyle, ShadingType, ImageRun, Header, Footer, PageNumber, VerticalAlign, LevelFormat, PageBreak, TableLayoutType } = d;
     const isT = tipo === 'tec';
     const mesmoCod = !!P.codPT && P.codPT === P.codPC; const cod = isT ? P.codPT : P.codPC, vinc = (isT ? P.codPC : P.codPT) === cod ? `${cod} (proposta ${isT ? 'comercial' : 'técnica'})` : (isT ? P.codPC : P.codPT);
@@ -63,8 +63,8 @@
     /* tabela com cabeçalho azul e zebra */
     const grade = (cols, head, rows, al, total) => {
       const g = scale(cols); al = al || head.map(() => 'left'); const A = x => ({ left: AlignmentType.LEFT, center: AlignmentType.CENTER, right: AlignmentType.RIGHT })[x];
-      const cp = (t, i, o) => new Paragraph({ alignment: A(al[i]), spacing: { after: 0 }, children: [R(t, Object.assign({ size: 18 }, o || {}))] });
-      const tr = [new TableRow({ tableHeader: true, cantSplit: true, children: head.map((h, i) => C(g[i], cp(h, i, { bold: true, color: 'FFFFFF' }), { shading: sh(BLUE) })) })];
+      const cp = (t, i, o, cab) => new Paragraph({ alignment: !cab && al[i] === 'left' ? AlignmentType.JUSTIFIED : A(al[i]), spacing: { after: 0 }, children: [R(t, Object.assign({ size: 18 }, o || {}))] });
+      const tr = [new TableRow({ tableHeader: true, cantSplit: true, children: head.map((h, i) => C(g[i], cp(h, i, { bold: true, color: 'FFFFFF' }, true), { shading: sh(BLUE) })) })];
       rows.forEach((r, k) => tr.push(new TableRow({ cantSplit: true, children: r.map((v, i) => C(g[i], cp(v, i), k % 2 ? { shading: sh(ZEBRA) } : {})) })));
       if (total) tr.push(new TableRow({ cantSplit: true, children: total.map((v, i) => C(g[i], cp(v, i, { bold: true }), { shading: sh(LBL) })) }));
       return [TB(g, tr), new Paragraph({ spacing: { after: 80 }, children: [] })];
@@ -214,6 +214,6 @@
     'Disciplina: os profissionais da PREVINE cumprem as regras de segurança do local, trabalham uniformizados e com todos os EPIs necessários.',
     'Sigilo: informações, documentos e dados trocados em razão desta proposta são mantidos em sigilo e só são repassados a terceiros com autorização da contratante.'];
   async function gerar(P, tipo, opt) { const d = X(); const doc = build(P, tipo, opt); return root.document ? d.Packer.toBlob(doc) : d.Packer.toBuffer(doc); }
-  const API = { gerar, totais, extenso, brl, COND_TEC };
+  const API = { gerar, build, totais, extenso, brl, COND_TEC };
   if (typeof module !== 'undefined' && module.exports) module.exports = API; else root.PropDoc = API;
 })(typeof window !== 'undefined' ? window : globalThis);

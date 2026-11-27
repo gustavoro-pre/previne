@@ -214,7 +214,7 @@ const SECS = [['id', 'Identificação'], ['tec', 'Proposta técnica'], ['preco',
 function editor() {
   if (!P) return lista(); const t = totaisK();
   $('#body').innerHTML = `<div class="ed-bar"><button class="btn sm ghost" id="ed-back" type="button">‹ Propostas</button><div class="tit">${esc(codTxt(P))} · Rev. ${esc(P.rev || '00')} ${stBadge(P.status)}<div class="note" style="font-weight:400">${esc(P.cliente || 'sem cliente')} — ${esc(P.objeto || 'sem objeto')}${veCustos() ? ' · <b>' + brl(t.total) + '</b>' : ''}</div></div>
-      ${ro() ? '' : '<button class="btn primary sm" id="ed-save" type="button">Salvar</button>'}<button class="btn sm" id="ed-pt" type="button">Gerar técnica (Word)</button><button class="btn sm" id="ed-pc" type="button">Gerar comercial (Word)</button>${podeEditar() ? '<button class="btn sm ghost" id="ed-st" type="button">Status…</button>' : ''}</div>
+      ${ro() ? '' : '<button class="btn primary sm" id="ed-save" type="button">Salvar</button>'}<button class="btn sm" id="ed-pt" type="button">Técnica (Word)</button><button class="btn sm" id="ed-ptf" type="button">Técnica (PDF)</button><button class="btn sm" id="ed-pc" type="button">Comercial (Word)</button><button class="btn sm" id="ed-pcf" type="button">Comercial (PDF)</button>${podeEditar() ? '<button class="btn sm ghost" id="ed-st" type="button">Status…</button>' : ''}</div>
     <div class="seg" id="ed-seg" style="background:#e9ecf1">${SECS.map(([k, n]) => `<button data-sec="${k}" class="${V.sec === k ? 'on' : ''}" type="button">${n}</button>`).join('')}</div>
     <div id="ed-body">${({ id: secId, tec: secTec, preco: secPreco, cond: secCond, anx: secAnx, hist: secHist })[V.sec]()}</div>`;
   ligaEditor();
@@ -223,7 +223,7 @@ function ligaEditor() {
   $('#ed-back').onclick = () => { if (SUJO && !confirm('Há alterações não salvas. Voltar mesmo assim?')) return; SUJO = false; V.id = ''; P = null; lista(); };
   $$('#ed-seg [data-sec]').forEach(b => b.onclick = () => { V.sec = b.dataset.sec; editor(); });
   const sv = $('#ed-save'); if (sv) sv.onclick = () => salvar();
-  $('#ed-pt').onclick = () => gerar('tec'); $('#ed-pc').onclick = () => gerar('com');
+  $('#ed-pt').onclick = () => gerar('tec'); $('#ed-pc').onclick = () => gerar('com'); $('#ed-ptf').onclick = () => gerar('tec', 'pdf'); $('#ed-pcf').onclick = () => gerar('com', 'pdf');
   const st = $('#ed-st'); if (st) st.onclick = () => mStatus();
   const B = $('#ed-body');
   B.querySelectorAll('[data-k]').forEach(el => el.addEventListener(el.tagName === 'SELECT' ? 'change' : 'input', () => {
@@ -275,15 +275,16 @@ async function salvar(msg) {
 /* ---------- geração dos documentos ---------- */
 let LOGO = null;
 async function logoBytes() { if (LOGO) return LOGO; try { LOGO = new Uint8Array(await (await fetch('../logo.png')).arrayBuffer()); } catch (e) { LOGO = null; } return LOGO; }
-async function gerar(tipo) {
+async function gerar(tipo, fmt) {
+  const pdf = fmt === 'pdf';
   if (!P.clienteId || !str(P.objeto).trim()) { V.sec = 'id'; editor(); return toast('Preencha o cliente e o objeto antes de gerar.', 'bad'); }
   if (SUJO && !ro()) { if (!(await salvar('Proposta salva antes de gerar o documento.'))) return; }
-  if (!window.docx || !window.PropDoc) return toast('Gerador ainda carregando. Tente de novo em instantes.', 'bad');
+  if (!window.docx || !window.PropDoc || (pdf && !(window.jspdf && window.PropPdf))) return toast('Gerador ainda carregando. Tente de novo em instantes.', 'bad');
   if (tipo === 'com' && !veCustos() && P.modalidade !== 'hh') return toast('A proposta comercial de preço global só pode ser gerada pelo perfil Comercial (usa os custos internos).', 'bad');
-  const btn = $(tipo === 'tec' ? '#ed-pt' : '#ed-pc'); const t0 = btn.textContent; btn.disabled = true; btn.textContent = 'Gerando…';
+  const btn = $('#ed-' + (tipo === 'tec' ? 'pt' : 'pc') + (pdf ? 'f' : '')); const t0 = btn.textContent; btn.disabled = true; btn.textContent = 'Gerando…';
   try {
-    const cfg = D.cfg.docs || {}; const blob = await PropDoc.gerar(P, tipo, { custos: K, logo: await logoBytes(), cfg: { elab: cfg.elab || 'Gustavo Rogel de Almeida', verif: cfg.verif || 'Thiago Rogel de Almeida', aprov: cfg.aprov || 'Cláudio José de Almeida', assinante: cfg.assinante, assinanteCargo: cfg.assinanteCargo, assinanteTel: cfg.assinanteTel } });
-    const nome = `${tipo === 'tec' ? P.codPT : P.codPC} - ${tipo === 'tec' ? 'PROPOSTA TÉCNICA' : 'PROPOSTA COMERCIAL'} - ${(cliBy(P.clienteId) || {}).sigla || P.cliente} - Rev${P.rev || '00'}.docx`.replace(/[\\/:*?"<>|]+/g, ' ');
+    const cfg = D.cfg.docs || {}; const blob = await (pdf ? PropPdf : PropDoc).gerar(P, tipo, { custos: K, logo: await logoBytes(), cfg: { elab: cfg.elab || 'Gustavo Rogel de Almeida', verif: cfg.verif || 'Thiago Rogel de Almeida', aprov: cfg.aprov || 'Cláudio José de Almeida', assinante: cfg.assinante, assinanteCargo: cfg.assinanteCargo, assinanteTel: cfg.assinanteTel } });
+    const nome = `${tipo === 'tec' ? P.codPT : P.codPC} - ${tipo === 'tec' ? 'PROPOSTA TÉCNICA' : 'PROPOSTA COMERCIAL'} - ${(cliBy(P.clienteId) || {}).sigla || P.cliente} - Rev${P.rev || '00'}.${pdf ? 'pdf' : 'docx'}`.replace(/[\\/:*?"<>|]+/g, ' ');
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = nome; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 4000);
     toast('Documento gerado: ' + nome, 'ok');
   } catch (e) { console.error(e); toast('Não foi possível gerar: ' + (e.message || e), 'bad'); }
