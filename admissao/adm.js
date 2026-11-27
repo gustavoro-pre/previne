@@ -245,8 +245,22 @@ function ouvir() {
 }
 
 /* ---------- telas ---------- */
+/* cria uma sub-área na área escolhida sem sair da nova admissão (fica no cadastro de áreas para todos os módulos) */
+let SEGURA = false;
+async function novaSub(areaId) {
+  const ar = areaBy(areaId); if (!ar) return toast('Escolha a área primeiro.', 'bad');
+  const nome = str(prompt(`Nova sub-área em ${ar.nome}:`) || '').trim().replace(/\s+/g, ' ').toUpperCase(); if (!nome) return;
+  const subs = (ar.subs || []).slice(); const ja = subs.find(x => norm(x.nome) === norm(nome));
+  if (ja) { $('#n-sub').value = ja.id; return toast('Essa sub-área já existe e foi selecionada.', 'ok'); }
+  const nv = { id: Math.random().toString(36).slice(2, 10), nome }; subs.push(nv);
+  SEGURA = true; /* não redesenhar o formulário quando o cadastro de áreas atualizar */
+  try { await db.doc('areas/' + areaId).update({ subs }); ar.subs = subs; $('#n-sub').innerHTML = optSubs(areaId); $('#n-sub').value = nv.id; toast(`Sub-área ${nome} criada em ${ar.nome}.`, 'ok'); }
+  catch (e) { toast('Não foi possível criar a sub-área (sem permissão no cadastro de áreas?).', 'bad'); }
+  finally { setTimeout(() => { SEGURA = false; }, 2500); }
+}
 function render() {
   $$('#seg button').forEach(b => b.classList.toggle('on', b.dataset.tab === V.tab));
+  if (SEGURA && V.tab === 'nova') return;
   const ae = document.activeElement; if (ae && ae.closest && ae.closest('#body') && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)) return;
   if (V.criando && V.tab === 'nova') return; /* abrindo admissão: não apaga o formulário nem a mensagem de progresso */
   ({ and: rAnd, nova: rNova, conc: rConc, kpi: rKpi, mod: rMod })[V.tab]();
@@ -286,7 +300,7 @@ function rNova() {
   $('#body').innerHTML = `<div class="card"><p class="ct">Abrir admissão</p><p class="cs">O candidato recebe um link para preencher os dados e mandar os documentos. Função, salário e área ficam só com o RH.</p>
     <div class="grid2"><div><label class="req" for="n-nome">Nome completo</label><input id="n-nome"></div><div><label class="req" for="n-cpf">CPF</label><input id="n-cpf" inputmode="numeric"></div></div>
     <div class="grid2"><div><label class="req" for="n-tel">Celular (WhatsApp)</label><input id="n-tel" inputmode="tel" placeholder="(24) 99999-9999"></div><div><label class="req" for="n-fun">Função</label><input id="n-fun" list="n-funl"><datalist id="n-funl">${funcoes().map(f => `<option value="${esc(f)}">`).join('')}</datalist></div></div>
-    <div class="grid3"><div${VS() ? '' : ' hidden'}><label for="n-sal">Salário (R$)</label><input id="n-sal" inputmode="decimal"></div><div><label class="req" for="n-area">Área</label><select id="n-area">${optAreas('')}</select></div><div><label for="n-sub">Sub-área</label><select id="n-sub">${optSubs('')}</select></div></div>
+    <div class="grid3"><div${VS() ? '' : ' hidden'}><label for="n-sal">Salário (R$)</label><input id="n-sal" inputmode="decimal"></div><div><label class="req" for="n-area">Área</label><select id="n-area">${optAreas('')}</select></div><div><label for="n-sub" style="display:flex;justify-content:space-between;align-items:center">Sub-área ${PODE ? '<button class="link" id="n-subn" type="button" style="font-size:12px">+ nova sub-área</button>' : ''}</label><select id="n-sub">${optSubs('')}</select></div></div>
     <div class="grid3"><div><label for="n-un">Unidade</label><input id="n-un" placeholder="Ex.: Barra Mansa"></div><div><label for="n-int">Previsão de integração</label><input type="date" id="n-int" value="${addDays(PRAZO - 1)}"></div><div><label for="n-alt">Trabalho em altura</label><select id="n-alt"><option value="">Não</option><option value="1">Sim</option></select></div></div>
     <div class="grid3"><div><label class="req" for="n-adc">Adicional</label><select id="n-adc"><option value="">Escolha…</option>${['Sem adicional', 'Com insalubridade', 'Com periculosidade'].map(o => `<option>${o}</option>`).join('')}</select></div></div>
     <div class="grid3"><div><label for="n-vin">Vínculo</label><select id="n-vin"><option value="CLT">CLT</option><option value="PJ">PJ (prestador de serviço)</option></select></div></div>
@@ -294,6 +308,7 @@ function rNova() {
     <p class="ct" style="margin-top:16px">Treinamentos admissionais (EaD)</p>${cursosPick(new Set(D.cfg.cursos || []), 'n')}
     <div class="actions"><button class="btn primary big" id="n-save">Abrir admissão e gerar link</button></div></div>`;
   $('#n-area').onchange = () => $('#n-sub').innerHTML = optSubs($('#n-area').value);
+  const sn = $('#n-subn'); if (sn) sn.onclick = () => novaSub($('#n-area').value);
   $('#n-save').onclick = criar;
 }
 function cursosPick(sel, px, excluir) {

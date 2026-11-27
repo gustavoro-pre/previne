@@ -88,7 +88,7 @@ service cloud.firestore {
     match /transferencias/{id} { allow read: if equipe(); allow write: if tem(['admin', 'gerente', 'gestao', 'almox']); }
 
     // ---------- módulo Treinamentos ----------
-    match /areas/{id}     { allow read: if ativo(); allow write: if trein(['gestor', 'tst', 'rh']); }
+    match /areas/{id}     { allow read: if ativo(); allow write: if trein(['gestor', 'tst', 'rh']) || admi(['rh']); }
     match /trein_ext/{id} {
       allow read: if equipe() || (aluno() && resource.data.funcionarioId == meuFunc());
       allow write: if trein(['gestor', 'tst', 'rh', 'instrutor']);
