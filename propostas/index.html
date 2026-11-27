@@ -203,6 +203,7 @@ window.__FBMODE = true; window.__MODULO = 'propostas';
 window.claude = { use: n => new Promise(r => { const go = () => window.__fbUse ? r(window.__fbUse(n)) : setTimeout(go, 50); go(); }) };
 </script>
 <script type="module" src="../fb.js"></script>
+<script src="../rel.js?v=2" defer></script>
 <script src="https://cdn.jsdelivr.net/npm/docx@9.8.1/dist/index.iife.js" defer></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js" defer></script>
 <script src="propdoc.js?v=6" defer></script>

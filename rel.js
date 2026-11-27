@@ -10,7 +10,7 @@
     rel_cautelas: ['Relatório de cautelas de ferramentas', 'REL-ALM-001'], rel_ocorrencias: ['Ocorrências com ferramentas', 'REL-ALM-002'], rel_entregas_epi: ['Entregas de EPI', 'REL-SST-001'],
     rel_ficha_epi: ['Histórico de EPI do funcionário', 'REL-SST-002'], rel_matriz_trein: ['Matriz de treinamentos', 'REL-SST-003'], rel_deacordo: ['Registro de de acordo', 'REL-SST-004'],
     rel_lista_mestra: ['Lista mestra de documentos', 'REL-SGI-001'], rel_deslocamentos: ['Deslocamentos (alocação em OM)', 'REL-OPE-001'], rel_alocacao: ['Alocação em OM', 'REL-OPE-002'],
-    rel_indicador: ['Base de indicador', 'REL-GER-001'], relatorio: ['Relatório', 'REL-GER-000']
+    rel_indicador: ['Base de indicador', 'REL-GER-001'], rel_painel: ['Painel de indicadores', 'REL-GER-002'], relatorio: ['Relatório', 'REL-GER-000']
   };
   const AZUL = '1F3A8A', AZUL_RGB = [31, 58, 138], CINZA = 'D9DEE8';
   const s = v => v == null ? '' : String(v);
@@ -132,5 +132,104 @@
         try { await exportar(Object.assign({}, o, { formato: f })); bg.remove(); res(true); } catch (er) { bg.querySelector('[data-st]').textContent = 'Não foi possível gerar: ' + (er.message || er); bg.querySelectorAll('button').forEach(x => x.disabled = false); } });
     });
   }
-  window.PrevRel = { exportar, escolher, deMatriz, MODELOS, EMP };
+  /* ---------- PDF de painel (KPIs + gráficos + tabelas) ----------
+     Qualquer tela com um bloco .kpis ganha o botão "PDF do painel". O PDF sai com o cabeçalho padrão:
+     cartões e gráficos como imagem (html2canvas), tabelas como tabela de texto (autoTable), com quebra de página. */
+  const libH2C = () => load('https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js', () => window.html2canvas);
+  const visivel = el => !!(el && el.offsetParent !== null && el.getBoundingClientRect().height > 0);
+  const raizPainel = k => { let e = k.parentElement; while (e && e.parentElement && e.parentElement !== document.body && !/^(MAIN|BODY)$/.test(e.parentElement.tagName) && !e.id) e = e.parentElement; return e || k.parentElement; };
+  function filtrosDe(root) {
+    const out = []; root.querySelectorAll('select, input').forEach(i => {
+      if (!visivel(i) || /^(hidden|file|button|submit|checkbox|radio)$/.test(i.type)) return;
+      const v = i.tagName === 'SELECT' ? s((i.options[i.selectedIndex] || {}).text) : s(i.value); if (!v.trim()) return;
+      let lb = i.id ? root.querySelector('label[for="' + i.id + '"]') : null; if (!lb) { const p = i.parentElement; lb = p && p.querySelector('label'); }
+      out.push((lb ? s(lb.textContent).trim() + ': ' : '') + v.trim());
+    });
+    root.querySelectorAll('.chip.on, .seg button.on, .pill button.on').forEach(b => { if (visivel(b)) out.push(s(b.textContent).trim()); });
+    return [...new Set(out)].join(' · ');
+  }
+  const ehFiltro = b => !b.querySelector('table, .kpis, canvas, svg, .kpi') && !b.classList.contains('kpis') && b.querySelector('select, input') && s(b.textContent).replace(/\s+/g, ' ').length < 400;
+  const tabelaDe = t => {
+    const lin = tr => [...tr.children].map(c => { const k = c.cloneNode(true); k.querySelectorAll('button, input, select, .rel-pdf-bar').forEach(x => x.remove()); return s(k.textContent).replace(/\s+/g, ' ').trim(); });
+    const head = t.tHead && t.tHead.rows.length ? lin(t.tHead.rows[t.tHead.rows.length - 1]) : [];
+    const rows = [...(t.tBodies.length ? [].concat(...[...t.tBodies].map(b => [...b.rows])) : [...t.rows].slice(head.length ? 1 : 0))].filter(r => visivel(r) || r.offsetParent === null && !r.hidden).map(lin);
+    const foot = t.tFoot ? [...t.tFoot.rows].map(lin) : [];
+    /* tira colunas vazias (botões/ações) */
+    const n = Math.max(head.length, ...rows.map(r => r.length), 0); const usa = [...Array(n).keys()].filter(i => (head[i] || '').trim() || rows.some(r => (r[i] || '').trim()));
+    const pick = r => usa.map(i => r[i] || ''); return { head: head.length ? [pick(head)] : [], body: rows.map(pick).concat(foot.map(pick)), nFoot: foot.length };
+  };
+  async function painelPdf(root, o) {
+    o = o || {}; const lib = await libPDF(); const h2c = await libH2C(); const M = await modelo(o.modelo || 'rel_painel');
+    const doc = new lib.jsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape' }); const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight(), Lm = 10, R = W - 10, CWm = R - Lm;
+    const img = await logo(); const tit = s(o.titulo || M.nome).toUpperCase(); const em = agora() + ' · ' + quem(); const filt = o.filtros != null ? o.filtros : filtrosDe(root);
+    const cab = () => {
+      doc.setDrawColor(...AZUL_RGB); doc.setLineWidth(0.3); doc.rect(Lm, 8, R - Lm, 22);
+      if (img) try { doc.addImage(img, 'PNG', Lm + 2, 10, 23, 18); } catch (e) {}
+      const bx = R - 62; doc.line(bx, 8, bx, 30); doc.line(Lm + 27, 8, Lm + 27, 30);
+      doc.setTextColor(...AZUL_RGB); doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.text(EMP.nome, Lm + 30, 13);
+      doc.setTextColor(90); doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.text('CNPJ ' + EMP.cnpj + ' · ' + EMP.end, Lm + 30, 17);
+      doc.setTextColor(20); doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.text(doc.splitTextToSize(tit, bx - Lm - 33), Lm + 30, 23);
+      doc.setFontSize(7); [['Documento', M.codigo + (M.prov ? ' (provisório)' : '')], ['Revisão', M.rev + ' · ' + M.data], ['Elaborado', M.elab], ['Aprovado', M.aprov]].forEach(([k, v], i) => { doc.setFont('helvetica', 'bold'); doc.text(k + ':', bx + 2, 12.5 + i * 4.6); doc.setFont('helvetica', 'normal'); doc.text(doc.splitTextToSize(s(v), 40)[0], bx + 18, 12.5 + i * 4.6); });
+      if (filt) { doc.setFont('helvetica', 'italic'); doc.setFontSize(7); doc.setTextColor(90); doc.text(doc.splitTextToSize('Filtros: ' + filt, R - Lm)[0], Lm, 34); }
+    };
+    const TOP = filt ? 38 : 35, BOT = H - 14; let y = TOP; cab();
+    const nova = () => { doc.addPage(); cab(); y = TOP; };
+    const blocos = [...root.children].filter(b => visivel(b) && !b.classList.contains('rel-pdf-bar') && !ehFiltro(b) && !/^(SCRIPT|STYLE|TEMPLATE)$/.test(b.tagName));
+    const ignorar = el => el.classList && (el.classList.contains('rel-pdf-bar') || el.tagName === 'BUTTON' && !el.closest('.kpis') && !el.classList.contains('kpi') && !el.closest('.ritem')) ;
+    async function imagem(el) {
+      const cv = await h2c(el, { scale: 2, backgroundColor: '#ffffff', logging: false, useCORS: true, ignoreElements: ignorar, windowWidth: Math.max(document.documentElement.clientWidth, 1100) });
+      const mmPx = CWm / cv.width; let h = cv.height * mmPx, sy = 0; const w = Math.min(CWm, cv.width * mmPx);
+      while (sy < cv.height) {
+        let livre = BOT - y; if (livre < 20 && y > TOP) { nova(); livre = BOT - y; }
+        const fatia = Math.min(cv.height - sy, Math.floor(livre / mmPx)); const c2 = document.createElement('canvas'); c2.width = cv.width; c2.height = fatia;
+        c2.getContext('2d').drawImage(cv, 0, sy, cv.width, fatia, 0, 0, cv.width, fatia);
+        doc.addImage(c2.toDataURL('image/jpeg', 0.92), 'JPEG', Lm, y, w, fatia * mmPx); y += fatia * mmPx + 3; sy += fatia; if (sy < cv.height) nova();
+      }
+    }
+    for (const b of blocos) {
+      const tabs = [...b.querySelectorAll('table')].filter(visivel);
+      if (tabs.length && !b.querySelector('.kpis, canvas, svg')) {
+        /* título do bloco (texto antes da primeira tabela) */
+        const t0 = b.querySelector('.ct, h2, h3, .lbl, b'); const titB = t0 && !t0.closest('table') ? s(t0.textContent).trim() : '';
+        if (titB) { if (y > BOT - 20) nova(); doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5); doc.setTextColor(...AZUL_RGB); doc.text(titB.slice(0, 160), Lm, y + 4); y += 7; }
+        for (const t of tabs) {
+          const T = tabelaDe(t); if (!T.body.length && !T.head.length) continue;
+          const nc = Math.max((T.head[0] || []).length, ...T.body.map(r => r.length)); const fs = nc > 14 ? 6 : nc > 10 ? 6.8 : 7.8;
+          doc.autoTable({ head: T.head, body: T.body, startY: y, margin: { top: TOP, left: Lm, right: 10, bottom: 14 }, theme: 'grid',
+            styles: { font: 'helvetica', fontSize: fs, cellPadding: 1.2, overflow: 'linebreak', valign: 'top', lineColor: [217, 222, 232], lineWidth: 0.1 },
+            headStyles: { fillColor: AZUL_RGB, textColor: 255, fontStyle: 'bold' }, alternateRowStyles: { fillColor: [244, 246, 250] },
+            didParseCell: d => { if (d.section === 'body' && d.row.index >= T.body.length - T.nFoot) d.cell.styles.fontStyle = 'bold'; if (/^[-−R$\s\d.,%h]+$/.test(s(d.cell.raw)) && /\d/.test(s(d.cell.raw))) d.cell.styles.halign = 'right'; },
+            didDrawPage: () => cab() });
+          y = doc.lastAutoTable.finalY + 5;
+        }
+      } else await imagem(b);
+    }
+    const n = doc.internal.getNumberOfPages();
+    for (let p = 1; p <= n; p++) { doc.setPage(p); doc.setDrawColor(...AZUL_RGB); doc.line(Lm, H - 10, R, H - 10); doc.setFont('helvetica', 'normal'); doc.setFontSize(6.5); doc.setTextColor(90);
+      doc.text(`${M.codigo} rev. ${M.rev} · emitido em ${em} · cópia impressa não é controlada`, Lm, H - 6.5); doc.text(`Página ${p} de ${n}`, R, H - 6.5, { align: 'right' }); }
+    baixar(doc.output('blob'), nomeArq(o.arquivo || o.titulo || 'Painel', 'pdf'));
+  }
+  const tituloPainel = root => {
+    const h = root.querySelector('h2'); const ab = document.querySelector('.tabs .on, .tab.on, nav .on, [aria-selected="true"], .seg .on');
+    const mod = s(document.title).split('·')[0].trim(); const t = h && visivel(h) ? s(h.textContent).trim() : ab ? s(ab.textContent).trim() : '';
+    return t && t !== mod ? (mod ? mod + ' – ' : '') + t : mod || 'Painel';
+  };
+  function poeBotoes() {
+    document.querySelectorAll('.kpis').forEach(k => {
+      if (!visivel(k) || k.closest('.rel-sem-pdf')) return; const root = raizPainel(k);
+      if (!root || root.querySelector(':scope > .rel-pdf-bar') || root.dataset.relPdf === '1' && root.querySelector('.rel-pdf-bar')) return;
+      if ([...root.querySelectorAll('.kpis')].filter(visivel)[0] !== k) return;
+      const bar = document.createElement('div'); bar.className = 'rel-pdf-bar'; bar.style.cssText = 'display:flex;justify-content:flex-end;margin:0 0 6px';
+      bar.innerHTML = '<button type="button" style="font:600 13px system-ui,sans-serif;padding:6px 12px;border-radius:8px;border:1px solid #1f3a8a;background:#fff;color:#1f3a8a;cursor:pointer">⤓ PDF do painel</button>';
+      const bt = bar.querySelector('button');
+      bt.onclick = async () => { const t0 = bt.textContent; bt.disabled = true; bt.textContent = 'Gerando PDF…'; try { const tit = tituloPainel(root); await painelPdf(root, { titulo: tit, arquivo: tit }); } catch (e) { console.error(e); alert('Não foi possível gerar o PDF: ' + (e.message || e)); } bt.disabled = false; bt.textContent = t0; };
+      root.dataset.relPdf = '1'; root.insertBefore(bar, root.firstChild);
+    });
+  }
+  if (typeof document !== 'undefined') {
+    let agendado = false; const tick = () => { if (agendado) return; agendado = true; setTimeout(() => { agendado = false; try { poeBotoes(); } catch (e) {} }, 300); };
+    const ini = () => { new MutationObserver(tick).observe(document.body, { childList: true, subtree: true }); tick(); };
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', ini); else ini();
+  }
+  window.PrevRel = { exportar, escolher, deMatriz, painelPdf, MODELOS, EMP };
 })();
