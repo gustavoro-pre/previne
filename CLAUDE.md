@@ -5,9 +5,12 @@ Av. Homero Leite, 198, Saudade, Barra Mansa – RJ). Dono: Gustavo Rogel de Alme
 Site: https://app.previneeletrica.com.br (GitHub Pages deste repositório: gustavoro-pre/previne).
 Firebase: projeto `ferramentas-epi` (Firestore + Auth). Responder sempre em português do Brasil.
 
+## Atenção
+Mais de uma conversa pode estar mexendo neste repositório. Sempre `git pull --rebase` antes de editar e antes do push.
+
 ## Como publicar
 1. Editar os arquivos. Se mexer em `ferramentas/index.html`, rodar `python3 build.py` (gera `treinamentos/index.html`).
-2. Subir a versão do script na página (`adm.js?v=N`, `ficha.js?v=N`, `prop.js?v=N`…) e o cache em `sw.js` (`previne-vNN`, hoje v81).
+2. Subir a versão do script na página (`adm.js?v=N`, `ficha.js?v=N`, `prop.js?v=N`…) e o cache em `sw.js` (`previne-vNN`; ver o número atual no `sw.js`).
    Arquivo novo de módulo: incluir também na lista `SHELL` do `sw.js`.
 3. `git commit` + `git push` (main) publica no GitHub Pages em ~1 min.
 4. Regras do Firestore (`firestore.rules`): depois do push, publicar no console do Firebase
