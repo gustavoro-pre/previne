@@ -1,7 +1,7 @@
 /* Indicadores → Pessoas: visão geral, funcionários (busca, filtros e a vida de cada um na empresa com os documentos),
    folha e horas (importação mensal do extrato da contabilidade) e absenteísmo. Folha e salários: só Admin, Gestão, Gerente e RH. */
 "use strict";
-const podeFolha = () => { const F = window.__FB || {}; const m = ((F.perfil || {}).modulos) || {}; return ['admin', 'gestao', 'gerente', 'rh'].includes(F.papelGeral) || m.admissao === 'rh'; };
+const podeFolha = () => ((window.__FB || {}).perfil || {}).verSalarios === true; /* salários: só quem tem a permissão 'Vê salários' */
 Object.assign(V, { pt: 'geral', pes: '', fq: '', fa: '', ff: '', fs: 'ativos', fv: '', comp: '' });
 const PB = () => $('#pes-body') || $('#ind-body');
 const soDig = s => str(s).replace(/\D/g, '');
@@ -137,20 +137,21 @@ function gerarDoc(btn, hash, tipo, nome) {
   setTimeout(() => { if (!ok) { fim(); toast('Não foi possível gerar o PDF agora. Tente de novo.', 'bad'); } }, 60000);
 }
 const RHD = [['RG', 'RG'], ['CPF', 'CPF'], ['CTPS', 'CTPS'], ['PIS', 'PIS'], ['TITULO', 'Título de eleitor'], ['RESERVISTA', 'Reservista'], ['CNH', 'CNH'], ['RESIDENCIA', 'Comprovante de residência'], ['ESCOLARIDADE', 'Escolaridade'], ['FOTO', 'Foto'], ['CONTRATO', 'Contrato de experiência'], ['FICHA EMPREGADO', 'Ficha de empregado'], ['ESOCIAL', 'eSocial'], ['ASO', 'ASO'], ['INTEGRACAO', 'Integração'], ['OS', 'OS de segurança (assinada)'], ['FICHA EPI', 'Ficha de EPI (assinada)'], ['NR', 'Certificados NR'], ['CERTIFICADO CURSO', 'Outros certificados'], ['CASAMENTO', 'Certidão de casamento'], ['NASCIMENTO', 'Certidão de nascimento (filhos)'], ['VT', 'Vale-transporte'], ['CRC', 'CRC'], ['ATESTADO', 'Atestados'], ['ADVERTENCIA', 'Advertências'], ['FERIAS', 'Férias'], ['RESCISAO', 'Rescisão']];
+const RHD_SAL = ['CONTRATO', 'FICHA EMPREGADO', 'ESOCIAL', 'CTPS', 'FERIAS', 'RESCISAO']; const ehSal = k => RHD_SAL.includes(k) || /CONTRA.?CHEQUE|RECIBO|SALAR|HOLERITE|FOLHA|PAGAMENTO|TRCT/.test(k);
 const RHD_SEG = ['ASO', 'INTEGRACAO', 'OS', 'FICHA EPI', 'NR', 'CERTIFICADO CURSO', 'ATESTADO'];
 async function rhBox(f) {
   const box = $('#vi-rh'); if (!box) return; let d = null;
   try { const s = await db.doc('rh_docs/' + f.id).get(); d = s.exists ? s.data() : null; } catch (e) { box.innerHTML = '<p class="ct">Documentos pessoais e de RH</p><p class="note">Seu usuário não tem acesso aos documentos do RH.</p>'; return; }
   if (!$('#vi-rh')) return;
   if (!d) { box.innerHTML = '<p class="ct">Documentos pessoais e de RH (Drive do RH)</p><p class="note">Nenhuma pasta deste funcionário foi encontrada no Drive do RH.</p>'; return; }
-  const t = d.tipos || {}; const lk = id => 'https://drive.google.com/file/d/' + encodeURIComponent(id) + '/view';
+  const vs = podeFolha(); const t = Object.fromEntries(Object.entries(d.tipos || {}).filter(([k]) => vs || !ehSal(k))); const lk = id => 'https://drive.google.com/file/d/' + encodeURIComponent(id) + '/view';
   const outros = Object.keys(t).filter(k => !RHD.some(x => x[0] === k)).map(k => [k, k.charAt(0) + k.slice(1).toLowerCase()]);
   const lin = ([k, n]) => t[k] ? `<tr><td>${esc(n)}</td><td class="n">${num(t[k].n)}</td><td>${fmtD(t[k].d)}</td><td><a href="${lk(t[k].id)}" target="_blank" rel="noopener">abrir</a></td></tr>` : '';
   const pess = RHD.filter(([k]) => !RHD_SEG.includes(k)).concat(outros).map(lin).join(''), seg = RHD.filter(([k]) => RHD_SEG.includes(k)).map(lin).join('');
   const cab = '<thead><tr><th>Documento</th><th class="n">Arquivos</th><th>Mais recente</th><th></th></tr></thead>';
   box.innerHTML = `<p class="ct">Documentos pessoais e de RH (Drive do RH)</p>
-    <div class="actions" style="margin:6px 0 8px;justify-content:flex-start;flex-wrap:wrap;gap:8px">${(d.pastas || []).map((p, i) => `<a class="btn primary sm" href="https://drive.google.com/drive/folders/${esc(p.id)}" target="_blank" rel="noopener">Abrir pasta${(d.pastas || []).length > 1 ? ' ' + (i + 1) : ''} no Drive (baixar tudo)</a>`).join('')}</div>
-    <p class="note" style="margin:0 0 8px">Para baixar tudo de uma vez: abra a pasta, selecione todos os arquivos (Ctrl+A) e use <b>Fazer download</b>; o Drive entrega um .zip.</p>
+    <div class="actions" style="margin:6px 0 8px;justify-content:flex-start;flex-wrap:wrap;gap:8px">${(vs ? d.pastas || [] : []).map((p, i) => `<a class="btn primary sm" href="https://drive.google.com/drive/folders/${esc(p.id)}" target="_blank" rel="noopener">Abrir pasta${(d.pastas || []).length > 1 ? ' ' + (i + 1) : ''} no Drive (baixar tudo)</a>`).join('')}</div>
+    ${vs ? '' : '<p class="note" style="margin:0 0 8px">Contrato, ficha de empregado, CTPS, férias, rescisão e outros documentos com salário só aparecem para quem tem a permissão <b>Vê salários</b>.</p>'}<p class="note" style="margin:0 0 8px${vs ? '' : ';display:none'}">Para baixar tudo de uma vez: abra a pasta, selecione todos os arquivos (Ctrl+A) e use <b>Fazer download</b>; o Drive entrega um .zip.</p>
     ${pess ? `<p class="note" style="margin:8px 0 2px"><b>Pessoais e RH</b></p><div class="tbwrap" style="margin:0"><table class="tb">${cab}<tbody>${pess}</tbody></table></div>` : ''}
     ${seg ? `<p class="note" style="margin:12px 0 2px"><b>Segurança e saúde (ASO, OS, ficha de EPI, certificados)</b></p><div class="tbwrap" style="margin:0"><table class="tb">${cab}<tbody>${seg}</tbody></table></div>` : ''}
     <p class="note" style="margin-top:6px">Os arquivos ficam no Drive do RH: o link abre para quem tem acesso à pasta. Lista atualizada em ${fmtD(str(d.em).slice(0, 10))}.</p>`;

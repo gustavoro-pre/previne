@@ -20,7 +20,7 @@ const PRAZO = 8;
 
 const D = { adm: [], func: [], areas: [], kits: [], cursos: [], cfg: {}, emp: {} };
 const V = { tab: 'and', q: '', per: '180' };
-let db = null, PODE = false, MEU = '';
+let db = null, PODE = false, MEU = ''; const VS = () => ((window.__FB || {}).perfil || {}).verSalarios === true;
 
 /* ---------- regras ---------- */
 const etp = a => a.etapas || {};
@@ -215,7 +215,7 @@ function rNova() {
   $('#body').innerHTML = `<div class="card"><p class="ct">Abrir admissão</p><p class="cs">O candidato recebe um link para preencher os dados e mandar os documentos. Função, salário e área ficam só com o RH.</p>
     <div class="grid2"><div><label class="req" for="n-nome">Nome completo</label><input id="n-nome"></div><div><label class="req" for="n-cpf">CPF</label><input id="n-cpf" inputmode="numeric"></div></div>
     <div class="grid2"><div><label class="req" for="n-tel">Celular (WhatsApp)</label><input id="n-tel" inputmode="tel" placeholder="(24) 99999-9999"></div><div><label class="req" for="n-fun">Função</label><input id="n-fun" list="n-funl"><datalist id="n-funl">${funcoes().map(f => `<option value="${esc(f)}">`).join('')}</datalist></div></div>
-    <div class="grid3"><div><label for="n-sal">Salário (R$)</label><input id="n-sal" inputmode="decimal"></div><div><label class="req" for="n-area">Área</label><select id="n-area">${optAreas('')}</select></div><div><label for="n-sub">Sub-área</label><select id="n-sub">${optSubs('')}</select></div></div>
+    <div class="grid3"><div${VS() ? '' : ' hidden'}><label for="n-sal">Salário (R$)</label><input id="n-sal" inputmode="decimal"></div><div><label class="req" for="n-area">Área</label><select id="n-area">${optAreas('')}</select></div><div><label for="n-sub">Sub-área</label><select id="n-sub">${optSubs('')}</select></div></div>
     <div class="grid3"><div><label for="n-un">Unidade</label><input id="n-un" placeholder="Ex.: Barra Mansa"></div><div><label for="n-int">Previsão de integração</label><input type="date" id="n-int" value="${addDays(PRAZO - 1)}"></div><div><label for="n-alt">Trabalho em altura</label><select id="n-alt"><option value="">Não</option><option value="1">Sim</option></select></div></div>
     <div class="grid3"><div><label for="n-vin">Vínculo</label><select id="n-vin"><option value="CLT">CLT</option><option value="PJ">PJ (prestador de serviço)</option></select></div></div>
     <label for="n-obs">Observação (só RH)</label><input id="n-obs">
@@ -266,7 +266,7 @@ async function criar() {
   const cur = $$('.n-cur').filter(c => c.checked).map(c => c.dataset.cur); const usarPadrao = !!($('#n-padrao') && $('#n-padrao').checked);
   const b = $('#n-save'); b.disabled = true; V.criando = true;
   try {
-    await db.doc('admissoes_priv/' + tk).set({ salario: sal != null ? sal : null, em: agora });
+    if (VS()) await db.doc('admissoes_priv/' + tk).set({ salario: sal != null ? sal : null, em: agora });
     await db.doc('admissoes/' + tk).set(a);
     const obj = Object.assign({ id: tk }, a); D.adm.push(obj);
     b.textContent = 'Gerando carta e termo LGPD…'; await gerarTextos(obj, sal);
@@ -314,7 +314,7 @@ async function detalhe(id, refresh) {
     <div class="etf"><h4>Assinaturas e envio</h4><div class="grid3"><div><label for="e-epi">OS e ficha de EPI assinadas</label><input type="date" id="e-epi" value="${esc((e.epi || {}).data || '')}" ${ro}></div><div><label for="e-adm">Docs admissionais assinados</label><input type="date" id="e-adm" value="${esc((e.admiss || {}).data || '')}" ${ro}></div><div><label for="e-ct">Enviado à contabilidade</label><input type="date" id="e-ct" value="${esc((e.contab || {}).data || '')}" ${ro}></div></div></div>
     <div class="etf"><h4>Justificativa de atraso ${atrasado(a) ? `<span class="badge ${precisaJust(a) ? 'b-bad' : 'b-ok'}">${precisaJust(a) ? 'obrigatória' : 'preenchida'}</span>` : ''}</h4>
       <div class="grid2"><div><label for="e-jm">Motivo</label><select id="e-jm" ${ro}><option value="">—</option>${['Documentos do candidato', 'Agenda do ASO / clínica', 'Agenda da integração (cliente)', 'Treinamentos', 'Candidato desistiu ou sumiu', 'Aprovação interna', 'Outro'].map(m => `<option ${a.justMotivo === m ? 'selected' : ''}>${m}</option>`).join('')}</select></div><div><label for="e-j">Detalhe</label><input id="e-j" value="${esc(a.justificativa || '')}" ${ro} placeholder="${atrasado(a) ? 'Obrigatório: passou de ' + PRAZO + ' dias' : 'Só se passar de ' + PRAZO + ' dias'}"></div></div></div>
-    <div class="grid2"><div><label for="e-sal">Salário (R$) · só RH vê</label><input id="e-sal" inputmode="decimal" placeholder="Carregando…" disabled></div><div><label for="e-obs">Observação (só RH)</label><input id="e-obs" value="${esc(a.obs || '')}" ${ro}></div></div>
+    <div class="grid2"><div${VS() ? '' : ' hidden'}><label for="e-sal">Salário (R$) · só quem vê salários</label><input id="e-sal" inputmode="decimal" placeholder="Carregando…" disabled></div><div><label for="e-obs">Observação (só RH)</label><input id="e-obs" value="${esc(a.obs || '')}" ${ro}></div></div>
     ${ro ? (a.funcionarioId ? `<p class="note">Cadastrado como funcionário em ${fmtD(a.concluidoEm)}.</p>` : '') : `<div class="actions"><button class="btn primary" id="e-save">Salvar etapas</button><button class="btn accent" id="e-conc">Concluir e cadastrar funcionário</button></div>
       <div class="actions" style="margin-top:6px"><button class="btn sm danger" id="e-canc">Cancelar admissão (desistência)</button></div>`}`);
   $('#sheet').scrollTop = y;
@@ -330,11 +330,11 @@ async function detalhe(id, refresh) {
         arq.hash = await ADM.sha256(prep.b64); arq.titulo = tit; arq.por = MEU; const as = Object.assign({}, a.assinar || {}, { [id]: arq }); await db.doc('admissoes/' + a.id).update({ assinar: as }); a.assinar = as;
         toast('Documento enviado para o candidato assinar.', 'ok'); SUJO = false; detalhe(a.id); } catch (e) { anx.disabled = false; anx.textContent = 'Anexar PDF para assinar'; toast(e.message || 'Não foi possível anexar.', 'bad'); } };
     i.click(); };
-  const astx = $('#as-tx'); if (astx) astx.onclick = async () => { astx.disabled = true; try { const p = await db.doc('admissoes_priv/' + a.id).get(); await gerarTextos(a, p.exists ? p.data().salario : null, (a.textos || {}).carta ? ['carta'] : ['lgpd', 'carta']); toast('Carta e termo prontos para o candidato assinar.', 'ok'); SUJO = false; detalhe(a.id); } catch (e) { astx.disabled = false; toast('Não foi possível gerar: ' + ((e && e.message) || e), 'bad'); } };
+  const astx = $('#as-tx'); if (astx) astx.onclick = async () => { astx.disabled = true; try { const p = VS() ? await db.doc('admissoes_priv/' + a.id).get().catch(() => null) : null; await gerarTextos(a, p && p.exists ? p.data().salario : null, (a.textos || {}).carta ? ['carta'] : ['lgpd', 'carta']); toast('Carta e termo prontos para o candidato assinar.', 'ok'); SUJO = false; detalhe(a.id); } catch (e) { astx.disabled = false; toast('Não foi possível gerar: ' + ((e && e.message) || e), 'bad'); } };
   const asos = $('#as-os'); if (asos) asos.onclick = async () => { asos.disabled = true; asos.textContent = 'Gerando (pode levar uns 20 s)…'; try { const m = await prepararOsEpi(a); toast(m.modelo ? 'Gerado, mas a OS usou o texto-modelo da função.' : 'OS e termo de EPI enviados para o candidato assinar.', m.modelo ? 'bad' : 'ok'); SUJO = false; detalhe(a.id); } catch (e) { asos.disabled = false; asos.textContent = 'Gerar OS e termo de EPI para assinar'; toast(e.message || 'Não foi possível gerar.', 'bad'); } };
   /* OS assinada: preenche a etapa sozinho */
   if (!ro && assinado(a, 'osepi') && !((a.etapas || {}).epi || {}).data) { const ne = JSON.parse(JSON.stringify(etp(a))); ne.epi = { data: str(a.cand.assin.osepi.em).slice(0, 10) }; db.doc('admissoes/' + a.id).update({ etapas: ne }).then(() => { a.etapas = ne; const x = $('#e-epi'); if (x && !x.value) x.value = ne.epi.data; }, () => {}); }
-  db.doc('admissoes_priv/' + id).get().then(s => { const v = s.exists ? s.data().salario : null; const el = $('#m-sal'); if (el) el.textContent = v != null ? brl(v) : 'não informado';
+  (VS() ? db.doc('admissoes_priv/' + id).get() : Promise.reject()).then(s => { const v = s.exists ? s.data().salario : null; const el = $('#m-sal'); if (el) el.textContent = v != null ? brl(v) : 'não informado';
       const inp = $('#e-sal'); if (inp) { inp.value = v != null ? String(v).replace('.', ',') : ''; inp.dataset.orig = inp.value; inp.placeholder = 'Ex.: 3500,00'; inp.disabled = !!ro; } },
     () => { const el = $('#m-sal'); if (el) el.textContent = 'restrito'; const inp = $('#e-sal'); if (inp) inp.placeholder = 'Seu perfil não vê salário'; });
   $('#m-x').onclick = fechar;

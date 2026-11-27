@@ -290,9 +290,10 @@ function renderUsers() {
       return `<div class="urow"><div class="main"><b>${esc(u.nome)}</b>${eu ? ' <span class="badge b-info">você</span>' : ''}${u.ativo === false ? ' <span class="badge b-bad">Desativado</span>' : ''}<div class="t2 note">${esc(u.email)}</div></div>
       <label class="note" style="margin:0">Ferramentas & EPI</label><select data-pp="${esc(id)}" style="width:auto;padding:7px" ${trav ? 'disabled' : ''}>${opt(u.papel, trav)}</select>
       ${sm('treinamentos')}${sm('indicadores')}${sm('alocacao')}${sm('admissao')}${sm('documentos')}
+      ${U[me] && U[me].verSalarios === true ? `<label class="note" style="margin:0;display:inline-flex;gap:6px;align-items:center"><input type="checkbox" data-pvs="${esc(id)}" ${u.verSalarios === true ? 'checked' : ''} ${eu ? 'disabled' : ''}> Vê salários</label>` : (u.verSalarios === true ? '<span class="badge b-warn">Vê salários</span>' : '')}
       ${protegido(u) ? '' : `<button class="btn sm ghost" data-pinv="${esc(u.email)}">Reenviar convite</button>`}${trav ? '' : `<button class="btn sm ${u.ativo === false ? 'ghost' : 'danger'}" data-pat="${esc(id)}">${u.ativo === false ? 'Reativar' : 'Desativar'}</button>`}</div>`; }).join('')}</div>
     <div class="card"><p class="ct">O que cada perfil faz</p><div class="tbwrap"><table class="tb"><thead><tr><th>Perfil</th><th>Acesso</th></tr></thead><tbody>${Object.values(PAPEIS).map(p => `<tr><td><b>${p[0]}</b></td><td>${p[1]}</td></tr>`).join('')}${DESC_MOD.map(p => `<tr><td><b>${p[0]}</b></td><td>${p[1]}</td></tr>`).join('')}</tbody></table></div>
-    <p class="note">Quem não tem perfil definido em Treinamentos herda: Gerente vira Gestor, TST e RH continuam TST e RH. Gestão e Administrador veem tudo.</p></div>`;
+    <p class="note"><b>Vê salários</b>: folha, contracheques, salários nos indicadores e na admissão e documentos de RH com salário. Só quem já tem essa permissão pode dá-la a outra pessoa.</p><p class="note">Quem não tem perfil definido em Treinamentos herda: Gerente vira Gestor, TST e RH continuam TST e RH. Gestão e Administrador veem tudo.</p></div>`;
   $('#pu-add').onclick = async () => {
     const nome = $('#pu-n').value.trim(), email = $('#pu-e').value.trim().toLowerCase(), papel = $('#pu-p').value;
     const modulos = { treinamentos: $('#pu-t').value, indicadores: $('#pu-i').value, alocacao: $('#pu-a').value, admissao: $('#pu-d').value, documentos: $('#pu-o').value };
@@ -309,6 +310,7 @@ function renderUsers() {
   $$('#p-ubody [data-pm]').forEach(sl => sl.onchange = async () => { const [uid, mid] = sl.dataset.pm.split('|'); if (!sl.value) return; const m = Object.assign({}, U[uid].modulos || {}, { [mid]: sl.value });
     try { await F.atualizarUsuario(uid, { modulos: m }); toast('Acesso alterado.', 'ok'); } catch (e) { toast('Não foi possível alterar.', 'bad'); } });
   $$('#p-ubody [data-pinv]').forEach(b => b.onclick = async () => { try { await F.reenviarConvite(b.dataset.pinv); toast('Convite reenviado.', 'ok'); } catch (e) { toast('Não foi possível reenviar.', 'bad'); } });
+  $$('#p-ubody [data-pvs]').forEach(c => c.onchange = async () => { try { await F.atualizarUsuario(c.dataset.pvs, { verSalarios: c.checked }); toast(c.checked ? 'Agora vê salários.' : 'Não vê mais salários.', 'ok'); } catch (e) { c.checked = !c.checked; toast('Não foi possível alterar.', 'bad'); } });
   $$('#p-ubody [data-pat]').forEach(b => { let armed = false; b.onclick = async () => { const u = U[b.dataset.pat]; if (u.ativo !== false && !armed) { armed = true; b.textContent = 'Confirmar'; return; } try { await F.atualizarUsuario(b.dataset.pat, { ativo: u.ativo === false }); toast(u.ativo === false ? 'Reativado.' : 'Desativado.', 'ok'); } catch (e) { toast('Não foi possível alterar.', 'bad'); } }; });
 }
 (async () => {

@@ -226,7 +226,7 @@ onAuthStateChanged(auth, async u => {
   if (MOD !== 'portal' && pm === 'nenhum') return telaSemModulo();
   ME = { uid: u.uid, email: u.email, nome: d.nome || u.email, papel: pm };
   window.__FB = { modulo: MOD, perfil: d, papel: pm, papelGeral: d.papel, uid: u.uid, nome: ME.nome, email: u.email, criarUsuario, criarAluno, reenviarConvite, atualizarUsuario, ativarPush, pushStatus, users: () => USERS, sair: () => signOut(auth).then(() => location.reload()) };
-  onSnapshot(collection(fs, 'usuarios'), s => { USERS = {}; s.docs.forEach(x => USERS[x.id] = x.data()); const m = USERS[u.uid]; if (m && (m.ativo === false || m.papel !== window.__FB.papelGeral || JSON.stringify(m.modulos || {}) !== JSON.stringify(d.modulos || {}))) location.reload(); window.dispatchEvent(new Event('fb-users')); }, () => {});
+  onSnapshot(collection(fs, 'usuarios'), s => { USERS = {}; s.docs.forEach(x => USERS[x.id] = x.data()); const m = USERS[u.uid]; if (m && (m.ativo === false || m.papel !== window.__FB.papelGeral || JSON.stringify(m.modulos || {}) !== JSON.stringify(d.modulos || {}) || (m.verSalarios === true) !== (d.verSalarios === true))) location.reload(); window.dispatchEvent(new Event('fb-users')); }, () => {});
   const um = document.getElementById('usermenu'); if (um) { um.hidden = false; um.querySelector('b').textContent = ME.nome.split(' ')[0]; um.onclick = () => { if (confirmSair()) window.__FB.sair(); }; }
   hideGate(); resolveReady();
 });
