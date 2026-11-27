@@ -64,20 +64,22 @@ function totalDe(p) { return num(p.valorTotal); }
 function lista() {
   const anos = [...new Set(D.prop.map(p => str(p.data).slice(0, 4)).filter(Boolean))].sort().reverse();
   const q = norm(V.busca);
-  const L = D.prop.filter(p => (!V.st || (p.status || 'rascunho') === V.st) && (!V.cli || p.clienteId === V.cli) && (!V.ano || str(p.data).startsWith(V.ano))
+  const L = D.prop.filter(p => (V.st ? (p.status || 'rascunho') === V.st : p.status !== 'cancelada') && (!V.cli || p.clienteId === V.cli) && (!V.ano || str(p.data).startsWith(V.ano))
     && (!q || [p.codPT, p.codPC, p.seq, p.controle, p.rc, p.cliente, p.objeto, p.unidade, p.area].some(x => norm(x).includes(q))));
   const base = D.prop.filter(p => !V.ano || str(p.data).startsWith(V.ano));
+  const ocultas = V.st ? 0 : D.prop.filter(p => p.status === 'cancelada' && (!V.cli || p.clienteId === V.cli) && (!V.ano || str(p.data).startsWith(V.ano))).length;
   const cnt = s => base.filter(p => (p.status || 'rascunho') === s); const soma = A => A.reduce((a, p) => a + totalDe(p), 0);
   const g = cnt('ganha'), pd = cnt('perdida'), env = cnt('enviada'), el = base.filter(p => ['rascunho', 'revisao'].includes(p.status || 'rascunho'));
   $('#body').innerHTML = `<div class="head"><h2>Propostas</h2>${podeEditar() ? '<button class="btn primary" id="nova" type="button">+ Nova proposta</button>' : ''}</div>
     <div class="kpis">${kpi('Em elaboração', el.length, '', brl(soma(el)), 'data-kst="rascunho"')}${kpi('Enviadas (aguardando)', env.length, 'warn', brl(soma(env)), 'data-kst="enviada"')}${kpi('Ganhas', g.length, 'ok', brl(soma(g)), 'data-kst="ganha"')}${kpi('Perdidas', pd.length, 'bad', brl(soma(pd)), 'data-kst="perdida"')}${kpi('Taxa de conversão', g.length + pd.length ? Math.round(g.length / (g.length + pd.length) * 100) + '%' : '—', 'info', 'ganhas ÷ decididas', 'data-kst=""')}${kpi('Ticket médio (ganhas)', g.length ? brl(soma(g) / g.length) : '—', '', V.ano || 'todos os anos', 'data-kst="ganha"')}</div>
     <div class="card" style="margin-top:12px"><div class="grid3" style="grid-template-columns:2fr 1fr 1fr 1fr;gap:0 10px">
       <div><label>Buscar</label><input id="f-q" value="${esc(V.busca)}" placeholder="Código, cliente, objeto, RC…"></div>
-      <div><label>Status</label><select id="f-st"><option value="">Todos</option>${Object.entries(STATUS).map(([k, t]) => `<option value="${k}" ${V.st === k ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
+      <div><label>Status</label><select id="f-st"><option value="">Todos (sem canceladas)</option>${Object.entries(STATUS).map(([k, t]) => `<option value="${k}" ${V.st === k ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
       <div><label>Cliente</label><select id="f-cli"><option value="">Todos</option>${D.cli.map(c => `<option value="${c.id}" ${V.cli === c.id ? 'selected' : ''}>${esc(c.sigla || c.nome)}</option>`).join('')}</select></div>
-      <div><label>Ano</label><select id="f-ano"><option value="">Todos</option>${anos.map(a => `<option ${V.ano === a ? 'selected' : ''}>${a}</option>`).join('')}</select></div></div></div>
+      <div><label>Ano</label><select id="f-ano"><option value="">Todos</option>${anos.map(a => `<option ${V.ano === a ? 'selected' : ''}>${a}</option>`).join('')}</select></div></div>${ocultas ? `<p class="note" style="margin:6px 0 0">${ocultas} proposta(s) cancelada(s) fora da lista. <button class="link" id="ver-canc" type="button">Ver canceladas</button></p>` : ''}</div>
     ${L.length ? `<div class="card" style="padding:4px 12px">${L.map(p => `<button class="ritem lk" data-p="${p.id}" type="button"><div class="main"><b>${esc(codTxt(p))}</b> <span class="note">· Rev. ${esc(p.rev || '00')} · ${esc(p.controle || '')}</span><div class="note">${esc(p.cliente || 'Sem cliente')}${p.unidade ? ' · ' + esc(p.unidade) : ''}${p.area ? ' · ' + esc(p.area) : ''} — ${esc(p.objeto || 'sem objeto')}</div><div class="note">${fmtD(p.data)} · ${p.modalidade === 'hh' ? 'HH' : 'Preço global'}${p.rc ? ' · RC ' + esc(p.rc) : ''}${p.gestorCom && p.gestorCom.nome ? ' · ' + esc(p.gestorCom.nome) : ''}</div></div><div style="text-align:right">${stBadge(p.status)}<div style="font-weight:700;margin-top:4px">${totalDe(p) ? brl(totalDe(p)) : ''}</div></div></button>`).join('')}</div>` : '<div class="empty">Nenhuma proposta com esses filtros.</div>'}`;
   const nv = $('#nova'); if (nv) nv.onclick = () => novaProposta();
+  const vc = $('#ver-canc'); if (vc) vc.onclick = () => { V.st = 'cancelada'; lista(); };
   $('#f-q').oninput = e => { V.busca = e.target.value; clearTimeout(lista.t); lista.t = setTimeout(() => { lista(); const i = $('#f-q'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }, 250); };
   $('#f-st').onchange = e => { V.st = e.target.value; lista(); }; $('#f-cli').onchange = e => { V.cli = e.target.value; lista(); }; $('#f-ano').onchange = e => { V.ano = e.target.value; lista(); };
   $$('[data-kst]').forEach(b => b.onclick = () => { V.st = b.dataset.kst; lista(); });
