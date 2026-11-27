@@ -167,7 +167,7 @@ function rMod() {
   $('#body').innerHTML = `<div class="card"><p class="ct">Carta-convite</p><p class="cs">Campos trocados automaticamente: {nome} {cpf} {funcao} {area} {unidade} {salario} {vinculo} {beneficios} {empresa} {cnpj}</p><textarea id="md-c" rows="16">${esc(D.cfg.cartaTxt || ADM.CARTA_PADRAO)}</textarea></div>
     <div class="card"><p class="ct">Benefícios (CLT)</p><p class="cs">Entra no lugar de {beneficios} na carta. Para PJ, a carta mostra "conforme o contrato de prestação de serviços".</p><textarea id="md-b" rows="4">${esc(D.cfg.beneficiosTxt || ADM.BENEF_PADRAO)}</textarea></div>
     <div class="card"><p class="ct">Termo LGPD</p><p class="cs">Revise com o jurídico ou a contabilidade antes de usar.</p><textarea id="md-l" rows="16">${esc(D.cfg.lgpdTxt || ADM.LGPD_PADRAO)}</textarea></div>
-    <div class="card"><p class="ct">E-mail à contabilidade</p><p class="cs">Vem preenchido no botão “Enviar à contabilidade”; dá para mudar em cada envio. Campos trocados automaticamente: {nome} {cpf} {funcao} {area} {unidade} {vinculo} {dataAdmissao} {empresa} {cnpj}</p>
+    <div class="card"><p class="ct">E-mail à contabilidade</p><p class="cs">Vem preenchido no botão “Enviar à contabilidade”; dá para mudar em cada envio. Campos trocados automaticamente: {nome} {cpf} {funcao} {area} {unidade} {vinculo} {adicional} {dataAdmissao} {empresa} {cnpj}</p>
       <div class="grid2"><div><label for="md-ep">Para (e-mails separados por vírgula)</label><input id="md-ep" value="${esc(D.cfg.contabEmail || '')}" placeholder="contabilidade@…"></div><div><label for="md-ec">Cópia (separe por vírgula)</label><input id="md-ec" value="${esc(D.cfg.contabCc || '')}"></div></div>
       <div class="grid2"><div><label for="md-ap">De acordo da contratação: e-mails de quem aprova</label><input id="md-ap" value="${esc(D.cfg.aprovEmails || '')}" placeholder="email1@…, email2@…"></div><div><label for="md-an">Nomes (aparecem no aviso)</label><input id="md-an" value="${esc(D.cfg.aprovNomes || '')}" placeholder="Gustavo ou Josilaine"></div></div>
       <label for="md-ea">Assunto</label><input id="md-ea" value="${esc(D.cfg.contabAssunto || ASSUNTO_PADRAO)}">
@@ -227,6 +227,7 @@ function rNova() {
     <div class="grid2"><div><label class="req" for="n-tel">Celular (WhatsApp)</label><input id="n-tel" inputmode="tel" placeholder="(24) 99999-9999"></div><div><label class="req" for="n-fun">Função</label><input id="n-fun" list="n-funl"><datalist id="n-funl">${funcoes().map(f => `<option value="${esc(f)}">`).join('')}</datalist></div></div>
     <div class="grid3"><div${VS() ? '' : ' hidden'}><label for="n-sal">Salário (R$)</label><input id="n-sal" inputmode="decimal"></div><div><label class="req" for="n-area">Área</label><select id="n-area">${optAreas('')}</select></div><div><label for="n-sub">Sub-área</label><select id="n-sub">${optSubs('')}</select></div></div>
     <div class="grid3"><div><label for="n-un">Unidade</label><input id="n-un" placeholder="Ex.: Barra Mansa"></div><div><label for="n-int">Previsão de integração</label><input type="date" id="n-int" value="${addDays(PRAZO - 1)}"></div><div><label for="n-alt">Trabalho em altura</label><select id="n-alt"><option value="">Não</option><option value="1">Sim</option></select></div></div>
+    <div class="grid3"><div><label class="req" for="n-adc">Adicional</label><select id="n-adc"><option value="">Escolha…</option>${['Sem adicional', 'Com insalubridade', 'Com periculosidade'].map(o => `<option>${o}</option>`).join('')}</select></div></div>
     <div class="grid3"><div><label for="n-vin">Vínculo</label><select id="n-vin"><option value="CLT">CLT</option><option value="PJ">PJ (prestador de serviço)</option></select></div></div>
     <label for="n-obs">Observação (só RH)</label><input id="n-obs">
     <p class="ct" style="margin-top:16px">Treinamentos admissionais (EaD)</p>${cursosPick(new Set(D.cfg.cursos || []), 'n')}
@@ -269,7 +270,8 @@ async function criar() {
   const ex = D.func.find(f => ADM.dig(f.cpf) === cpf && f.ativo !== false); if (ex) return toast(`CPF já cadastrado como funcionário ativo: ${ex.nome}.`, 'bad');
   const ar = areaBy(areaId), sid = $('#n-sub').value, sub = ((ar && ar.subs) || []).find(s => s.id === sid);
   const tk = ADM.rand(20); const agora = new Date().toISOString();
-  const a = { nome, cpf, telefone: tel, funcao, areaId, area: ar ? ar.nome : '', subareaId: sid, subarea: sub ? sub.nome : '', unidade: $('#n-un').value.trim(), altura: $('#n-alt').value === '1', vinculo: $('#n-vin').value,
+  if (!$('#n-adc').value) return toast('Marque o adicional: sem adicional, com insalubridade ou com periculosidade.', 'bad');
+  const a = { nome, cpf, telefone: tel, funcao, areaId, area: ar ? ar.nome : '', subareaId: sid, subarea: sub ? sub.nome : '', unidade: $('#n-un').value.trim(), altura: $('#n-alt').value === '1', adicional: $('#n-adc').value, vinculo: $('#n-vin').value,
     status: 'aberto', abertoEm: agora, abertoPor: MEU, etapas: { integ: { agendada: $('#n-int').value } }, rev: {}, cand: { dados: {}, docs: {} }, obs: $('#n-obs').value.trim() };
   /* lê tudo do formulário ANTES de gravar: a gravação dispara o snapshot, que redesenha a tela e limpa os campos */
   const salTxt = $('#n-sal').value; const sal = numBR(salTxt); if (salTxt.trim() && sal == null) return toast('Salário inválido. Ex.: 2500,00', 'bad');
@@ -334,8 +336,8 @@ async function cancelarEnvio(a, id) {
   try { await db.doc('envios_contab/' + id).update({ status: 'cancelado', canceladoPor: MEU, canceladoEm: new Date().toISOString() }); const x = (a.envios || []).find(y => y.id === id); if (x) x.status = 'cancelado'; await db.doc('admissoes/' + a.id).update({ envios: a.envios }); toast('Envio cancelado.', 'ok'); detalhe(a.id); } catch (e) { toast('Não foi possível cancelar.', 'bad'); }
 }
 const ASSUNTO_PADRAO = 'Admissão – {nome} – {funcao}';
-const MSG_PADRAO = 'Prezados,\n\nSegue a documentação para admissão de {nome}, CPF {cpf}.\n\nFunção: {funcao}\nÁrea: {area}\nUnidade: {unidade}\nVínculo: {vinculo}\nData de admissão: {dataAdmissao}\n\nEm anexo, a ficha cadastral com os dados do funcionário, conferidos com os documentos.\n\nFicamos à disposição.\n\nAtenciosamente,\nRH – {empresa}';
-const preencher = (t, a, dAdm) => str(t).replace(/\{(\w+)\}/g, (m, k) => ({ nome: a.nome, cpf: ADM.fmtCpf(a.cpf), funcao: a.funcao, area: [a.area, a.subarea].filter(Boolean).join(' / '), unidade: a.unidade || '—', vinculo: a.vinculo || 'CLT', dataAdmissao: dAdm ? fmtD(dAdm) : '[escolha a data]', empresa: empNome(), cnpj: empCnpj() })[k] ?? m);
+const MSG_PADRAO = 'Prezados,\n\nSegue a documentação para admissão de {nome}, CPF {cpf}.\n\nFunção: {funcao}\nÁrea: {area}\nUnidade: {unidade}\nVínculo: {vinculo}\nAdicional: {adicional}\nData de admissão: {dataAdmissao}\n\nEm anexo, a ficha cadastral com os dados do funcionário, conferidos com os documentos.\n\nFicamos à disposição.\n\nAtenciosamente,\nRH – {empresa}';
+const preencher = (t, a, dAdm) => str(t).replace(/\{(\w+)\}/g, (m, k) => ({ nome: a.nome, cpf: ADM.fmtCpf(a.cpf), funcao: a.funcao, area: [a.area, a.subarea].filter(Boolean).join(' / '), unidade: a.unidade || '—', vinculo: a.vinculo || 'CLT', adicional: a.adicional || 'não informado', dataAdmissao: dAdm ? fmtD(dAdm) : '[escolha a data]', empresa: empNome(), cnpj: empCnpj() })[k] ?? m);
 const imgB64 = async blob => { // qualquer imagem -> JPEG base64 (ExcelJS aceita png/jpeg)
   const url = URL.createObjectURL(blob); try { const im = await new Promise((ok, er) => { const i = new Image(); i.onload = () => ok(i); i.onerror = er; i.src = url; });
     const cv = document.createElement('canvas'); const k = Math.min(1, 600 / Math.max(im.width, im.height)); cv.width = Math.round(im.width * k); cv.height = Math.round(im.height * k); const cx = cv.getContext('2d'); cx.fillStyle = '#fff'; cx.fillRect(0, 0, cv.width, cv.height); cx.drawImage(im, 0, 0, cv.width, cv.height);
@@ -386,7 +388,7 @@ function envioContab(a) {
         meta.push({ nome: f.nome, tipo: f.tipo || 'application/octet-stream', partes, bytes: f.blob.size }); }
       const agora = new Date().toISOString();
       const apv = aprovEmails(); const stIni = apv.length ? 'aprovacao' : 'agendado';
-      const resumo = `Pedido de de acordo para contratação\n\nCandidato: ${a.nome}\nCPF: ${ADM.fmtCpf(a.cpf)}\nFunção: ${a.funcao}\nÁrea: ${[a.area, a.subarea].filter(Boolean).join(' / ')}\nUnidade: ${a.unidade || '—'}\nVínculo: ${a.vinculo || 'CLT'}\nData de admissão: ${fmtD(dAdm)}\nE-mail à contabilidade marcado para: ${fmtDH(quando.toISOString())} (${para})\nAnexos preparados: ${meta.length}\nDados conferidos com os documentos: ${fcEstado(a).completo ? 'sim, por ' + (fcEstado(a).por || '') : 'NÃO'}\nPedido por: ${str(((window.__FB || {}).perfil || {}).nome) || MEU}\n\nPara dar o de acordo, abra no portal: https://app.previneeletrica.com.br/admissao/?a=${a.id}\n(a ficha cadastral vai em anexo)`;
+      const resumo = `Pedido de de acordo para contratação\n\nCandidato: ${a.nome}\nCPF: ${ADM.fmtCpf(a.cpf)}\nFunção: ${a.funcao}\nÁrea: ${[a.area, a.subarea].filter(Boolean).join(' / ')}\nUnidade: ${a.unidade || '—'}\nVínculo: ${a.vinculo || 'CLT'}\nAdicional: ${a.adicional || 'não informado'}\nData de admissão: ${fmtD(dAdm)}\nE-mail à contabilidade marcado para: ${fmtDH(quando.toISOString())} (${para})\nAnexos preparados: ${meta.length}\nDados conferidos com os documentos: ${fcEstado(a).completo ? 'sim, por ' + (fcEstado(a).por || '') : 'NÃO'}\nPedido por: ${str(((window.__FB || {}).perfil || {}).nome) || MEU}\n\nPara dar o de acordo, abra no portal: https://app.previneeletrica.com.br/admissao/?a=${a.id}\n(a ficha cadastral vai em anexo)`;
       await ref.set({ admissaoId: a.id, nome: a.nome, para, cc, assunto: $('#v-ass').value.trim() || 'Admissão – ' + a.nome, corpo: $('#v-msg').value, dataAdmissao: dAdm, quando: quando.toISOString(), status: stIni, arquivos: meta, criadoEm: agora, por: MEU, temSalario: !!temSal,
         aprovEmails: apv, aprovAssunto: `De acordo de contratação – ${a.nome} – ${a.funcao}`, aprovCorpo: resumo });
       const env = (a.envios || []).concat([{ id: ref.id, para, quando: quando.toISOString(), dataAdmissao: dAdm, n: meta.length, status: stIni }]);
@@ -404,7 +406,7 @@ async function detalhe(id, refresh) {
   const e = etp(a), c = a.cand || {}, dd = c.dados || {}, docs = c.docs || {}, rev = a.rev || {}, ro = PODE && a.status === 'aberto' ? '' : 'disabled';
   const d = diasMob(a);
   sheet(`<div class="top"><h2>${esc(a.nome)}</h2><button class="x" id="m-x" aria-label="Fechar">×</button></div>
-    <p class="note" style="margin:-4px 0 8px">CPF ${esc(ADM.fmtCpf(a.cpf))} · ${esc(a.funcao)} · ${esc(a.area)}${a.subarea ? ' → ' + esc(a.subarea) : ''}${a.unidade ? ' · ' + esc(a.unidade) : ''}${a.altura ? ' · trabalho em altura' : ''}${a.vinculo === 'PJ' ? ' · <b>PJ</b>' : ''}</p>
+    <p class="note" style="margin:-4px 0 8px">CPF ${esc(ADM.fmtCpf(a.cpf))} · ${esc(a.funcao)} · ${esc(a.area)}${a.subarea ? ' → ' + esc(a.subarea) : ''}${a.unidade ? ' · ' + esc(a.unidade) : ''}${a.altura ? ' · trabalho em altura' : ''}${a.adicional ? ' · ' + esc(a.adicional.toLowerCase()) : ''}${a.vinculo === 'PJ' ? ' · <b>PJ</b>' : ''}</p>
     <div class="kpis" style="grid-template-columns:repeat(3,1fr)">${kpi('Dias de mobilização', d, d > PRAZO ? 'bad' : 'ok', fimMob(a) ? 'integrado em ' + fmtD(fimMob(a)) : 'desde ' + fmtD(a.abertoEm))}${kpi('Documentos', ADM.docsSt(a).env + '/' + ADM.docsSt(a).obr, ADM.docsSt(a).rej.length ? 'bad' : '')}<div class="kpi"><div class="n" id="m-sal" style="font-size:18px">…</div><div class="t">Salário</div></div></div>
     ${pills(a)}
     ${a.status === 'aberto' ? `<div class="etf"><h4>Link do candidato</h4><div class="linkbox"><input readonly value="${esc(linkDe(a))}" id="m-link"><button class="btn sm ghost" id="m-copy">Copiar</button><a class="btn sm accent" href="${esc(waDe(a))}" target="_blank" rel="noopener" style="text-decoration:none">WhatsApp</a></div></div>` : ''}
@@ -431,6 +433,7 @@ async function detalhe(id, refresh) {
     <h3>Documentos da contratação para assinar</h3>
     ${assinBox(a, ro)}
     <div class="grid2"><div${VS() ? '' : ' hidden'}><label for="e-sal">Salário (R$) · só quem vê salários</label><input id="e-sal" inputmode="decimal" placeholder="Carregando…" disabled></div><div><label for="e-obs">Observação (só RH)</label><input id="e-obs" value="${esc(a.obs || '')}" ${ro}></div></div>
+    <div class="grid2"><div><label for="e-adc">Adicional</label><select id="e-adc" ${ro}><option value="">—</option>${['Sem adicional', 'Com insalubridade', 'Com periculosidade'].map(o => `<option ${a.adicional === o ? 'selected' : ''}>${o}</option>`).join('')}</select></div></div>
     ${ro ? (a.funcionarioId ? `<p class="note">Cadastrado como funcionário em ${fmtD(a.concluidoEm)}.</p>` : '') : `<div class="actions"><button class="btn primary" id="e-save">Salvar etapas</button><button class="btn accent" id="e-conc">Concluir e cadastrar funcionário</button></div>
       <div class="actions" style="margin-top:6px"><button class="btn sm danger" id="e-canc">Cancelar admissão (desistência)</button></div>`}`);
   $('#sheet').scrollTop = y;
@@ -480,7 +483,7 @@ function lerEtapas(a) {
   return e;
 }
 async function salvarEtapas(a, silencioso) {
-  const e = lerEtapas(a); const u = { etapas: e, justMotivo: $('#e-jm').value, justificativa: $('#e-j').value.trim(), obs: $('#e-obs').value.trim(), atualizadoEm: new Date().toISOString() };
+  const e = lerEtapas(a); const u = { etapas: e, justMotivo: $('#e-jm').value, justificativa: $('#e-j').value.trim(), obs: $('#e-obs').value.trim(), adicional: ($('#e-adc') || {}).value || a.adicional || '', atualizadoEm: new Date().toISOString() };
   if (e.integ.realizada && e.integ.realizada < str(a.abertoEm).slice(0, 10)) { toast('A integração não pode ser antes da abertura.', 'bad'); return false; }
   const si = $('#e-sal'); if (si && !si.disabled && si.value !== si.dataset.orig) {
     const v = numBR(si.value); if (si.value.trim() && v == null) { toast('Salário inválido.', 'bad'); return false; }
@@ -551,7 +554,7 @@ async function concluir(a) {
     const b = $('#c-go'); b.disabled = true;
     const f = { nome: a.nome, matricula: mat, cpf: a.cpf, funcao: a.funcao, area: a.area, areaId: a.areaId, subareaId: a.subareaId || '', subarea: a.subarea || '', subareas: a.subareaId ? [a.subareaId] : [], unidade: a.unidade || '',
       admissao: adm, nascimento: dd.nascimento || '', situacao: 'Trabalhando', tamCamisa: dd.tamCamisa || '', tamRoupa: dd.tamCamisa || '', tamCalca: dd.tamCalca || '', tamCalcado: dd.tamCalcado || '',
-      telefone: dd.telefone || a.telefone, email: dd.email || '', altura: !!a.altura, vinculo: a.vinculo || 'CLT', ativo: true, admissaoId: a.id,
+      telefone: dd.telefone || a.telefone, email: dd.email || '', altura: !!a.altura, adicional: a.adicional || '', vinculo: a.vinculo || 'CLT', ativo: true, admissaoId: a.id,
       asoData: e.aso.data || '', asoValidade: e.aso.validade || '', integracaoData: e.integ.realizada || '', integracaoValidade: '' };
     try {
       let fid; if (exist) { fid = exist.id; await db.doc('funcionarios/' + fid).update(f); } else { const r = db.collection('funcionarios').doc(); fid = r.id; await r.set(Object.assign({ criadoEm: new Date().toISOString() }, f)); }

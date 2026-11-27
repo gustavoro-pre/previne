@@ -199,7 +199,7 @@ async function fichaPdf(a, o = {}) {
     ['Reservista', dd.reservistaNum], ['CNH / categoria', [dd.cnhNum, dd.cnhCat].filter(Boolean).join(' / ')], ['Validade da CNH', dd.cnhVal ? fmtD(dd.cnhVal) : ''], ['Registro profissional', (docs.registro || []).length ? 'anexado' : '']]));
   sec('Endereço e contato', [full('Endereço', [dd.rua, dd.numero, dd.complemento].filter(Boolean).join(', '))].concat(lin2([['Bairro', dd.bairro], ['Cidade / UF', [dd.cidade, dd.uf].filter(Boolean).join(' / ')], ['CEP', dd.cep], ['Celular', dd.telefone || a.telefone], ['E-mail', dd.email], ['Emergência', [dd.emergNome, dd.emergTel].filter(Boolean).join(' · ')]])));
   const ctr = [['Data de admissão', dAdm ? fmtD(dAdm) : ''], ['Cargo / função', a.funcao], ['Vínculo', a.vinculo || 'CLT'], ['Área / setor', [a.area, a.subarea].filter(Boolean).join(' / ')], ['Local de trabalho', a.unidade],
-    ['Salário', o.salario != null ? brl(o.salario) : ''], ['Vale-transporte', dd.valeTransporte], ['Trabalho em altura', a.altura ? 'Sim' : 'Não'], ['ASO admissional', aso ? fmtD(aso) : '']];
+    ['Salário', o.salario != null ? brl(o.salario) : ''], ['Vale-transporte', dd.valeTransporte], ['Trabalho em altura', a.altura ? 'Sim' : 'Não'], ['Adicional', a.adicional], ['ASO admissional', aso ? fmtD(aso) : '']];
   sec('Dados da admissão', lin2(ctr));
   sec('Dados bancários e uniforme', lin2([['Banco', dd.banco], ['Agência / conta', [dd.agencia, dd.conta].filter(Boolean).join(' / ')], ['Chave PIX', dd.pix], ['Camisa / calça / calçado', [dd.tamCamisa, dd.tamCalca, dd.tamCalcado].map(x => x || '—').join(' · ')]]));
   const recebidos = ADM.slotsDe(a).filter(sl => (docs[sl.id] || []).length).map(sl => sl.t.split(' (')[0] + ' (' + docs[sl.id].length + ')').join(' · ');
