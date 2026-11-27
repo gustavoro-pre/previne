@@ -75,4 +75,22 @@ for (const d of docsP) {
   for (const t of alvo) { try { await admin.messaging().send({ token: t.token, webpush: { headers: { Urgency: 'high', TTL: '86400' }, data: { title: 'Documento para aprovar', body: `${d.data().codigo} ${d.data().titulo || ''} (Rev. ${String(+p.rev || 0).padStart(2, '0')}) enviado por ${p.por}.`, url: '/documentos/#aprov', tag: 'doc' } } }); } catch (e) { console.log('falha no envio:', e.code || ''); } }
 }
 await estDocRef.set({ ids: docsP.map(d => d.id + ':' + d.data().pend.rev + ':' + d.data().pend.em) });
+// contratações aguardando o de acordo (Gustavo ou Josilaine, conforme config/admissao.aprovEmails)
+const cfgAdm = (await db.doc('config/admissao').get()).data() || {};
+const apEm = String(cfgAdm.aprovEmails || '').toLowerCase().split(/[,;\s]+/).filter(Boolean);
+const envP = (await db.collection('envios_contab').where('status', '==', 'aprovacao').get()).docs;
+const estAdmRef = db.doc('push_estado/adm'); const estAdm = new Set(((await estAdmRef.get()).data() || {}).ids || []);
+const novosAdm = envP.filter(d => !estAdm.has(d.id));
+if (novosAdm.length && apEm.length) {
+  const uids = (await db.collection('usuarios').get()).docs.filter(d => apEm.includes(String(d.data().email || '').toLowerCase()) && d.data().ativo !== false).map(d => d.id);
+  const alvo = toks.filter(t => uids.includes(t.uid));
+  const um = novosAdm[0].data();
+  const body = novosAdm.length === 1 ? `${um.nome} aguarda o seu de acordo para seguir à contabilidade.` : `${novosAdm.length} contratações aguardam o seu de acordo.`;
+  console.log(`contratações: ${novosAdm.length} nova(s), ${alvo.length} aparelho(s)`);
+  for (const t of alvo) {
+    try { await admin.messaging().send({ token: t.token, webpush: { headers: { Urgency: 'high', TTL: '86400' }, data: { title: 'De acordo de contratação', body, url: novosAdm.length === 1 ? '/admissao/?a=' + um.admissaoId : '/admissao/', tag: 'adm' } } }); }
+    catch (e) { const c = e.errorInfo && e.errorInfo.code || e.code || ''; console.log('falha no envio:', c); if (/registration-token-not-registered|invalid-argument|invalid-registration-token/.test(c)) await db.doc('push_tokens/' + t.id).delete().catch(() => {}); }
+  }
+}
+await estAdmRef.set({ ids: envP.map(d => d.id) });
 console.log('ok');
