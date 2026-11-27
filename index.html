@@ -191,6 +191,7 @@ a.mod:hover{transform:translateY(-1px);box-shadow:0 4px 14px rgba(20,33,61,.12)}
   <a id="p-aviso" class="aviso" href="treinamentos/#aprov" hidden></a>
   <a id="p-aviso2" class="aviso" href="ferramentas/#painel" hidden></a>
   <a id="p-aviso3" class="aviso" href="documentos/#aprov" hidden></a>
+  <a id="p-aviso4" class="aviso" href="admissao/?aprov=1" hidden></a>
   <div id="p-push" class="pushbox" hidden></div>
   <p class="note" style="margin:0">Escolha o módulo. Você vê apenas os módulos liberados para o seu usuário.</p>
   <div class="mods" id="p-mods"></div>
@@ -240,7 +241,7 @@ const PAPEIS_MOD = {
   propostas: { comercial: 'Comercial: tudo, inclusive custos', tecnico: 'Técnico: edita a proposta, sem custos', consulta: 'Consulta (só vê, sem custos)', nenhum: 'Sem acesso' }
 };
 const DESC_MOD = [['Treinamentos · Gestor', 'Tudo no módulo: tipos, turmas, admissão, externos, áreas, padrões, cursos e acesso do aluno'], ['Treinamentos · TST / RH', 'Turmas, admissão, externos, padrões, cursos, áreas e funcionários'], ['Treinamentos · Instrutor', 'Turmas, padrões (listas e assinaturas) e cursos'], ['Treinamentos · Consulta', 'Vê tudo, não altera'], ['Indicadores', 'Todas as áreas, ou só uma área escolhida'], ['Alocação em OM · Lança', 'Cadastra OMs e equipe fixa, programa preventivas, completa pendências de OM e marca o apontamento'], ['Alocação em OM · Consulta', 'Vê tudo e tira PDF, não altera'], ['Admissão · RH', 'Abre a admissão, envia o link, confere documentos, registra ASO e integração e cadastra o funcionário'], ['Admissão · Consulta', 'Acompanha as admissões, sem ver salário e sem alterar']];
-let AREAS = [], PEND = 0, PAUT = 0, PDOC = 0;
+let AREAS = [], PEND = 0, PAUT = 0, PDOC = 0, PADM = 0;
 /* mesmo cálculo do fb.js: perfil efetivo em cada módulo */
 function papelMod(d, id) {
   if (!d) return 'nenhum'; if (d.papel === 'admin') return 'admin'; if (d.papel === 'funcionario') return 'nenhum';
@@ -261,7 +262,7 @@ function renderMods() {
   const F = window.__FB, d = F.perfil;
   $('#p-hello').textContent = 'Olá, ' + str(F.nome).split(' ')[0];
   const L = MODS.filter(m => temModulo(d, m.id));
-  $('#p-mods').innerHTML = (L.length ? L.map(m => `<a class="mod" href="${m.href}"><div class="mi">${m.icone}</div><h3>${esc(m.nome)}</h3>${m.id === 'treinamentos' && PEND ? `<span class="bn">${PEND} aguardando seu de acordo</span>` : ''}${m.id === 'ferramentas' && PAUT ? `<span class="bn">${PAUT} aguardando sua autorização</span>` : ''}${m.id === 'documentos' && PDOC ? `<span class="bn">${PDOC} aguardando sua aprovação</span>` : ''}<p>${esc(m.desc)}</p><div class="pf">Seu perfil: ${esc(nomeMod(m.id, papelMod(d, m.id)))}</div></a>`).join('') : '<div class="empty">Nenhum módulo liberado para você ainda. Fale com o administrador.</div>')
+  $('#p-mods').innerHTML = (L.length ? L.map(m => `<a class="mod" href="${m.href}"><div class="mi">${m.icone}</div><h3>${esc(m.nome)}</h3>${m.id === 'admissao' && PADM ? `<span class="bn">${PADM} aguardando seu de acordo</span>` : ''}${m.id === 'treinamentos' && PEND ? `<span class="bn">${PEND} aguardando seu de acordo</span>` : ''}${m.id === 'ferramentas' && PAUT ? `<span class="bn">${PAUT} aguardando sua autorização</span>` : ''}${m.id === 'documentos' && PDOC ? `<span class="bn">${PDOC} aguardando sua aprovação</span>` : ''}<p>${esc(m.desc)}</p><div class="pf">Seu perfil: ${esc(nomeMod(m.id, papelMod(d, m.id)))}</div></a>`).join('') : '<div class="empty">Nenhum módulo liberado para você ainda. Fale com o administrador.</div>')
     + (temModulo(d, 'treinamentos') ? `<a class="mod" href="aluno/" target="_blank" rel="noopener"><div class="mi">👷</div><h3>Portal do aluno</h3><p>Onde o funcionário entra com a matrícula para fazer os cursos on-line e assinar os padrões. Envie este link para a equipe.</p><div class="pf">${esc(new URL('aluno/', location.href).href)}</div></a>` : '');
 }
 function renderPush() {
@@ -337,6 +338,13 @@ function renderUsers() {
     const nr = v => str(v).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim().replace(/\s+/g, ' '), eu = nr(F.nome);
     PDOC = eu ? q.docs.map(x => x.data()).filter(d => d.pend && !d.pend.recusa && nr(d.pend.aprovador) === eu).length : 0;
     const av = $('#p-aviso3'); av.hidden = !PDOC; av.innerHTML = PDOC ? `<span class="n">${PDOC}</span><span>${PDOC === 1 ? 'Documento aguardando' : 'Documentos aguardando'} a sua aprovação</span><span class="go">Ver agora</span>` : ''; renderMods();
+  }, () => {});
+  /* contratações aguardando o de acordo (Gustavo ou Josilaine, conforme config/admissao.aprovEmails) */
+  if (temModulo(F.perfil, 'admissao')) db.doc('config/admissao').get().then(c => {
+    const em = str(F.email || (F.user || {}).email).toLowerCase(); const ap = str((c.data() || {}).aprovEmails).toLowerCase().split(/[,;\s]+/).filter(Boolean);
+    if (!em || !ap.includes(em)) return;
+    db.collection('envios_contab').where('status', '==', 'aprovacao').onSnapshot(q => { const nomes = q.docs.map(x => str(x.data().nome)); PADM = nomes.length;
+      const av = $('#p-aviso4'); av.hidden = !PADM; av.innerHTML = PADM ? `<span class="n">${PADM}</span><span>${PADM === 1 ? 'Contratação aguardando' : 'Contratações aguardando'} o seu de acordo: ${esc(nomes.slice(0, 3).join(', '))}${nomes.length > 3 ? '…' : ''}</span><span class="go">Ver agora</span>` : ''; renderMods(); }, e => console.warn(e));
   }, () => {});
   /* pedidos de EPI ou ferramenta fora do previsto: quem aprova é Administrador ou Gerente */
   if (F.perfil && ['admin', 'gerente'].includes(F.perfil.papel)) { let SOL = [], DEC = new Set();

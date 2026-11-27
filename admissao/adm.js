@@ -200,13 +200,16 @@ function cardAdm(a) {
   return `<div class="card adm" data-open="${esc(a.id)}"><div style="display:flex;gap:12px;align-items:flex-start">${th ? `<img class="foto" src="${th}" alt="">` : ''}
     <div style="flex:1;min-width:0"><b>${esc(a.nome)}</b><div class="t2">${a.vinculo === 'PJ' ? '<span class="badge b-warn">PJ</span> ' : ''}${esc(a.funcao || '')}${a.area ? ' · ' + esc(a.area) : ''}${a.subarea ? ' → ' + esc(a.subarea) : ''}</div>
     <div class="t2">Aberto em ${fmtD(a.abertoEm)}${(a.cand || {}).em ? ' · candidato mexeu em ' + fmtD(a.cand.em) : ' · candidato ainda não abriu o link'}${ds.pendRev.length && a.status === 'aberto' ? ` · <b style="color:var(--info)">${ds.pendRev.length} doc(s) para conferir</b>` : ''}</div></div>
-    <div style="text-align:right"><div class="dias ${d > PRAZO ? 'bad' : ''}">${d}d</div><div class="t2">${fimMob(a) ? 'mobilizado' : 'mobilização'}</div>${precisaJust(a) && a.status === 'aberto' ? '<span class="badge b-bad">Justificar</span>' : ''}</div></div>${pills(a)}</div>`;
+    <div style="text-align:right"><div class="dias ${d > PRAZO ? 'bad' : ''}">${d}d</div><div class="t2">${fimMob(a) ? 'mobilizado' : 'mobilização'}</div>${precisaJust(a) && a.status === 'aberto' ? '<span class="badge b-bad">Justificar</span>' : ''}${(a.envios || []).some(x => x.status === 'aprovacao') ? '<span class="badge b-bad">Aguardando de acordo</span>' : ''}</div></div>${pills(a)}</div>`;
 }
 function rAnd() {
   let L = D.adm.filter(a => a.status === 'aberto'); if (V.q) { const q = norm(V.q); L = L.filter(a => norm(a.nome + ' ' + a.funcao + ' ' + a.area + ' ' + a.cpf).includes(q)); }
   L.sort((a, b) => diasMob(b) - diasMob(a));
   const conf = L.filter(a => ADM.docsSt(a).pendRev.length).length, atr = L.filter(atrasado).length, semInt = L.filter(a => !fimMob(a)).length;
-  $('#body').innerHTML = `<div class="kpis k5" style="margin-bottom:12px">${kpi('Em andamento', L.length)}${kpi('Acima de ' + PRAZO + ' dias', atr, atr ? 'bad' : 'ok')}${kpi('Docs para conferir', conf, conf ? 'info' : '')}${kpi('Sem integração', semInt, semInt ? 'warn' : '')}${kpi('Prazo', PRAZO + ' dias')}</div>
+  const pAp = podeAprovar() ? D.adm.filter(a => (a.envios || []).some(x => x.status === 'aprovacao')) : [];
+  const ban = pAp.length ? `<div class="card" style="border:2px solid #d92d20;background:#fef3f2;margin-bottom:12px"><b style="color:#b42318">${pAp.length === 1 ? 'Contratação aguardando o seu de acordo' : pAp.length + ' contratações aguardando o seu de acordo'}</b>
+    ${pAp.map(a => `<div style="display:flex;gap:8px;align-items:center;margin-top:6px"><span style="flex:1">${esc(a.nome)} · ${esc(a.funcao || '')}${a.area ? ' · ' + esc(a.area) : ''}</span><button class="btn sm primary" data-open="${esc(a.id)}" type="button">Abrir</button></div>`).join('')}</div>` : '';
+  $('#body').innerHTML = ban + `<div class="kpis k5" style="margin-bottom:12px">${kpi('Em andamento', L.length)}${kpi('Acima de ' + PRAZO + ' dias', atr, atr ? 'bad' : 'ok')}${kpi('Docs para conferir', conf, conf ? 'info' : '')}${kpi('Sem integração', semInt, semInt ? 'warn' : '')}${kpi('Prazo', PRAZO + ' dias')}</div>
     <input id="a-q" placeholder="Buscar nome, CPF, função ou área" value="${esc(V.q)}" style="margin-bottom:12px">
     ${L.length ? L.map(cardAdm).join('') : '<div class="empty">Nenhuma admissão em andamento. Abra uma em “Nova admissão”.</div>'}`;
   const q = $('#a-q'); q.oninput = () => { V.q = q.value; clearTimeout(q._t); q._t = setTimeout(() => { const p = q.selectionStart; q.blur(); render(); const n = $('#a-q'); n.focus(); n.setSelectionRange(p, p); }, 300); };
