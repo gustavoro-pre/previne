@@ -143,6 +143,8 @@ service cloud.firestore {
       }
     }
     // salário: só o RH
+    // e-mails da contabilidade lidos pelo robô (tools/contab-mail.mjs); os sem candidato o RH liga no portal
+    match /contab_mail/{id} { allow read, update: if admi(['rh']); match /p/{pid} { allow read, delete: if admi(['rh']); } }
     // pedidos de envio da documentação de admissão à contabilidade (o script do Google lê e manda o e-mail)
     match /envios_contab/{id} {
       function aprovOk() { return logado() && request.auth.token.email.lower() in get(/databases/$(database)/documents/config/admissao).data.get('aprovEmails', '').lower().split('[,; ]+'); }

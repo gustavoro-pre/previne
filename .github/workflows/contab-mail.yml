@@ -1,0 +1,29 @@
+name: Documentos da contabilidade (e-mail)
+on:
+  schedule:
+    - cron: '*/10 10-23 * * 1-6'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: contab-mail
+  cancel-in-progress: false
+jobs:
+  ler:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Ler e-mails da contabilidade e anexar nas admissões
+        env:
+          FIREBASE_SA: ${{ secrets.FIREBASE_SA }}
+          CONTAB_IMAP_USER: ${{ secrets.CONTAB_IMAP_USER }}
+          CONTAB_IMAP_PASS: ${{ secrets.CONTAB_IMAP_PASS }}
+        run: |
+          cd tools
+          npm init -y >/dev/null
+          npm install firebase-admin@12 imapflow@1 mailparser@3 --no-audit --no-fund >/dev/null
+          node contab-mail.mjs

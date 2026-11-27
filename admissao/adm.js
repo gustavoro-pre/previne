@@ -28,6 +28,13 @@ const fimMob = a => str((etp(a).integ || {}).realizada);
 const diasMob = a => diasEntre(a.abertoEm, fimMob(a) || hoje());
 const atrasado = a => diasMob(a) > PRAZO;
 const precisaJust = a => atrasado(a) && !str(a.justificativa).trim();
+/* documentos que a contabilidade devolveu por e-mail (lidos pelo robô em tools/contab-mail.mjs) */
+function ctSt(a) {
+  const arq = ((a.contabDocs || {}).arq) || {}; const ids = Object.keys(arq);
+  const pend = ids.filter(id => !arq[id].enviadoAssinar); const env = ids.filter(id => arq[id].enviadoAssinar);
+  const ass = env.filter(id => assinado(a, id));
+  return { ids, pend: pend.length, env: env.length, aguardAss: env.length > ass.length, todosAssinados: ids.length > 0 && !pend.length && ass.length === env.length, ultimoAss: ass.map(id => str(a.cand.assin[id].em).slice(0, 10)).sort().pop() || '' };
+}
 function etapas(a) {
   const e = etp(a), ds = ADM.docsSt(a), aso = e.aso || {}, ig = e.integ || {}, tr = e.trein || {};
   return [
@@ -37,7 +44,7 @@ function etapas(a) {
     { k: 'integ', t: 'Integração', st: ig.realizada ? 'ok' : ig.agendada ? 'at' : '', s: ig.realizada ? fmtD(ig.realizada).slice(0, 5) : ig.agendada ? 'marcada ' + fmtD(ig.agendada).slice(0, 5) : '' },
     { k: 'trein', t: 'Treinamentos', st: tr.concluido ? 'ok' : tr.enviado ? 'at' : '', s: tr.concluido ? 'feitos' : tr.enviado ? 'enviados' : '' },
     { k: 'epi', t: 'OS, ficha e termo EPI', st: (e.epi || {}).data || assinado(a, 'osepi') ? 'ok' : (a.assinar || {}).osepi ? 'at' : '', s: (e.epi || {}).data || assinado(a, 'osepi') ? 'assinados' : (a.assinar || {}).osepi ? 'aguardando assinatura' : '' },
-    { k: 'admiss', t: 'Docs admissionais', st: (e.admiss || {}).data ? 'ok' : '', s: (e.admiss || {}).data ? 'assinados' : '' },
+    (() => { const c = ctSt(a); return { k: 'admiss', t: 'Docs admissionais', st: (e.admiss || {}).data || c.todosAssinados ? 'ok' : c.pend || c.aguardAss ? 'at' : (e.contab || {}).data ? 'at' : '', s: (e.admiss || {}).data || c.todosAssinados ? 'assinados' : c.pend ? 'recebidos · enviar para assinar' : c.aguardAss ? 'aguardando assinatura' : (e.contab || {}).data ? 'aguardando documentação da contabilidade' : '' }; })(),
     { k: 'contab', t: 'Contabilidade', st: (e.contab || {}).data ? 'ok' : '', s: (e.contab || {}).data ? 'enviado' : '' }
   ];
 }
@@ -146,6 +153,52 @@ async function pdfDoc(a, id) {
     baixar(`${tit} - ${a.nome} (assinado).pdf`, new Blob([await pdf.save()], { type: 'application/pdf' }));
   } catch (e) { toast(e.message || 'Não foi possível gerar o PDF.', 'bad'); }
 }
+function ctBox(a, ro) {
+  const c = ctSt(a), cd = a.contabDocs || {}, arq = cd.arq || {}, e = etp(a);
+  if (!c.ids.length) return (e.contab || {}).data ? `<div class="etf"><h4>Documentos da contabilidade <span class="badge b-warn">Aguardando</span></h4><p class="note" style="margin:0">Documentação enviada à contabilidade em ${fmtD(e.contab.data)}. Quando a contabilidade responder com os documentos de admissão no e-mail da empresa, o portal lê o e-mail e anexa os PDFs aqui sozinho (confere a cada 10 minutos).</p></div>` : '';
+  const pend = c.ids.filter(id => !arq[id].enviadoAssinar);
+  return `<div class="etf"><h4>Documentos da contabilidade ${pend.length ? `<span class="badge b-info">${pend.length} para enviar</span>` : c.aguardAss ? '<span class="badge b-warn">Aguardando assinatura</span>' : '<span class="badge b-ok">Assinados</span>'}</h4>
+    <p class="note" style="margin:0 0 4px">Recebidos por e-mail${(cd.emails || []).length ? ' de ' + esc(cd.emails[cd.emails.length - 1].de) : ''} em ${fmtDH(cd.ultimoEm || cd.recebidoEm)}.</p>
+    ${c.ids.map(id => `<div class="bt" style="padding:6px 0;border-bottom:1px solid var(--line);gap:8px;align-items:center"><span style="flex:1">${esc(arq[id].titulo || arq[id].nome)}</span>${assinado(a, id) ? '<span class="badge b-ok">Assinado</span>' : arq[id].enviadoAssinar ? '<span class="badge b-warn">Enviado ' + fmtD(arq[id].enviadoAssinar) + '</span>' : '<span class="badge b-info">Novo</span>'}<button class="btn sm ghost" data-ctv="${esc(id)}" type="button">PDF</button>${ro || arq[id].enviadoAssinar ? '' : `<button class="btn sm danger" data-ctx="${esc(id)}" type="button" title="Não enviar este">×</button>`}</div>`).join('')}
+    ${!ro && pend.length ? `<div class="actions" style="justify-content:flex-start;margin-top:8px"><button class="btn sm primary" id="ct-env" type="button">Enviar para ${esc(str(a.nome).split(' ')[0])} assinar (WhatsApp)</button></div><p class="note" style="margin:4px 0 0">Os documentos entram no link do candidato para assinatura e abre o WhatsApp com a mensagem pronta.</p>` : ''}</div>`;
+}
+async function ctLigar(mid, aid) {
+  const m = (D.ctSolto || []).find(x => x.id === mid), a = D.adm.find(x => x.id === aid); if (!m || !a) return;
+  const cd = JSON.parse(JSON.stringify(a.contabDocs || {})); cd.arq = cd.arq || {}; const agora = new Date().toISOString();
+  for (const f of m.arquivos || []) {
+    const id = 'ct' + ADM.rand(6);
+    for (let i = 0; i < (f.partes || 1); i++) { const p = await db.doc(`contab_mail/${mid}/p/${f.slot}_${f.v}_${i}`).get(); if (!p.exists) throw new Error('Arquivo incompleto.'); await db.doc(`admissoes/${aid}/d/${id}_${f.v}_${i}`).set({ d: p.data().d }); }
+    cd.arq[id] = { v: f.v, partes: f.partes || 1, nome: f.nome, tipo: 'application/pdf', tam: f.tam, em: agora, q: 'ok', prob: [], thumb: '', hash: f.hash, titulo: f.titulo, por: 'contabilidade (e-mail) · ligado por ' + MEU };
+  }
+  cd.recebidoEm = cd.recebidoEm || agora; cd.ultimoEm = agora; cd.emails = (cd.emails || []).concat([{ de: m.de, assunto: m.assunto, em: m.em }]);
+  await db.doc('admissoes/' + aid).update({ contabDocs: cd });
+  await db.doc('contab_mail/' + mid).update({ status: 'ligado', admissao: aid, nome: a.nome, ligadoPor: MEU });
+  for (const f of m.arquivos || []) for (let i = 0; i < (f.partes || 1); i++) db.doc(`contab_mail/${mid}/p/${f.slot}_${f.v}_${i}`).delete().catch(() => {});
+  toast(`Documentos anexados na admissão de ${a.nome}.`, 'ok');
+}
+async function ctVer(a, id) {
+  const arq = ((a.contabDocs || {}).arq || {})[id]; if (!arq) return;
+  if ((a.assinar || {})[id]) return pdfDoc(a, id);
+  try { baixar(`${arq.titulo || 'Documento'} - ${a.nome}.pdf`, await ADM.ler(arq, id, pid => db.doc(`admissoes/${a.id}/d/${pid}`).get().then(x => x.exists ? x.data().d : null))); } catch (e) { toast(e.message || 'Não foi possível abrir.', 'bad'); }
+}
+async function ctEnviar(a) {
+  const cd = JSON.parse(JSON.stringify(a.contabDocs || {})); const arq = cd.arq || {}; const pend = Object.keys(arq).filter(id => !arq[id].enviadoAssinar); if (!pend.length) return;
+  const w = window.open('', '_blank'); /* abre já, senão o navegador bloqueia a janela do WhatsApp */
+  try {
+    const agora = new Date().toISOString(); const as = Object.assign({}, a.assinar || {});
+    pend.forEach(id => { const x = Object.assign({}, arq[id]); delete x.enviadoAssinar; as[id] = x; arq[id].enviadoAssinar = agora; });
+    await db.doc('admissoes/' + a.id).update({ assinar: as, contabDocs: cd }); a.assinar = as; a.contabDocs = cd;
+    const t = ADM.dig(a.telefone); const nomes = pend.map(id => arq[id].titulo || 'documento').join(', ');
+    const msg = `Olá, ${str(a.nome).split(' ')[0]}! Aqui é do RH da PREVINE. Seus documentos de admissão estão prontos para você assinar (${nomes}). É só abrir o mesmo link de antes e assinar pelo celular: ${linkDe(a)}`;
+    const url = 'https://wa.me/' + (t ? (t.length <= 11 ? '55' + t : t) : '') + '?text=' + encodeURIComponent(msg);
+    if (w) w.location.href = url; else location.href = url;
+    toast(`${pend.length} documento(s) enviados para assinatura.`, 'ok'); SUJO = false; detalhe(a.id);
+  } catch (e) { if (w) w.close(); toast('Não foi possível enviar: ' + ((e && e.message) || e), 'bad'); }
+}
+async function ctRetirar(a, id) {
+  const cd = JSON.parse(JSON.stringify(a.contabDocs || {})); if (!(cd.arq || {})[id]) return; const arq = cd.arq[id]; delete cd.arq[id];
+  try { await db.doc('admissoes/' + a.id).update({ contabDocs: cd }); for (let i = 0; i < (arq.partes || 1); i++) await db.doc(`admissoes/${a.id}/d/${id}_${arq.v}_${i}`).delete().catch(() => {}); a.contabDocs = cd; SUJO = false; detalhe(a.id); } catch (e) { toast('Não foi possível retirar.', 'bad'); }
+}
 function assinBox(a, ro) {
   const row = (t, ok, pend, btns) => `<div class="bt" style="padding:7px 0;border-bottom:1px solid var(--line);gap:8px;align-items:center"><span style="flex:1">${t}</span>${ok ? `<span class="badge b-ok">Assinado ${fmtDH(ok).slice(0, 10)}</span>` : pend}${btns}</div>`;
   const sig = q => assinado(a, q) ? a.cand.assin[q].em : '';
@@ -188,6 +241,7 @@ function ouvir() {
   db.collection('kits').onSnapshot(s => { D.kits = s.docs.map(d => d.data()); }, () => {});
   db.collection('cursos').onSnapshot(s => { D.cursos = s.docs.map(d => Object.assign({}, d.data(), { id: d.id })).filter(c => c.ativo !== false).sort((a, b) => str(a.nome).localeCompare(str(b.nome), 'pt')); render(); }, () => {});
   db.doc('config/admissao').onSnapshot(s => { D.cfg = s.exists ? s.data() : {}; }, () => {});
+  if (PODE) db.collection('contab_mail').where('status', '==', 'sem_candidato').onSnapshot(s => { D.ctSolto = s.docs.map(d => Object.assign({}, d.data(), { id: d.id })); if (V.tab === 'and') render(); }, () => {});
 }
 
 /* ---------- telas ---------- */
@@ -211,9 +265,14 @@ function rAnd() {
   const pAp = podeAprovar() ? D.adm.filter(a => (a.envios || []).some(x => x.status === 'aprovacao')) : [];
   const ban = pAp.length ? `<div class="card" style="border:2px solid #d92d20;background:#fef3f2;margin-bottom:12px"><b style="color:#b42318">${pAp.length === 1 ? 'Contratação aguardando o seu de acordo' : pAp.length + ' contratações aguardando o seu de acordo'}</b>
     ${pAp.map(a => `<div style="display:flex;gap:8px;align-items:center;margin-top:6px"><span style="flex:1">${esc(a.nome)} · ${esc(a.funcao || '')}${a.area ? ' · ' + esc(a.area) : ''}</span><button class="btn sm primary" data-taprov="${esc(((a.envios || []).find(x => x.status === 'aprovacao') || {}).id)}" type="button">Ver ficha e dar o de acordo</button></div>`).join('')}</div>` : '';
-  $('#body').innerHTML = ban + `<div class="kpis k5" style="margin-bottom:12px">${kpi('Em andamento', L.length)}${kpi('Acima de ' + PRAZO + ' dias', atr, atr ? 'bad' : 'ok')}${kpi('Docs para conferir', conf, conf ? 'info' : '')}${kpi('Sem integração', semInt, semInt ? 'warn' : '')}${kpi('Prazo', PRAZO + ' dias')}</div>
+  const solt = (D.ctSolto || []); const abt = D.adm.filter(a => a.status === 'aberto').sort((a, b) => str(a.nome).localeCompare(str(b.nome), 'pt'));
+  const ban2 = solt.length && PODE ? `<div class="card" style="border:2px solid #f79009;background:#fffaeb;margin-bottom:12px"><b style="color:#b54708">${solt.length === 1 ? 'E-mail da contabilidade sem candidato' : solt.length + ' e-mails da contabilidade sem candidato'}</b><p class="note" style="margin:2px 0 6px">O portal não achou o nome nem o CPF no e-mail. Escolha de quem são os documentos.</p>
+    ${solt.map(m => `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px"><span style="flex:1;min-width:220px">${esc(m.assunto || '(sem assunto)')} · ${esc(m.de)} · ${fmtD(m.em)} · ${(m.arquivos || []).map(f => esc(f.titulo)).join(', ')}</span><select data-ctsel="${esc(m.id)}" style="max-width:240px"><option value="">Escolher candidato…</option>${abt.map(a => `<option value="${esc(a.id)}">${esc(a.nome)}</option>`).join('')}</select><button class="btn sm primary" data-ctlig="${esc(m.id)}" type="button">Anexar</button><button class="link" data-ctign="${esc(m.id)}" type="button">ignorar</button></div>`).join('')}</div>` : '';
+  $('#body').innerHTML = ban + ban2 + `<div class="kpis k5" style="margin-bottom:12px">${kpi('Em andamento', L.length)}${kpi('Acima de ' + PRAZO + ' dias', atr, atr ? 'bad' : 'ok')}${kpi('Docs para conferir', conf, conf ? 'info' : '')}${kpi('Sem integração', semInt, semInt ? 'warn' : '')}${kpi('Prazo', PRAZO + ' dias')}</div>
     <input id="a-q" placeholder="Buscar nome, CPF, função ou área" value="${esc(V.q)}" style="margin-bottom:12px">
     ${L.length ? L.map(cardAdm).join('') : '<div class="empty">Nenhuma admissão em andamento. Abra uma em “Nova admissão”.</div>'}`;
+  $$('[data-ctlig]').forEach(b => b.onclick = () => { const aid = ($(`[data-ctsel="${b.dataset.ctlig}"]`) || {}).value; if (!aid) return toast('Escolha o candidato.', 'bad'); b.disabled = true; ctLigar(b.dataset.ctlig, aid).catch(e => { b.disabled = false; toast('Não foi possível anexar: ' + ((e && e.message) || e), 'bad'); }); });
+  $$('[data-ctign]').forEach(b => b.onclick = () => db.doc('contab_mail/' + b.dataset.ctign).update({ status: 'ignorado', ignoradoPor: MEU }).catch(() => toast('Não foi possível.', 'bad')));
   const q = $('#a-q'); q.oninput = () => { V.q = q.value; clearTimeout(q._t); q._t = setTimeout(() => { const p = q.selectionStart; q.blur(); render(); const n = $('#a-q'); n.focus(); n.setSelectionRange(p, p); }, 300); };
 }
 function rConc() {
@@ -436,7 +495,7 @@ async function detalhe(id, refresh) {
     <div class="etf"><h4>Justificativa de atraso ${atrasado(a) ? `<span class="badge ${precisaJust(a) ? 'b-bad' : 'b-ok'}">${precisaJust(a) ? 'obrigatória' : 'preenchida'}</span>` : ''}</h4>
       <div class="grid2"><div><label for="e-jm">Motivo</label><select id="e-jm" ${ro}><option value="">—</option>${['Documentos do candidato', 'Agenda do ASO / clínica', 'Agenda da integração (cliente)', 'Treinamentos', 'Candidato desistiu ou sumiu', 'Aprovação interna', 'Outro'].map(m => `<option ${a.justMotivo === m ? 'selected' : ''}>${m}</option>`).join('')}</select></div><div><label for="e-j">Detalhe</label><input id="e-j" value="${esc(a.justificativa || '')}" ${ro} placeholder="${atrasado(a) ? 'Obrigatório: passou de ' + PRAZO + ' dias' : 'Só se passar de ' + PRAZO + ' dias'}"></div></div></div>
     <h3>Documentos da contratação para assinar</h3>
-    ${assinBox(a, ro)}
+    ${ctBox(a, ro)}${assinBox(a, ro)}
     <div class="grid2"><div${VS() ? '' : ' hidden'}><label for="e-sal">Salário (R$) · só quem vê salários</label><input id="e-sal" inputmode="decimal" placeholder="Carregando…" disabled></div><div><label for="e-obs">Observação (só RH)</label><input id="e-obs" value="${esc(a.obs || '')}" ${ro}></div></div>
     <div class="grid2"><div><label for="e-adc">Adicional</label><select id="e-adc" ${ro}><option value="">—</option>${['Sem adicional', 'Com insalubridade', 'Com periculosidade'].map(o => `<option ${a.adicional === o ? 'selected' : ''}>${o}</option>`).join('')}</select></div></div>
     ${ro ? (a.funcionarioId ? `<p class="note">Cadastrado como funcionário em ${fmtD(a.concluidoEm)}.</p>` : '') : `<div class="actions"><button class="btn primary" id="e-save">Salvar etapas</button><button class="btn accent" id="e-conc">Concluir e cadastrar funcionário</button></div>
@@ -445,6 +504,9 @@ async function detalhe(id, refresh) {
   treinBox(a, !!ro);
   $$('[data-pdft]').forEach(b => b.onclick = () => pdfTexto(a, b.dataset.pdft));
   const osv = $('#as-osv'); if (osv) osv.onclick = () => pdfDoc(a, 'osepi');
+  $$('[data-ctv]').forEach(b => b.onclick = () => ctVer(a, b.dataset.ctv));
+  $$('[data-ctx]').forEach(b => { let armed = false; b.onclick = () => { if (!armed) { armed = true; b.textContent = 'Retirar?'; return; } ctRetirar(a, b.dataset.ctx); }; });
+  const cte = $('#ct-env'); if (cte) cte.onclick = () => { cte.disabled = true; ctEnviar(a); };
   $$('[data-pdfd]').forEach(b => b.onclick = () => pdfDoc(a, b.dataset.pdfd));
   $$('[data-rmd]').forEach(b => { let armed = false; b.onclick = async () => { if (!armed) { armed = true; b.textContent = 'Retirar?'; return; } const as = Object.assign({}, a.assinar); delete as[b.dataset.rmd]; try { await db.doc('admissoes/' + a.id).update({ assinar: as }); a.assinar = as; SUJO = false; detalhe(a.id); } catch (e) { toast('Não foi possível retirar.', 'bad'); } }; });
   const anx = $('#as-anx'); if (anx) anx.onclick = () => { const tit = $('#as-tit').value.trim(); if (!tit) return toast('Dê um nome ao documento (ex.: Contrato de trabalho).', 'bad');
@@ -457,6 +519,7 @@ async function detalhe(id, refresh) {
   const astx = $('#as-tx'); if (astx) astx.onclick = async () => { astx.disabled = true; try { const p = VS() ? await db.doc('admissoes_priv/' + a.id).get().catch(() => null) : null; await gerarTextos(a, p && p.exists ? p.data().salario : null, (a.textos || {}).carta ? ['carta'] : ['lgpd', 'carta']); toast('Carta e termo prontos para o candidato assinar.', 'ok'); SUJO = false; detalhe(a.id); } catch (e) { astx.disabled = false; toast('Não foi possível gerar: ' + ((e && e.message) || e), 'bad'); } };
   const asos = $('#as-os'); if (asos) asos.onclick = async () => { asos.disabled = true; asos.textContent = 'Gerando (pode levar uns 20 s)…'; try { const m = await prepararOsEpi(a); toast(m.modelo ? 'Gerado, mas a OS usou o texto-modelo da função.' : 'OS e termo de EPI enviados para o candidato assinar.', m.modelo ? 'bad' : 'ok'); SUJO = false; detalhe(a.id); } catch (e) { asos.disabled = false; asos.textContent = 'Gerar OS e termo de EPI para assinar'; toast(e.message || 'Não foi possível gerar.', 'bad'); } };
   /* OS assinada: preenche a etapa sozinho */
+  { const c = ctSt(a); if (!ro && c.todosAssinados && c.ultimoAss && !((a.etapas || {}).admiss || {}).data) { const ne = JSON.parse(JSON.stringify(etp(a))); ne.admiss = { data: c.ultimoAss }; db.doc('admissoes/' + a.id).update({ etapas: ne }).then(() => { a.etapas = ne; const x = $('#e-adm'); if (x && !x.value) x.value = ne.admiss.data; }, () => {}); } }
   if (!ro && assinado(a, 'osepi') && !((a.etapas || {}).epi || {}).data) { const ne = JSON.parse(JSON.stringify(etp(a))); ne.epi = { data: str(a.cand.assin.osepi.em).slice(0, 10) }; db.doc('admissoes/' + a.id).update({ etapas: ne }).then(() => { a.etapas = ne; const x = $('#e-epi'); if (x && !x.value) x.value = ne.epi.data; }, () => {}); }
   (VS() ? db.doc('admissoes_priv/' + id).get() : Promise.reject()).then(s => { const v = s.exists ? s.data().salario : null; const el = $('#m-sal'); if (el) el.textContent = v != null ? brl(v) : 'não informado';
       const inp = $('#e-sal'); if (inp) { inp.value = v != null ? String(v).replace('.', ',') : ''; inp.dataset.orig = inp.value; inp.placeholder = 'Ex.: 3500,00'; inp.disabled = !!ro; } },
