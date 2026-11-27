@@ -76,6 +76,9 @@ Notificações no celular: `.github/workflows/push.yml` (a cada 5 min, 6h–20h)
    USO DOS DOCUMENTOS ANTIGOS (pedido de 27/11, 17h40), depois de ler RH + SEGURANÇA DO TRABALHO e identificar cada documento por pessoa (CPF/nome):
    a) Termo de EPI antigo assinado: anexar como o termo válido do funcionário antigo (substitui a falta de termo no portal).
    b) Ficha de EPI antiga: lançar em `entregas` o que ele já recebeu (registro histórico, origem 'historico', SEM mexer no estoque). Ficha não vence.
+      EPI que não existe mais no cadastro: lançar com o nome escrito na ficha (decisão do Gustavo, 27/11).
+      SEMPRE guardar o arquivo original (ficha, termo, certificado) ligado ao registro e copiado para a pasta do funcionário no Drive,
+      para fiscalização. As pastas antigas só podem ser apagadas depois que cada arquivo tiver sua cópia conferida.
    c) Treinamentos do sistema antigo: lançar em `treinamentos` (origem 'historico', com o certificado anexado). Todas as NRs ficam como histórico;
       as válidas recebem a validade (data do certificado + `validadeMeses` do tipo em `trein_tipos`, ou a validade escrita no certificado) para o controle de vencimento.
    Tudo passa por planilha de revisão e OK do Gustavo antes de gravar (dado de funcionário).
