@@ -49,7 +49,7 @@
     const d = X(); opt = opt || {}; const K = opt.custos || {}; const F = opt.cfg || {};
     const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, AlignmentType, BorderStyle, ShadingType, ImageRun, Header, Footer, PageNumber, VerticalAlign, LevelFormat, PageBreak, TableLayoutType } = d;
     const isT = tipo === 'tec';
-    const cod = isT ? P.codPT : P.codPC, vinc = (isT ? P.codPC : P.codPT) === cod ? `${cod} (proposta ${isT ? 'comercial' : 'técnica'})` : (isT ? P.codPC : P.codPT);
+    const mesmoCod = !!P.codPT && P.codPT === P.codPC; const cod = isT ? P.codPT : P.codPC, vinc = (isT ? P.codPC : P.codPT) === cod ? `${cod} (proposta ${isT ? 'comercial' : 'técnica'})` : (isT ? P.codPC : P.codPT);
     const titulo = isT ? 'PROPOSTA TÉCNICA' : 'PROPOSTA COMERCIAL';
     const rev = s(P.rev || '00').padStart(2, '0');
     const R = (t, o) => new TextRun(Object.assign({ text: s(t), font: 'Arial', size: 20, color: '222222' }, o || {}));
@@ -85,7 +85,7 @@
       new TableRow({ children: [L(lw, 'Área do Documento'), V(vw, 'Comercial / Engenharia'), L(lw, 'Unidade'), V(vw, s(P.unidade)), L(lw, 'Código'), V(gI[5], cod)] }),
       new TableRow({ children: [L(lw, 'Elaborador'), V(vw, F.elab || ''), L(lw, 'Verificador'), V(vw, F.verif || ''), L(lw, 'Aprovador'), V(gI[5], F.aprov || '')] }),
       new TableRow({ children: [L(lw, 'Data de elaboração'), V(vw, fmtD(P.dataElab || P.data)), L(lw, 'Data de revisão'), V(vw, fmtD(P.data)), L(lw, 'Nº da Revisão'), V(gI[5], rev)] }),
-      new TableRow({ children: [L(lw, 'Controle Previne'), V(vw, P.controle), L(lw, 'Ref. do cliente (RC)'), V(vw, P.rc || '—'), L(lw, 'Proposta vinculada'), V(gI[5], vinc)] }),
+      new TableRow({ children: mesmoCod ? [L(lw, 'Ref. do cliente (RC)'), C(W - lw, new Paragraph({ spacing: { after: 0 }, children: [R(P.rc || '—', { size: 15, bold: true, color: '111827' })] }), { columnSpan: 5 })] : [L(lw, 'Ref. do cliente (RC)'), C(2 * vw + lw, new Paragraph({ spacing: { after: 0 }, children: [R(P.rc || '—', { size: 15, bold: true, color: '111827' })] }), { columnSpan: 3 }), L(lw, 'Proposta vinculada'), V(gI[5], vinc)] }),
       new TableRow({ children: [L(lw, 'Páginas'), C(vw, new Paragraph({ spacing: { after: 0 }, children: [new TextRun({ children: [PageNumber.CURRENT, ' de ', PageNumber.TOTAL_PAGES], font: 'Arial', size: 15, bold: true })] })), L(lw, 'Cliente'), C(vw + lw + gI[5], new Paragraph({ spacing: { after: 0 }, children: [R(P.cliente, { size: 15, bold: true })] }), { columnSpan: 3 })] })
     ]);
     const gT = [1300, 6438, 2800];
@@ -108,14 +108,14 @@
       new Paragraph({ spacing: { before: 120, after: 1000 }, children: [R(cod + '  ·  Revisão ' + rev, { bold: true, size: 24, color: BLUE })] }),
       new Paragraph({ spacing: { after: 0 }, children: [R(P.cliente, { bold: true, size: 18, color: '111827' })] }),
       new Paragraph({ spacing: { after: 400 }, children: [R([P.unidade, P.area].filter(Boolean).join(' · '), { size: 18, color: GRAY })] }),
-      TB([2400, W - 2400], [ctrlRow('Código', cod), ctrlRow('Nº da Revisão', rev + ' – ' + fmtD(P.data)), ctrlRow('Controle Previne', P.controle), ctrlRow('Ref. do cliente (RC)', P.rc || '—'), ctrlRow('Proposta vinculada', vinc), ctrlRow('Elaborado por', F.elab || ''), ctrlRow('Verificado por', F.verif || ''), ctrlRow('Aprovado por', F.aprov || '')]),
+      TB([2400, W - 2400], [ctrlRow('Código', cod), ctrlRow('Nº da Revisão', rev + ' – ' + fmtD(P.data)), ctrlRow('Ref. do cliente (RC)', P.rc || '—'), ...(mesmoCod ? [] : [ctrlRow('Proposta vinculada', vinc)]), ctrlRow('Elaborado por', F.elab || ''), ctrlRow('Verificado por', F.verif || ''), ctrlRow('Aprovado por', F.aprov || '')]),
       new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 400 }, children: [R(END, { size: 15, color: GRAY })] })
     ];
 
     /* ---------- carta ---------- */
     const carta = [
       Pp([R('Barra Mansa, ' + dataExt(P.data) + '.')], { alignment: AlignmentType.RIGHT, spacing: { after: 240 } }),
-      Pp([R((isT ? 'Proposta Técnica' : 'Proposta Comercial') + ' nº ' + cod + '  ·  Controle Previne: ' + s(P.controle) + (P.rc ? '  ·  Ref. do cliente (RC): ' + P.rc : ''), { bold: true })], { spacing: { after: 240 } }),
+      Pp([R((isT ? 'Proposta Técnica' : 'Proposta Comercial') + ' nº ' + cod + (P.rc ? '  ·  Ref. do cliente (RC): ' + P.rc : ''), { bold: true })], { spacing: { after: 240 } }),
       Pp('À', { spacing: { after: 0 } }), Pp([R(P.cliente, { bold: true })], { spacing: { after: 0 } }),
       Pp('Unidade: ' + (P.unidade || '—') + '  ·  Área: ' + (P.area || '—'), { spacing: { after: 0 } }),
       ...(P.contato ? [Pp('A/C: ' + P.contato, { spacing: { after: 0 } })] : []),
