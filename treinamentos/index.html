@@ -1492,7 +1492,7 @@ function openKit(id, adicional) {
     <div class="grid2">${OSX.map(([kk, t, ph]) => `<div><label for="os-${kk}">${t}</label><input id="os-${kk}" value="${esc(((k && k.os) || {})[kk] || '')}" placeholder="${esc(ph || '')}"></div>`).join('')}</div>
     ${OSF.map(([kk, t]) => `<label for="os-${kk}">${t}</label><textarea id="os-${kk}" rows="3">${esc(((k && k.os) || {})[kk] || '')}</textarea>`).join('')}
     <label for="os-entregadores">Quem pode assinar a entrega na ficha de EPI (um por linha; o primeiro é o padrão)</label><textarea id="os-entregadores" rows="2">${esc(((k && k.os) || {}).entregadores || '')}</textarea></div>
-    <div class="actions">${k ? `<button class="btn danger" id="kt-del">Excluir</button><button class="btn ghost" id="kt-osall">OS dos ${S.func.filter(f => f.ativo !== false && (k.adicional ? f[k.adicional] : kitFuncs(k).includes(norm(f.funcao)))).length} funcionários (PDF)</button>` : ''}<button class="btn ghost" data-close>Cancelar</button><button class="btn primary" id="kt-save" ${S.canWrite === false ? 'disabled' : ''}>Salvar</button></div>`);
+    <div class="actions">${k ? `<button class="btn danger" id="kt-del">Excluir</button><button class="btn ghost" id="kt-osall">OS dos ${S.func.filter(f => f.ativo !== false && (k.adicional ? f[k.adicional] : kitFuncs(k).includes(norm(f.funcao)))).length} funcionários (PDF)</button>${k.adicional ? '' : '<button class="btn ghost" id="kt-termall">Termos de EPI (PDF)</button>'}` : ''}<button class="btn ghost" data-close>Cancelar</button><button class="btn primary" id="kt-save" ${S.canWrite === false ? 'disabled' : ''}>Salvar</button></div>`);
   $('#kt-save').onclick = async () => {
     if (!guardWrite()) return;
     const nome = $('#kt-nome').value.trim(), funcao = ad ? '' : $('#kt-fun').value.trim();
@@ -1504,6 +1504,7 @@ function openKit(id, adicional) {
     try { if (k) await db.doc('kits/' + k.id).update({ nome, funcao, funcoesAlt, epis, ferramentas, os, adicional: ad }); else await db.collection('kits').doc().set({ nome, funcao, funcoesAlt, epis, ferramentas, os, adicional: ad, criadoEm: new Date().toISOString() }); closeModal(); toast('Kit salvo.', 'ok'); } catch (e) { handleErr(e); }
   };
   $('#kt-mod').onclick = () => { const m = ad ? Object.assign({}, osAdic(ad), { emergencia: '' }) : osModelo($('#kt-fun').value); let n = 0; OSF.forEach(([kk]) => { const el = $('#os-' + kk); if (!el.value.trim()) { el.value = m[kk]; n++; } }); toast(n ? 'Modelo aplicado nos campos vazios. Revise antes de salvar.' : 'Os campos já estão preenchidos.', n ? 'ok' : ''); };
+  const ta = $('#kt-termall'); if (ta) ta.onclick = () => gerarTermos(S.func.filter(f => f.ativo !== false && kitFuncs(k).includes(norm(f.funcao))).sort((a, b) => str(a.nome).localeCompare(str(b.nome), 'pt')), 'termos_epi_' + norm(k.funcao).replace(/[^a-z0-9]+/g, '_') + '.pdf');
   const oa = $('#kt-osall'); if (oa) oa.onclick = () => gerarOS(S.func.filter(f => f.ativo !== false && (k.adicional ? f[k.adicional] : kitFuncs(k).includes(norm(f.funcao)))).sort((a, b) => str(a.nome).localeCompare(str(b.nome), 'pt')), 'os_seguranca_' + norm(k.funcao).replace(/[^a-z0-9]+/g, '_') + '.pdf');
   const del = $('#kt-del'); if (del) armDelete(del, () => db.doc('kits/' + k.id).delete());
 }
@@ -2204,6 +2205,14 @@ function fichaInto(P, f, entregador) {
     P.sign([str(f.nome) + ' · Funcionário\n' + cpfL(f.cpf), 'Responsável pela entrega' + (ent ? ' · ' + ent : '') + '\n' + cpfL(pe && pe.cpf)]); P.just = false;
   }
 }
+async function gerarTermos(funcs, nome) {
+  if (!funcs.length) return toast('Nenhum funcionário nessa função.', 'bad');
+  toast('Gerando termos de EPI…');
+  try { await loadPDF(); } catch (_) { return toast('Sem conexão para gerar o PDF.', 'bad'); }
+  const P = PDFW(); funcs.forEach((f, fi) => { if (fi) P.newPage(); termoEpiInto(P, f); });
+  P.footer('Gerado em ' + fmtDT(new Date().toISOString()));
+  await salvarPDF(P, nome, funcs.length);
+}
 async function gerarOS(funcs, nome) {
   if (!funcs.length) return toast('Nenhum funcionário nessa função.', 'bad');
   toast('Gerando OS de segurança…');
@@ -2284,12 +2293,13 @@ $('#u-docs').onclick = () => {
   openModal(mtop('Fichas de EPI e OS de Segurança') + `<div class="card"><span class="lbl">Documento</span>
     <label style="display:flex;gap:8px;align-items:center;color:inherit;font-size:15px"><input type="radio" name="dt" value="ficha" checked style="width:18px;height:18px"> Ficha de EPI (NR-06)</label>
     <label style="display:flex;gap:8px;align-items:center;color:inherit;font-size:15px"><input type="radio" name="dt" value="os" style="width:18px;height:18px"> OS de Segurança (NR-01)</label>
+    <label style="display:flex;gap:8px;align-items:center;color:inherit;font-size:15px"><input type="radio" name="dt" value="termo" style="width:18px;height:18px"> Termo de EPI (NR-06)</label>
     <span class="lbl" style="margin-top:12px">Funcionários</span>
     <label style="display:flex;gap:8px;align-items:center;color:inherit;font-size:15px"><input type="radio" name="ds" value="all" checked style="width:18px;height:18px"> Todos os ativos (${ativos.length})</label>
     <label style="display:flex;gap:8px;align-items:center;color:inherit;font-size:15px"><input type="radio" name="ds" value="fil" style="width:18px;height:18px"> Só os da lista filtrada (${fil.length})</label>
     <p class="note">Um PDF único, uma página (ou mais) por funcionário, pronto para imprimir e colher assinatura. Entregas assinadas no app já saem com a assinatura.</p></div>
     <div class="actions"><button class="btn ghost" data-close>Cancelar</button><button class="btn primary" id="dc-go">Gerar PDF</button></div>`);
-  $('#dc-go').onclick = () => { const t = $$('#sheet input[name=dt]').find(r => r.checked).value, sc = $$('#sheet input[name=ds]').find(r => r.checked).value; const L = sc === 'fil' ? fil : ativos; t === 'ficha' ? gerarFichas(L, 'fichas_epi_' + todayStr() + '.pdf') : gerarOS(L, 'os_seguranca_' + todayStr() + '.pdf'); };
+  $('#dc-go').onclick = () => { const t = $$('#sheet input[name=dt]').find(r => r.checked).value, sc = $$('#sheet input[name=ds]').find(r => r.checked).value; const L = sc === 'fil' ? fil : ativos; t === 'ficha' ? gerarFichas(L, 'fichas_epi_' + todayStr() + '.pdf') : t === 'termo' ? gerarTermos(L, 'termos_epi_' + todayStr() + '.pdf') : gerarOS(L, 'os_seguranca_' + todayStr() + '.pdf'); };
 };
 
 
@@ -2926,7 +2936,7 @@ function termoEpiInto(P, f) {
 })();
 /* OS ou ficha de EPI de um funcionário pedida por outro módulo (ex.: Indicadores → vida do funcionário), aberto escondido: devolve o PDF */
 (() => {
-  const m = /[#&]gerar-func=([A-Za-z0-9_-]+)\.(os|ficha)/.exec(location.hash); if (!m || window.parent === window) return;
+  const m = /[#&]gerar-func=([A-Za-z0-9_-]+)\.(os|ficha|termo)/.exec(location.hash); if (!m || window.parent === window) return;
   const fid = m[1], tipo = m[2], t0 = Date.now(); const fim = msg => window.parent.postMessage(Object.assign({ tipo: 'previne-func-doc', fid, doc: tipo }, msg), location.origin);
   const tentar = async () => {
     if (!(typeof db !== 'undefined' && db && S.ready.kits && S.ready.epis && S.ready.func && Date.now() - t0 > 1500)) { if (Date.now() - t0 > 45000) return fim({ erro: 'Não carregou o cadastro a tempo. Verifique se o seu usuário tem acesso a Ferramentas & EPI.' }); return setTimeout(tentar, 400); }
@@ -2934,6 +2944,7 @@ function termoEpiInto(P, f) {
       const f = S.func.find(x => x.id === fid); if (!f) return fim({ erro: 'Funcionário não encontrado.' });
       await loadPDF(); const P = PDFW();
       if (tipo === 'os') { osInto(P, f); P.footer('Gerado em ' + fmtDT(new Date().toISOString()) + ' · conteúdo a ser validado pelo SESMT conforme o PGR'); }
+      else if (tipo === 'termo') { termoEpiInto(P, f); P.footer('Gerado em ' + fmtDT(new Date().toISOString())); }
       else { fichaInto(P, f, entregadoresDe(f)[0] || ''); P.footer('Gerado em ' + fmtDT(new Date().toISOString()) + ' · registro eletrônico com extração de relatório (NR-06, 6.5.1.1)'); }
       fim({ b64: P.doc.output('datauristring').split(',')[1] });
     } catch (e) { fim({ erro: (e && e.message) || String(e) }); }

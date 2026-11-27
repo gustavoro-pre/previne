@@ -111,7 +111,7 @@ function vida(fid) {
       <dl class="kv">${kv.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v || '—')}</dd>`).join('')}</dl></div>
     <h3>Documentos</h3>
     <div class="card"><p class="ct">Documentos de segurança gerados pelo portal</p><p class="note" style="margin:0 0 8px">Saem na hora com os dados atuais do cadastro, no modelo aprovado.</p>
-      <div class="actions" style="justify-content:flex-start;flex-wrap:wrap;gap:8px"><button class="btn ghost sm" data-gdoc="os">Ordem de Serviço (PDF)</button><button class="btn ghost sm" data-gdoc="ficha">Ficha de EPI (PDF)</button>${certs.length ? `<button class="btn ghost sm" data-gcert="${esc(certs.join(','))}">Certificados (${certs.length}) (PDF)</button>` : ''}${D.ext.filter(x => x.funcionarioId === fid && x.arquivoId).map(x => `<button class="btn ghost sm" data-arq="${esc(x.arquivoId)}">${esc(x.tipo)} (externo)</button>`).join('')}</div></div>
+      <div class="actions" style="justify-content:flex-start;flex-wrap:wrap;gap:8px"><button class="btn ghost sm" data-gdoc="os">Ordem de Serviço (PDF)</button><button class="btn ghost sm" data-gdoc="ficha">Ficha de EPI (PDF)</button><button class="btn ghost sm" data-gdoc="termo">Termo de EPI (PDF)</button>${certs.length ? `<button class="btn ghost sm" data-gcert="${esc(certs.join(','))}">Certificados (${certs.length}) (PDF)</button>` : ''}${D.ext.filter(x => x.funcionarioId === fid && x.arquivoId).map(x => `<button class="btn ghost sm" data-arq="${esc(x.arquivoId)}">${esc(x.tipo)} (externo)</button>`).join('')}</div></div>
     <div class="card" id="vi-rh"><p class="ct">Documentos pessoais e de RH (Drive do RH)</p><p class="note">Carregando…</p></div>
     <h3>Linha do tempo na empresa (${ev.length})</h3>
     <div class="card" style="padding:4px 12px;max-height:560px;overflow:auto">${ev.map(([d, ic, t, s]) => `<div class="ritem"><div style="font-size:18px;width:28px;flex:none">${ic}</div><div class="main"><b>${esc(t)}</b>${s ? `<div class="note">${esc(s)}</div>` : ''}</div><span class="note" style="white-space:nowrap">${fmtD(d)}</span></div>`).join('') || '<p class="note">Nada registrado ainda.</p>'}</div>
@@ -120,7 +120,7 @@ function vida(fid) {
     <h3>Treinamentos e padrões</h3>
     <div class="rgrid">${resto}`;
   $('#vi-bk').onclick = () => { V.pes = ''; tPesHub(); };
-  PB().querySelectorAll('[data-gdoc]').forEach(b => b.onclick = () => gerarDoc(b, '#gerar-func=' + fid + '.' + b.dataset.gdoc, 'previne-func-doc', (b.dataset.gdoc === 'os' ? 'OS - ' : 'Ficha EPI - ') + f.nome + '.pdf'));
+  PB().querySelectorAll('[data-gdoc]').forEach(b => b.onclick = () => gerarDoc(b, '#gerar-func=' + fid + '.' + b.dataset.gdoc, 'previne-func-doc', ({ os: 'OS - ', ficha: 'Ficha EPI - ', termo: 'Termo EPI - ' }[b.dataset.gdoc]) + f.nome + '.pdf'));
   PB().querySelectorAll('[data-gcert]').forEach(b => b.onclick = () => gerarDoc(b, '#gerar-cert=' + b.dataset.gcert, 'previne-cert', 'Certificados - ' + f.nome + '.pdf'));
   rhBox(f); if (pf && window.ccBox) ccBox(f);
 }
