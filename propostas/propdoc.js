@@ -49,7 +49,7 @@
     const d = X(); opt = opt || {}; const K = opt.custos || {}; const F = opt.cfg || {};
     const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, AlignmentType, BorderStyle, ShadingType, ImageRun, Header, Footer, PageNumber, VerticalAlign, LevelFormat, PageBreak, TableLayoutType } = d;
     const isT = tipo === 'tec';
-    const cod = isT ? P.codPT : P.codPC, vinc = isT ? P.codPC : P.codPT;
+    const cod = isT ? P.codPT : P.codPC, vinc = (isT ? P.codPC : P.codPT) === cod ? `${cod} (proposta ${isT ? 'comercial' : 'técnica'})` : (isT ? P.codPC : P.codPT);
     const titulo = isT ? 'PROPOSTA TÉCNICA' : 'PROPOSTA COMERCIAL';
     const rev = s(P.rev || '00').padStart(2, '0');
     const R = (t, o) => new TextRun(Object.assign({ text: s(t), font: 'Arial', size: 20, color: '222222' }, o || {}));

@@ -76,7 +76,7 @@ function lista() {
       <div><label>Status</label><select id="f-st"><option value="">Todos</option>${Object.entries(STATUS).map(([k, t]) => `<option value="${k}" ${V.st === k ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
       <div><label>Cliente</label><select id="f-cli"><option value="">Todos</option>${D.cli.map(c => `<option value="${c.id}" ${V.cli === c.id ? 'selected' : ''}>${esc(c.sigla || c.nome)}</option>`).join('')}</select></div>
       <div><label>Ano</label><select id="f-ano"><option value="">Todos</option>${anos.map(a => `<option ${V.ano === a ? 'selected' : ''}>${a}</option>`).join('')}</select></div></div></div>
-    ${L.length ? `<div class="card" style="padding:4px 12px">${L.map(p => `<button class="ritem lk" data-p="${p.id}" type="button"><div class="main"><b>${esc(p.codPT || '—')} / ${esc(p.codPC || '—')}</b> <span class="note">· Rev. ${esc(p.rev || '00')} · ${esc(p.controle || '')}</span><div class="note">${esc(p.cliente || 'Sem cliente')}${p.unidade ? ' · ' + esc(p.unidade) : ''}${p.area ? ' · ' + esc(p.area) : ''} — ${esc(p.objeto || 'sem objeto')}</div><div class="note">${fmtD(p.data)} · ${p.modalidade === 'hh' ? 'HH' : 'Preço global'}${p.rc ? ' · RC ' + esc(p.rc) : ''}${p.gestorCom && p.gestorCom.nome ? ' · ' + esc(p.gestorCom.nome) : ''}</div></div><div style="text-align:right">${stBadge(p.status)}<div style="font-weight:700;margin-top:4px">${totalDe(p) ? brl(totalDe(p)) : ''}</div></div></button>`).join('')}</div>` : '<div class="empty">Nenhuma proposta com esses filtros.</div>'}`;
+    ${L.length ? `<div class="card" style="padding:4px 12px">${L.map(p => `<button class="ritem lk" data-p="${p.id}" type="button"><div class="main"><b>${esc(codTxt(p))}</b> <span class="note">· Rev. ${esc(p.rev || '00')} · ${esc(p.controle || '')}</span><div class="note">${esc(p.cliente || 'Sem cliente')}${p.unidade ? ' · ' + esc(p.unidade) : ''}${p.area ? ' · ' + esc(p.area) : ''} — ${esc(p.objeto || 'sem objeto')}</div><div class="note">${fmtD(p.data)} · ${p.modalidade === 'hh' ? 'HH' : 'Preço global'}${p.rc ? ' · RC ' + esc(p.rc) : ''}${p.gestorCom && p.gestorCom.nome ? ' · ' + esc(p.gestorCom.nome) : ''}</div></div><div style="text-align:right">${stBadge(p.status)}<div style="font-weight:700;margin-top:4px">${totalDe(p) ? brl(totalDe(p)) : ''}</div></div></button>`).join('')}</div>` : '<div class="empty">Nenhuma proposta com esses filtros.</div>'}`;
   const nv = $('#nova'); if (nv) nv.onclick = () => novaProposta();
   $('#f-q').oninput = e => { V.busca = e.target.value; clearTimeout(lista.t); lista.t = setTimeout(() => { lista(); const i = $('#f-q'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }, 250); };
   $('#f-st').onchange = e => { V.st = e.target.value; lista(); }; $('#f-cli').onchange = e => { V.cli = e.target.value; lista(); }; $('#f-ano').onchange = e => { V.ano = e.target.value; lista(); };
@@ -92,6 +92,12 @@ async function proximoNumero() {
   await db.runTransaction(async tx => { const s = await tx.get(ref); const d = s.exists ? s.data() : {}; const seq = Object.assign({}, d.seq || {}); n = num(seq[ano]) + 1; seq[ano] = n; tx.set(ref, { seq }, { merge: true }); });
   return { ano, n: String(n).padStart(3, '0') };
 }
+/* código da proposta: 3 primeiras letras da sigla do cliente + ano + 5 números da sequência do ano (ex.: AMS-2026-00012).
+   O mesmo código vale para a técnica e a comercial. Sem cliente ainda: PRV; ao escolher o cliente, as letras trocam (o número fica). */
+const RX_COD = /^[A-Z0-9]{3}-\d{4}-\d{5}$/;
+const sig3 = sigla => { const t = str(sigla).toUpperCase().normalize('NFD').replace(/[^A-Z0-9]/g, ''); return t ? t.slice(0, 3).padEnd(3, 'X') : 'PRV'; };
+const codigoPara = (sigla, seq) => { const [ano, n] = str(seq).split('-'); return `${sig3(sigla)}-${ano}-${String(num(n)).padStart(5, '0')}`; };
+const codTxt = p => p.codPT && p.codPT === p.codPC ? p.codPT : `${p.codPT || '—'} / ${p.codPC || '—'}`;
 function controlePara(sigla) { const s = str(sigla).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6) || 'PREV'; const usados = new Set(D.prop.map(p => p.controle)); let c; do c = s + '-' + aleat(6); while (usados.has(c)); return c; }
 
 async function novaProposta() {
@@ -101,11 +107,11 @@ async function novaProposta() {
     gestorTec: { nome: '', contato: '' }, gestorCom: { nome: '', contato: '' }, validade: pad.validade || 30, pagamento: pad.pagamento || '45 dias após a aprovação da medição e a emissão da nota fiscal', faturamento: pad.faturamento || 'por medição mensal', lc116: pad.lc116 || '14.01', reajuste: '',
     tecnico: Object.assign({ objetivo: '', visita: '', prazo: '', nrs: 'NR-10', materiais: [], equipamentos: [], equipe: [], cronograma: [], docsRef: [] }, JSON.parse(JSON.stringify(PADRAO_T))), hh: [], anexos: { cliente: [], cotacoes: [] }, revisoes: [], hist: [] };
   try {
-    const { ano, n } = await proximoNumero(); p.seq = `${ano}-${n}`; /* sequência só interna (ordem e contagem); o cliente vê o código aleatório */
-    const usados = new Set(D.prop.flatMap(x => [x.codPT, x.codPC])); let r; do r = aleat(4); while (usados.has(`PT-${ano.slice(2)}-${r}`)); p.codPT = `PT-${ano.slice(2)}-${r}`; p.codPC = `PC-${ano.slice(2)}-${r}`; p.controle = controlePara('');
+    const { ano, n } = await proximoNumero(); p.seq = `${ano}-${n}`;
+    p.codPT = p.codPC = codigoPara('', p.seq); p.controle = controlePara('');
     p.criadoEm = new Date().toISOString(); p.criadoPor = MEU; p.hist = [{ em: p.criadoEm, por: MEU, txt: 'Proposta criada.' }];
     const ref = await db.collection('propostas').add(p); if (veCustos()) await db.doc('prop_custos/' + ref.id).set({ mo: [], mat: [], eq: [], bdi: 0 });
-    D.prop.unshift(Object.assign({ id: ref.id }, p)); toast(`Proposta ${p.codPT} / ${p.codPC} criada.`, 'ok'); abrir(ref.id);
+    D.prop.unshift(Object.assign({ id: ref.id }, p)); toast(`Proposta ${codTxt(p)} criada.`, 'ok'); abrir(ref.id);
   } catch (e) { toast('Não foi possível criar: ' + (e.message || e), 'bad'); }
 }
 
@@ -136,7 +142,7 @@ function secId() {
   const c = cliBy(P.clienteId) || {}; const un = (c.unidades || []); const uSel = un.find(u => u.nome === P.unidade) || {};
   const gest = (D.cfg.gestores || []);
   return `<div class="card"><p class="ct">Identificação</p>
-    <div class="grid3"><div><label>Código técnico</label><input value="${esc(P.codPT)}" disabled></div><div><label>Código comercial</label><input value="${esc(P.codPC)}" disabled></div><div><label>Controle Previne</label><input value="${esc(P.controle)}" disabled></div></div>${P.seq ? `<p class="note" style="margin:2px 0 0">Nº interno (sequência do ano, não aparece para o cliente): ${esc(P.seq)}</p>` : ''}
+    <div class="grid3">${P.codPT && P.codPT === P.codPC ? `<div><label>Código da proposta</label><input value="${esc(P.codPT)}" disabled></div><div></div>` : `<div><label>Código técnico</label><input value="${esc(P.codPT)}" disabled></div><div><label>Código comercial</label><input value="${esc(P.codPC)}" disabled></div>`}<div><label>Controle Previne</label><input value="${esc(P.controle)}" disabled></div></div>${P.seq ? `<p class="note" style="margin:2px 0 0">Nº interno (sequência do ano, não aparece para o cliente): ${esc(P.seq)}</p>` : ''}
     <div class="grid2"><div><label>Cliente</label><select data-k="clienteId" ${ro() ? 'disabled' : ''}><option value="">— escolha —</option>${D.cli.map(x => `<option value="${x.id}" ${x.id === P.clienteId ? 'selected' : ''}>${esc(x.nome)}${x.sigla ? ' (' + esc(x.sigla) + ')' : ''}</option>`).join('')}</select><p class="hint">${podeCli() ? 'Não está na lista? Cadastre em <a href="#" id="go-cli">Clientes</a>.' : ''}</p></div>
       <div><label>Ref. do cliente (RC / solicitação)</label>${inp('rc', P.rc)}</div></div>
     <div class="grid3"><div><label>Unidade</label><input data-k="unidade" list="dl-un" value="${esc(P.unidade)}" ${ro() ? 'disabled' : ''}><datalist id="dl-un">${un.map(u => `<option value="${esc(u.nome)}">`).join('')}</datalist></div>
@@ -200,7 +206,7 @@ function secHist() {
 const SECS = [['id', 'Identificação'], ['tec', 'Proposta técnica'], ['preco', 'Preço'], ['cond', 'Condições'], ['anx', 'Anexos'], ['hist', 'Histórico']];
 function editor() {
   if (!P) return lista(); const t = totaisK();
-  $('#body').innerHTML = `<div class="ed-bar"><button class="btn sm ghost" id="ed-back" type="button">‹ Propostas</button><div class="tit">${esc(P.codPT)} / ${esc(P.codPC)} · Rev. ${esc(P.rev || '00')} ${stBadge(P.status)}<div class="note" style="font-weight:400">${esc(P.cliente || 'sem cliente')} — ${esc(P.objeto || 'sem objeto')}${veCustos() ? ' · <b>' + brl(t.total) + '</b>' : ''}</div></div>
+  $('#body').innerHTML = `<div class="ed-bar"><button class="btn sm ghost" id="ed-back" type="button">‹ Propostas</button><div class="tit">${esc(codTxt(P))} · Rev. ${esc(P.rev || '00')} ${stBadge(P.status)}<div class="note" style="font-weight:400">${esc(P.cliente || 'sem cliente')} — ${esc(P.objeto || 'sem objeto')}${veCustos() ? ' · <b>' + brl(t.total) + '</b>' : ''}</div></div>
       ${ro() ? '' : '<button class="btn primary sm" id="ed-save" type="button">Salvar</button>'}<button class="btn sm" id="ed-pt" type="button">Gerar técnica (Word)</button><button class="btn sm" id="ed-pc" type="button">Gerar comercial (Word)</button>${podeEditar() ? '<button class="btn sm ghost" id="ed-st" type="button">Status…</button>' : ''}</div>
     <div class="seg" id="ed-seg" style="background:#e9ecf1">${SECS.map(([k, n]) => `<button data-sec="${k}" class="${V.sec === k ? 'on' : ''}" type="button">${n}</button>`).join('')}</div>
     <div id="ed-body">${({ id: secId, tec: secTec, preco: secPreco, cond: secCond, anx: secAnx, hist: secHist })[V.sec]()}</div>`;
@@ -215,7 +221,7 @@ function ligaEditor() {
   const B = $('#ed-body');
   B.querySelectorAll('[data-k]').forEach(el => el.addEventListener(el.tagName === 'SELECT' ? 'change' : 'input', () => {
     const k = el.dataset.k; setK(k, el.value);
-    if (k === 'clienteId') { const c = cliBy(el.value) || {}; P.cliente = c.nome || ''; if (c.sigla && (!P.controle || /^PREV-/.test(P.controle))) P.controle = controlePara(c.sigla); editor(); }
+    if (k === 'clienteId') { const c = cliBy(el.value) || {}; P.cliente = c.nome || ''; if (c.sigla && (!P.controle || /^PREV-/.test(P.controle))) P.controle = controlePara(c.sigla); if (P.status === 'rascunho' && RX_COD.test(P.codPT || '') && P.codPT === P.codPC && P.seq) P.codPT = P.codPC = codigoPara(c.sigla, P.seq); editor(); }
   }));
   B.querySelectorAll('[data-lst]').forEach(el => el.oninput = () => { P.tecnico[el.dataset.lst] = el.value.split('\n').map(s => s.trim()).filter(Boolean); SUJO = true; });
   B.querySelectorAll('[data-lstc]').forEach(el => el.oninput = () => { P[el.dataset.lstc] = el.value.split('\n').map(s => s.trim()).filter(Boolean); SUJO = true; });
@@ -409,7 +415,7 @@ function config() {
   const c = D.cfg; const dc = c.docs || {}; const pd = c.padroes || {}; const ano = hoje().slice(0, 4); const ed = veCustos();
   const dis = ed ? '' : 'disabled';
   $('#body').innerHTML = `<div class="head"><h2>Configuração</h2></div>
-    <div class="card"><p class="ct">Numeração</p><p class="cs">Cada proposta recebe um código aleatório que o cliente vê: PT-${ano.slice(2)}-XXXX (técnica) e PC-${ano.slice(2)}-XXXX (comercial), com as mesmas 4 letras. A sequência do ano (${ano}-NNN) fica só no portal, para ordem e contagem. Há ainda o controle interno com a sigla do cliente.</p>
+    <div class="card"><p class="ct">Numeração</p><p class="cs">Cada proposta recebe o código SIG-${ano}-00000: as 3 primeiras letras da sigla do cliente, o ano e 5 números da sequência do ano (ex.: AMS-${ano}-00012). O mesmo código vale para a técnica e a comercial. Enquanto o cliente não é escolhido, aparece PRV. Propostas antigas mantêm o código que já tinham.</p>
       <div class="grid3"><div><label>Última proposta de ${ano}</label><input id="cf-seq" inputmode="numeric" value="${esc(num((c.seq || {})[ano]))}" ${dis}></div><div></div><div></div></div><p class="hint">A próxima proposta criada recebe este número + 1.</p></div>
     <div class="card"><p class="ct">Quem assina os documentos comerciais</p><div class="grid3"><div><label>Elaborado por</label><input id="cf-el" value="${esc(dc.elab || 'Gustavo Rogel de Almeida')}" ${dis}></div><div><label>Verificado por</label><input id="cf-ve" value="${esc(dc.verif || 'Thiago Rogel de Almeida')}" ${dis}></div><div><label>Aprovado por</label><input id="cf-ap" value="${esc(dc.aprov || 'Cláudio José de Almeida')}" ${dis}></div></div>
       <div class="grid3"><div><label>Assina a carta</label><input id="cf-as" value="${esc(dc.assinante || 'Cláudio José de Almeida')}" ${dis}></div><div><label>Cargo</label><input id="cf-asc" value="${esc(dc.assinanteCargo || 'Sócio-Gerente')}" ${dis}></div><div><label>Telefone</label><input id="cf-ast" value="${esc(dc.assinanteTel || 'Cel.: (24) 98855-7269')}" ${dis}></div></div></div>
