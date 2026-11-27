@@ -160,7 +160,7 @@ function regWire(a) {
 async function fcModelo() {
   let m = null; try { const d = await db.doc('config/modelos').get(); m = d.exists ? (d.data() || {})[FC_MODELO[0]] : null; } catch (e) {}
   if (m && m.codigo) return { codigo: m.codigo, rev: String(+m.rev || 0).padStart(2, '0'), data: fmtD(m.data), elab: str(m.elaborador) || '—', aprov: str(m.aprovador) || '—', prov: false };
-  return { codigo: FC_MODELO[2], rev: '00', data: '—', elab: '—', aprov: '—', prov: true };
+  return { codigo: FC_MODELO[2], rev: '00', data: '27/11/2026', elab: 'Gustavo Rogel', aprov: 'Cláudio', prov: true };
 }
 async function fcLogo() { const lg = window.logoEmp ? window.logoEmp(D.emp) : D.emp || {}; if (/^data:image\/(png|jpeg)/.test(str(lg.logo))) return lg; try { const b = await (await fetch('/logo.png')).blob(); return { logo: await new Promise(r => { const f = new FileReader(); f.onload = () => r(f.result); f.readAsDataURL(b); }), logoW: 240, logoH: 193 }; } catch (e) { return {}; } }
 async function fichaPdf(a, o = {}) {
@@ -170,10 +170,11 @@ async function fichaPdf(a, o = {}) {
   const emit = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }).slice(0, 17);
   const cab = () => { doc.setDrawColor(...FC_AZUL); doc.setLineWidth(0.3); doc.rect(Lm, 8, R - Lm, 24); const bx = R - 60; doc.line(Lm + 30, 8, Lm + 30, 32); doc.line(bx, 8, bx, 32);
     if (lg.logo) try { const h = 19, w = Math.min(26, h * (+lg.logoW || 240) / (+lg.logoH || 193)); doc.addImage(lg.logo, /jpeg/.test(lg.logo.slice(0, 20)) ? 'JPEG' : 'PNG', Lm + 15 - w / 2, 10.5, w, h); } catch (e) {}
-    doc.setTextColor(...FC_AZUL); doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5); doc.text(empNome(), Lm + 33, 13.5);
-    doc.setTextColor(90); doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.text('CNPJ ' + empCnpj() + ' · ' + (str((D.emp || {}).endereco) || 'Av. Homero Leite, 198, Saudade, Barra Mansa – RJ'), Lm + 33, 17.5);
-    doc.setTextColor(20); doc.setFont('helvetica', 'bold'); doc.setFontSize(12.5); doc.text('FICHA CADASTRAL DE ADMISSÃO', Lm + 33, 25); doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(90); doc.text('Área: Recursos Humanos', Lm + 33, 29.5);
-    doc.setFontSize(7); doc.setTextColor(20); [['Código', M.codigo + (M.prov ? ' (provisório)' : '')], ['Revisão', M.rev + ' · ' + M.data], ['Elaborado', M.elab], ['Aprovado', M.aprov], ['Emitido', emit]].forEach(([k, v], i) => { doc.setFont('helvetica', 'bold'); doc.text(k + ':', bx + 2, 12.3 + i * 4.3); doc.setFont('helvetica', 'normal'); doc.text(doc.splitTextToSize(str(v), 40)[0], bx + 17, 12.3 + i * 4.3); }); };
+    const tw = bx - (Lm + 33) - 2; const end = str((D.emp || {}).endereco) || 'Av. Homero Leite, 198, Saudade, Barra Mansa – RJ';
+    doc.setTextColor(...FC_AZUL); doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.text(doc.splitTextToSize(empNome(), tw)[0], Lm + 33, 12.8);
+    doc.setTextColor(90); doc.setFont('helvetica', 'normal'); doc.setFontSize(6.8); doc.text('CNPJ ' + empCnpj(), Lm + 33, 16.3); doc.text(doc.splitTextToSize(end, tw)[0], Lm + 33, 19.3);
+    doc.setTextColor(20); doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.text('FICHA CADASTRAL DE ADMISSÃO', Lm + 33, 25.6); doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(90); doc.text('Área: Recursos Humanos', Lm + 33, 29.8);
+    doc.setFontSize(7); doc.setTextColor(20); [['Código', M.codigo], ['Revisão', M.rev + (M.data && M.data !== '—' ? ' · ' + M.data : '')], ['Elaborado', M.elab], ['Aprovado', M.aprov], ['Emitido', emit]].forEach(([k, v], i) => { doc.setFont('helvetica', 'bold'); doc.text(k + ':', bx + 2, 12.3 + i * 4.3); doc.setFont('helvetica', 'normal'); doc.text(doc.splitTextToSize(str(v), 40)[0], bx + 17, 12.3 + i * 4.3); }); };
   cab(); let y = 37;
   /* foto */
   const ft = (docs.foto || [])[0]; let fw = 0;
