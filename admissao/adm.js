@@ -405,7 +405,7 @@ async function detalhe(id, refresh) {
     <h3>Dados do candidato</h3><div class="card">${Object.keys(dd).length ? `<dl class="kv">${[['Nascimento', fmtD(dd.nascimento)], ['Sexo', dd.sexo], ['Estado civil', dd.estadoCivil], ['Mãe', dd.mae], ['Pai', dd.pai], ['Celular', dd.telefone], ['E-mail', dd.email],
         ['Endereço', [dd.rua, dd.numero, dd.complemento, dd.bairro, dd.cidade && dd.cidade + '/' + dd.uf, dd.cep].filter(Boolean).join(', ')], ['Escolaridade', dd.escolaridade], ['PIS', dd.pis], ['Banco', [dd.banco, dd.agencia && 'ag. ' + dd.agencia, dd.conta && 'cc ' + dd.conta, dd.pix && 'PIX ' + dd.pix].filter(Boolean).join(' · ')],
         ['Tamanhos', `camisa ${dd.tamCamisa || '—'} · calça ${dd.tamCalca || '—'} · calçado ${dd.tamCalcado || '—'}`], ['Emergência', [dd.emergNome, dd.emergTel].filter(Boolean).join(' · ')], ['Dependentes', dd.dependentes]].filter(x => x[1]).map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join('')}</dl>` : '<p class="note" style="margin:0">O candidato ainda não preencheu os dados.</p>'}</div>
-    ${confBox(a, ro)}${typeof regBox === 'function' && Object.keys(dd).length ? regBox(a, ro) : ''}
+    ${confBox(a, ro)}
     <h3>Etapas</h3>
     <div class="etf"><h4>ASO ${(e.aso || {}).data ? '<span class="badge b-ok">feito</span>' : ''}</h4><div class="grid2"><div><label for="e-asoag">Exame marcado para</label><input type="date" id="e-asoag" value="${esc((e.aso || {}).agendado || '')}" ${ro}></div><div><label for="e-aso">Data do ASO</label><input type="date" id="e-aso" value="${esc((e.aso || {}).data || '')}" ${ro}></div></div>
       ${(e.aso || {}).data ? `<p class="note" style="margin:6px 0 0">Vence em ${fmtD(addMonths(e.aso.data, 12))} (1 ano, automático).</p>` : ''}
@@ -446,7 +446,7 @@ async function detalhe(id, refresh) {
   const sv = $('#e-save'); if (sv) sv.onclick = () => salvarEtapas(a);
   const en = $('#e-env'); if (en) en.onclick = () => envioContab(a);
   const fx = $('#e-fx'); if (fx) fx.onclick = () => baixarFichaPdf(a);
-  confWire(a); regWire(a);
+  confWire(a);
   if (!refresh) envStatus(a);
   $$('[data-envx]').forEach(b => b.onclick = () => cancelarEnvio(a, b.dataset.envx));
   $$('[data-envap]').forEach(b => b.onclick = () => aprovarEnvio(a, b.dataset.envap));
