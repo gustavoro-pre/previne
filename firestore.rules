@@ -141,6 +141,9 @@ service cloud.firestore {
     function folhaOk() { return tem(['admin', 'gestao', 'gerente', 'rh']) || admi(['rh']); }
     match /folha/{id} { allow read, write: if folhaOk(); }
     match /folha_imp/{id} { allow read, write: if folhaOk(); }
+    match /contracheques/{id} { allow read, write: if folhaOk(); }
+    match /cc_arq/{id} { allow read, write: if folhaOk();
+      match /p/{i} { allow read, write: if folhaOk(); } }
     match /rh_docs/{id} { allow read: if admi(['rh', 'consulta']) || tem(['admin', 'gestao', 'gerente']); allow write: if admi(['rh']); }
 
     // documentação: quem consulta não vê nem baixa documentos restritos

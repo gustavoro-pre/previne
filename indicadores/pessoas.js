@@ -116,12 +116,13 @@ function vida(fid) {
     <h3>Linha do tempo na empresa (${ev.length})</h3>
     <div class="card" style="padding:4px 12px;max-height:560px;overflow:auto">${ev.map(([d, ic, t, s]) => `<div class="ritem"><div style="font-size:18px;width:28px;flex:none">${ic}</div><div class="main"><b>${esc(t)}</b>${s ? `<div class="note">${esc(s)}</div>` : ''}</div><span class="note" style="white-space:nowrap">${fmtD(d)}</span></div>`).join('') || '<p class="note">Nada registrado ainda.</p>'}</div>
     ${pf ? `<h3>Folha mês a mês</h3>${FO.length ? `<div class="card" style="padding:6px 10px">${tabela(['Mês', 'Cargo', 'Salário', 'HE (h)', 'HE noturna (h)', 'Adic. noturno', 'Faltas (h)', 'Proventos', 'Líquido'], FO.slice().reverse().map(x => { const a = x.ag || {}; return [mesNome(x.comp), esc(x.cargo), brl2(x.salario), hh(num(a.he50h) + num(a.he70h) + num(a.he100h)), hh(a.heNoth), brl2(a.adNotv), hh(a.faltash), brl2(x.proventos), brl2(x.liquido)]; }), [2, 3, 4, 5, 6, 7, 8])}</div>` : '<div class="empty">Nenhuma folha importada com este funcionário. Importe o extrato mensal em Pessoas → Folha e horas.</div>'}` : ''}
+    ${pf ? '<h3>Contracheques</h3><div id="vi-cc"><p class="note">Carregando…</p></div>' : ''}
     <h3>Treinamentos e padrões</h3>
     <div class="rgrid">${resto}`;
   $('#vi-bk').onclick = () => { V.pes = ''; tPesHub(); };
   PB().querySelectorAll('[data-gdoc]').forEach(b => b.onclick = () => gerarDoc(b, '#gerar-func=' + fid + '.' + b.dataset.gdoc, 'previne-func-doc', (b.dataset.gdoc === 'os' ? 'OS - ' : 'Ficha EPI - ') + f.nome + '.pdf'));
   PB().querySelectorAll('[data-gcert]').forEach(b => b.onclick = () => gerarDoc(b, '#gerar-cert=' + b.dataset.gcert, 'previne-cert', 'Certificados - ' + f.nome + '.pdf'));
-  rhBox(f);
+  rhBox(f); if (pf && window.ccBox) ccBox(f);
 }
 /* PDFs gerados pelo módulo Ferramentas & EPI / Treinamentos, aberto escondido (mesmo mecanismo da Admissão) */
 function gerarDoc(btn, hash, tipo, nome) {
@@ -175,7 +176,7 @@ function tFolha() {
   const C = comps(); if (!V.comp || !C.includes(V.comp)) V.comp = C[0] || '';
   const imp = `<div class="card"><div class="head" style="margin:0"><p class="ct" style="margin:0;margin-right:auto">Importar a folha do mês</p><label class="btn primary sm" style="margin:0;cursor:pointer">Escolher o extrato (PDF)<input type="file" id="fo-file" accept="application/pdf,.pdf" hidden></label></div>
     <p class="note" style="margin:6px 0 0">Use o <b>Extrato Mensal</b> que a contabilidade manda (o PDF com todos os funcionários). Todo mês: importe o do mês fechado. Se importar o mesmo mês de novo, ele é substituído. CPF, matrícula e admissão que estiverem vazios no cadastro são preenchidos com os dados da folha.</p><div id="fo-prev"></div></div>`;
-  if (!C.length) { PB().innerHTML = imp + '<div class="empty">Nenhuma folha importada ainda. Importe o extrato mensal acima para ver horas extras, horas noturnas, adicionais, faltas, salários por função e custo.</div>' + beneficiosCard(); return ligaImport(); }
+  if (!C.length) { PB().innerHTML = imp + '<div class="empty">Nenhuma folha importada ainda. Importe o extrato mensal acima para ver horas extras, horas noturnas, adicionais, faltas, salários por função e custo.</div>' + (window.ccCard ? ccCard() : '') + beneficiosCard(); return ligaImport(); }
   const L = doMes(V.comp); const M12 = C.slice(0, 12).reverse();
   const S = k => L.reduce((a, x) => a + num((x.ag || {})[k]), 0);
   const prov = L.reduce((a, x) => a + num(x.proventos), 0), custo = L.reduce((a, x) => a + custoF(x), 0), fgts = L.reduce((a, x) => a + num(x.fgts), 0);
@@ -213,6 +214,7 @@ function tFolha() {
     <h3>Quanto cada função paga (${mesNome(V.comp)})</h3>
     <div class="card" style="padding:6px 10px">${tabela(['Cargo (folha)', 'Pessoas', 'Salário mín.', 'Salário médio', 'Salário máx.', 'Adicionais (média)', 'HE (média)', 'Remuneração bruta média', ben.porPessoa ? 'Com benefícios' : null].filter(Boolean), CG.map(g => [`<a href="#" data-cargo="${esc(g.k)}">${esc(g.k)}</a>`, g.n, brl2(g.min), '<b>' + brl2(g.med) + '</b>', brl2(g.max), brl2(g.adic), brl2(g.hev), brl2(g.prov)].concat(ben.porPessoa ? [brl2(g.prov + ben.porPessoa)] : [])), [1, 2, 3, 4, 5, 6, 7, 8])}
       <p class="note" style="margin:6px 0 0">Adicionais = insalubridade + periculosidade + adicional noturno. Remuneração bruta = todos os proventos do mês. Toque no cargo para ver as pessoas.</p><div id="fo-cargo"></div></div>
+    ${window.ccCard ? ccCard() : ''}
     ${beneficiosCard()}`;
   $('#fo-comp').onchange = e => { V.comp = e.target.value; tFolha(); };
   PB().querySelectorAll('[data-fcomp]').forEach(b => b.onclick = () => { V.comp = b.dataset.fcomp; tFolha(); });
@@ -258,6 +260,7 @@ function casar(r) {
     return { x, f, como }; });
 }
 function ligaImport() {
+  if (window.ligaCC) ligaCC();
   const inp = $('#fo-file'); if (!inp) return;
   inp.onchange = async () => {
     const file = inp.files[0]; inp.value = ''; if (!file) return; const box = $('#fo-prev'); box.innerHTML = '<p class="note">Lendo o PDF…</p>';
