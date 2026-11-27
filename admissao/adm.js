@@ -333,7 +333,7 @@ async function criar() {
   const tk = ADM.rand(20); const agora = new Date().toISOString();
   if (!$('#n-adc').value) return toast('Marque o adicional: sem adicional, com insalubridade ou com periculosidade.', 'bad');
   const a = { nome, cpf, telefone: tel, funcao, areaId, area: ar ? ar.nome : '', subareaId: sid, subarea: sub ? sub.nome : '', unidade: $('#n-un').value.trim(), altura: $('#n-alt').value === '1', adicional: $('#n-adc').value, vinculo: $('#n-vin').value,
-    status: 'aberto', abertoEm: agora, abertoPor: MEU, etapas: { integ: { agendada: $('#n-int').value } }, rev: {}, cand: { dados: {}, docs: {} }, obs: $('#n-obs').value.trim() };
+    status: 'aberto', abertoEm: agora, abertoPor: MEU, etapas: { integ: { agendada: $('#n-int').value, agendadaEm: $('#n-int').value ? agora.slice(0, 10) : '' } }, rev: {}, cand: { dados: {}, docs: {} }, obs: $('#n-obs').value.trim() };
   /* lê tudo do formulário ANTES de gravar: a gravação dispara o snapshot, que redesenha a tela e limpa os campos */
   const salTxt = $('#n-sal').value; const sal = numBR(salTxt); if (salTxt.trim() && sal == null) return toast('Salário inválido. Ex.: 2500,00', 'bad');
   const cur = $$('.n-cur').filter(c => c.checked).map(c => c.dataset.cur); const usarPadrao = !!($('#n-padrao') && $('#n-padrao').checked);
@@ -547,8 +547,11 @@ async function detalhe(id, refresh) {
 function lerEtapas(a) {
   const e = JSON.parse(JSON.stringify(etp(a)));
   const asoD = $('#e-aso').value;
-  e.aso = Object.assign({}, e.aso, { agendado: $('#e-asoag').value, data: asoD, validade: asoD ? addMonths(asoD, 12) : '', apto: $('#e-asoap').value !== '0' });
-  e.integ = Object.assign({}, e.integ, { agendada: $('#e-ia').value, realizada: $('#e-ir').value, validade: '' });
+  const hoje = new Date().toISOString().slice(0, 10), asoAg = $('#e-asoag').value, intAg = $('#e-ia').value;
+  /* dia em que o exame e a integração foram marcados no portal: base dos indicadores de tempo do ASO e da integração */
+  const asoAgEm = asoAg ? ((e.aso || {}).agendadoEm || hoje) : '', intAgEm = intAg ? ((e.integ || {}).agendadaEm || hoje) : '';
+  e.aso = Object.assign({}, e.aso, { agendado: asoAg, agendadoEm: asoAgEm, data: asoD, validade: asoD ? addMonths(asoD, 12) : '', apto: $('#e-asoap').value !== '0' });
+  e.integ = Object.assign({}, e.integ, { agendada: intAg, agendadaEm: intAgEm, realizada: $('#e-ir').value, validade: '' });
   e.trein = { enviado: $('#e-te').value, concluido: $('#e-tc').value };
   e.epi = { data: $('#e-epi').value }; e.admiss = { data: $('#e-adm').value }; e.contab = { data: $('#e-ct').value };
   return e;
@@ -646,11 +649,22 @@ function rKpi() {
   const noPrazo = mob.filter(a => diasMob(a) <= PRAZO).length; const canc = L.filter(a => a.status === 'cancelado').length;
   const fase = (f, t) => { const v = mob.map(a => { const x = f(a), y = t(a); return x && y ? diasEntre(x, y) : null; }).filter(v => v != null && v >= 0); return v.length ? (v.reduce((s, x) => s + x, 0) / v.length).toFixed(1).replace('.', ',') : '—'; };
   const fases = [['Abertura → documentos completos', a => a.abertoEm, a => (a.cand || {}).completoEm], ['Documentos → ASO', a => (a.cand || {}).completoEm, a => (etp(a).aso || {}).data], ['ASO → integração', a => (etp(a).aso || {}).data, a => fimMob(a)], ['Abertura → integração (total)', a => a.abertoEm, a => fimMob(a)]];
+  const med2 = v => { v = v.filter(x => x != null && x >= 0); return v.length ? { m: (v.reduce((s2, x) => s2 + x, 0) / v.length).toFixed(1).replace('.', ',') + 'd', n: v.length, max: Math.max(...v) } : { m: '—', n: 0, max: 0 }; };
+  const envio = a => { const e1 = (a.envios || []).filter(x => x.status === 'enviado').map(x => str(x.enviadoEm).slice(0, 10)).sort()[0]; return e1 || (etp(a).contab || {}).data || ''; };
+  const Lv = L.filter(a => a.status !== 'cancelado');
+  const tCont = med2(Lv.map(a => envio(a) && (a.contabDocs || {}).recebidoEm ? diasEntre(envio(a), str(a.contabDocs.recebidoEm).slice(0, 10)) : null));
+  const espCont = Lv.filter(a => a.status === 'aberto' && envio(a) && !(a.contabDocs || {}).recebidoEm);
+  const tAso = med2(Lv.map(a => { const x = etp(a).aso || {}; return x.data ? diasEntre(x.agendadoEm || str(a.abertoEm).slice(0, 10), x.data) : null; }));
+  const tInt = med2(Lv.map(a => { const x = etp(a).integ || {}; return x.realizada && x.agendadaEm ? diasEntre(x.agendadaEm, x.realizada) : null; }));
+  const espera = `<div class="card" style="margin-bottom:12px"><p class="ct">Tempos de espera (dias corridos)</p>
+    <div class="kpis k3" style="margin:6px 0 0">${kpi('Contabilidade responder', tCont.m, '', tCont.n ? `do envio até chegarem os documentos · ${tCont.n} admissão(ões) · maior ${tCont.max}d` : 'sem respostas registradas ainda')}${kpi('ASO', tAso.m, '', tAso.n ? `do dia em que o exame foi marcado até o ASO · ${tAso.n} · maior ${tAso.max}d` : 'sem ASO registrado no período')}${kpi('Integração', tInt.m, '', tInt.n ? `do dia em que o funcionário foi inscrito até a integração feita · ${tInt.n} · maior ${tInt.max}d` : 'conta a partir das inscrições feitas de hoje em diante')}</div>
+    ${espCont.length ? `<p class="note" style="margin:8px 0 0">Aguardando a contabilidade agora: ${espCont.map(a => `${esc(a.nome)} (${diasEntre(envio(a), new Date().toISOString().slice(0, 10))}d)`).join(', ')}.</p>` : ''}</div>`;
   const mot = {}; L.filter(atrasado).forEach(a => { const k = a.justMotivo || (a.justificativa ? 'Outro' : 'Sem justificativa'); mot[k] = (mot[k] || 0) + 1; });
   const porF = {}; mob.forEach(a => { (porF[a.funcao] = porF[a.funcao] || []).push(diasMob(a)); });
   const mx = Math.max(1, ...Object.values(mot));
   $('#body').innerHTML = `<div class="top2"><select id="k-per">${[['90', '90 dias'], ['180', '6 meses'], ['365', '12 meses'], ['all', 'Tudo']].map(([v, t]) => `<option value="${v}" ${V.per === v ? 'selected' : ''}>${t}</option>`).join('')}</select><span class="note">Mobilização = da abertura até a integração realizada. Prazo: ${PRAZO} dias.</span></div>
     <div class="kpis" style="margin-bottom:12px">${kpi('Tempo médio', dias.length ? media.toFixed(1).replace('.', ',') + 'd' : '—', media > PRAZO ? 'bad' : 'ok')}${kpi('Mediana', dias.length ? med + 'd' : '—')}${kpi('No prazo', mob.length ? Math.round(noPrazo / mob.length * 100) + '%' : '—', noPrazo === mob.length ? 'ok' : 'warn', `${noPrazo} de ${mob.length}`)}${kpi('Mobilizados', mob.length)}${kpi('Em andamento', L.filter(a => a.status === 'aberto' && !fimMob(a)).length)}${kpi('Desistências', canc, canc ? 'warn' : '')}</div>
+    ${espera}
     <div class="rgrid"><div class="card"><p class="ct">Tempo médio por fase (dias)</p>${fases.map(([t, f, g]) => `<div class="bt" style="padding:6px 0;border-bottom:1px solid var(--line)"><span>${t}</span><b>${fase(f, g)}</b></div>`).join('')}</div>
       <div class="card"><p class="ct">Motivos de atraso (acima de ${PRAZO} dias)</p>${Object.keys(mot).length ? Object.entries(mot).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<div class="br"><div class="bt"><span>${esc(k)}</span><b>${v}</b></div><div class="bb"><i style="width:${Math.round(v / mx * 100)}%;background:${k === 'Sem justificativa' ? 'var(--bad)' : '#c98a00'}"></i></div></div>`).join('') : '<div class="empty">Nenhum atraso no período.</div>'}</div></div>
     <div class="card"><p class="ct">Por função</p><div class="tbwrap"><table class="tb"><thead><tr><th>Função</th><th class="n">Mobilizados</th><th class="n">Média (dias)</th><th class="n">Acima de ${PRAZO}d</th></tr></thead><tbody>${Object.keys(porF).length ? Object.entries(porF).sort((a, b) => b[1].length - a[1].length).map(([f, v]) => `<tr><td>${esc(f)}</td><td class="n">${v.length}</td><td class="n">${(v.reduce((s, x) => s + x, 0) / v.length).toFixed(1).replace('.', ',')}</td><td class="n">${v.filter(x => x > PRAZO).length}</td></tr>`).join('') : '<tr><td colspan="4" class="t2">Sem mobilizações no período.</td></tr>'}</tbody></table></div></div>
