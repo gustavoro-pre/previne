@@ -210,10 +210,11 @@ async function fichaPdf(a, o = {}) {
     return [c.t, { content: ok ? 'Conferido' : 'Não conferido', styles: { textColor: ok ? [20, 110, 60] : [180, 40, 40], fontStyle: 'bold' } }, au ? 'Leitura: ' + au : '', ok ? 'Doc.: ' + (c.docs.map(s => ((ADM.SLOTS.find(z => z.id === s) || {}).t || s).split(' (')[0]).slice(0, 2).join(' / ')) : '']; });
   if (y > H - 80) { doc.addPage(); cab(); y = 37; }
   sec(E.completo ? `Conferência com os documentos: conferido por ${E.por || '—'} em ${fmtDH(E.em)}` : 'Conferência com os documentos: NÃO CONFERIDA POR COMPLETO', cl);
-    y += 4; doc.setDrawColor(...FC_AZUL); doc.setLineWidth(0.3); doc.rect(Lm, y, R - Lm, 14); doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(...FC_AZUL); doc.text('DE ACORDO DO RH', Lm + 3, y + 5);
-  doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(E.completo ? 20 : 180, E.completo ? 20 : 40, E.completo ? 20 : 40);
-  doc.text(E.completo ? `De acordo: ${E.por || '—'} · ${fmtDH(E.em)} · registro eletrônico no portal PREVINE (dados conferidos com os documentos).` : 'Pendente: os dados ainda não foram conferidos e aprovados pelo RH no portal.', Lm + 3, y + 10.5);
-  y += 18;
+    const AP = o.aprov || a.aprovContratacao; y += 4; doc.setDrawColor(...FC_AZUL); doc.setLineWidth(0.3); doc.rect(Lm, y, R - Lm, 19);
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(...FC_AZUL); doc.text('DE ACORDO DA CONTRATAÇÃO', Lm + 3, y + 5); doc.setFont('helvetica', 'normal'); doc.setFontSize(8);
+  doc.setTextColor(AP ? 20 : 180, AP ? 20 : 40, AP ? 20 : 40); doc.text(AP ? `De acordo: ${AP.por || '—'} · ${fmtDH(AP.em)} · registro eletrônico no portal PREVINE.` : 'Pendente: aguardando o de acordo da contratação no portal.', Lm + 3, y + 10.5);
+  doc.setTextColor(E.completo ? 70 : 180, E.completo ? 70 : 40, E.completo ? 70 : 40); doc.text(E.completo ? `Dados conferidos com os documentos por ${E.por || '—'} em ${fmtDH(E.em)}.` : 'Dados ainda não conferidos por completo com os documentos.', Lm + 3, y + 15.5);
+  y += 23;
   const n = doc.internal.getNumberOfPages();
   for (let p = 1; p <= n; p++) { doc.setPage(p); doc.setDrawColor(...FC_AZUL); doc.setLineWidth(0.3); doc.line(Lm, H - 12, R, H - 12); doc.setFontSize(6.5); doc.setTextColor(90);
     doc.text(`${M.codigo} rev. ${M.rev} · Ficha cadastral de admissão · ${a.nome} · cópia impressa não é controlada`, Lm, H - 8.5); doc.text(`Página ${p} de ${n}`, R, H - 8.5, { align: 'right' }); }

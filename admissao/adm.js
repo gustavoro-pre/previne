@@ -313,8 +313,17 @@ async function aprovarEnvio(a, id) {
   const x = (a.envios || []).find(y => y.id === id); if (!x) return;
   if (!confirm(`Dar o de acordo para a contratação de ${a.nome} (${a.funcao})? O e-mail para a contabilidade sai ${new Date(x.quando) > new Date() ? 'em ' + fmtDH(x.quando) : 'em até 5 minutos'}.`)) return;
   const quem = str(((window.__FB || {}).perfil || {}).nome) || meuEmail(); const agora = new Date().toISOString(); const quando = new Date(x.quando) > new Date() ? x.quando : agora;
-  try { await db.doc('envios_contab/' + id).update({ status: 'agendado', quando, aprovadoPor: quem, aprovadoEmail: meuEmail(), aprovadoEm: agora });
-    Object.assign(x, { status: 'agendado', quando, aprovadoPor: quem, aprovadoEm: agora }); await db.doc('admissoes/' + a.id).update({ envios: a.envios, aprovContratacao: { por: quem, email: meuEmail(), em: agora } });
+  const ap = { por: quem, email: meuEmail(), em: agora };
+  try { toast('Registrando o de acordo e atualizando a ficha…');
+    /* refaz a ficha cadastral do envio já com o de acordo */
+    const ref = db.doc('envios_contab/' + id); const ed = (await ref.get()).data() || {}; const arqs = (ed.arquivos || []).slice(); const fi = arqs.findIndex(f => /^Ficha cadastral/.test(str(f.nome)));
+    if (fi >= 0) { const f = await fichaPdf(a, { dataAdmissao: ed.dataAdmissao, salario: ed.temSalario ? await salarioDe(a) : null, aprov: ap });
+      const u8 = new Uint8Array(await f.blob.arrayBuffer()); let bin = ''; for (let j = 0; j < u8.length; j += 0x8000) bin += String.fromCharCode.apply(null, u8.subarray(j, j + 0x8000)); const b64 = btoa(bin); const partes = Math.max(1, Math.ceil(b64.length / 700000));
+      for (let p2 = 0; p2 < partes; p2++) await db.doc(`envios_contab/${id}/p/${fi}_${p2}`).set({ f: fi, i: p2, d: b64.slice(p2 * 700000, (p2 + 1) * 700000) });
+      for (let p2 = partes; p2 < (+arqs[fi].partes || 1); p2++) await db.doc(`envios_contab/${id}/p/${fi}_${p2}`).delete().catch(() => {});
+      arqs[fi] = Object.assign({}, arqs[fi], { partes, bytes: f.blob.size }); }
+    await ref.update({ status: 'agendado', quando, aprovadoPor: quem, aprovadoEmail: meuEmail(), aprovadoEm: agora, arquivos: arqs });
+    Object.assign(x, { status: 'agendado', quando, aprovadoPor: quem, aprovadoEm: agora }); await db.doc('admissoes/' + a.id).update({ envios: a.envios, aprovContratacao: ap }); a.aprovContratacao = ap;
     toast('De acordo registrado. O envio à contabilidade está agendado.', 'ok'); detalhe(a.id); } catch (e) { console.error(e); toast('Não foi possível registrar o de acordo.', 'bad'); }
 }
 async function cancelarEnvio(a, id) {
