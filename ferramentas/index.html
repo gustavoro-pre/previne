@@ -2676,6 +2676,8 @@ async function gerarCertificados(regs, nome) {
   if (regs.some(r => str(r.termino) > todayStr())) { toast('Há treinamento ainda não concluído (término no futuro). O certificado só deve ser emitido após a conclusão.', 'bad'); await sleep(2600); }
   toast('Gerando certificado(s)…');
   try { await loadPDF(); } catch (_) { return toast('Sem conexão para gerar o PDF.', 'bad'); }
+  /* assinatura do aluno feita no app depois do registro gerado: busca na matrícula se ainda não foi copiada */
+  regs = await Promise.all(regs.map(async r => { if (r.assinAluno || !db) return r; try { const q = await db.collection('matriculas').where('certId', '==', r.id).get(); const m = q.docs.map(d => d.data()).find(x => x.assinCert && x.assinCert.img); if (m) { db.doc('treinamentos/' + r.id).update({ assinAluno: m.assinCert }).catch(() => {}); return Object.assign({}, r, { assinAluno: m.assinCert }); } } catch (e) { } return r; }));
   regs = await Promise.all(regs.map(async r => Object.assign({}, r, { __hash: await certHash(r) })));
   const doc = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape' });
   const grupo = r => (r.turma || r.id) + '|' + r.tipoId;
