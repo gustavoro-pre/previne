@@ -188,6 +188,7 @@ table.tb{width:100%;border-collapse:collapse;font-size:13px}
   <div id="onb"></div>
   <div class="kpis" id="kpis"></div>
   <div id="p-tr-wrap"><h3>Treinamentos vencidos ou vencendo (60 dias)</h3><div id="p-tr" class="list"></div></div>
+  <div id="p-sep-wrap" class="hidden"><h3>Separar EPI · funcionários em mobilização</h3><p class="note" style="margin-top:0">Lista gerada pela Admissão com o kit de cada função. Marque o que já separou e o que está faltando. Quem tem ASO apto (liberado) aparece primeiro.</p><div id="p-sep" class="list"></div></div>
   <div id="p-aut-wrap"><h3>Autorizações de EPI pendentes</h3><div id="p-aut" class="list"></div></div>
   <h3>Cautelas de ferramentas em atraso</h3>
   <div id="p-atraso" class="list"></div>
@@ -422,7 +423,7 @@ const pend = c => (Array.isArray(c.itens) ? c.itens : []).filter(i => i && !i.de
 const isLate = c => c.status === 'aberta' && str(c.previsaoDevolucao) && str(c.previsaoDevolucao) < todayStr();
 
 /* ================= estado ================= */
-const S = { areas: [], est: [], transf: [], ferr: [], func: [], epis: [], kits: [], caut: [], ent: [], ready: { ferr:false, func:false, epis:false, kits:false, caut:false, ent:false }, canWrite: true, uid: null, emp: {}, regras: { epi: {}, tipos: {} }, sol: [], dec: [], canEdit: false, tt: [], tr: [], isOwner: false, usuarios: {}, ped: [] };
+const S = { sep: [], areas: [], est: [], transf: [], ferr: [], func: [], epis: [], kits: [], caut: [], ent: [], ready: { ferr:false, func:false, epis:false, kits:false, caut:false, ent:false }, canWrite: true, uid: null, emp: {}, regras: { epi: {}, tipos: {} }, sol: [], dec: [], canEdit: false, tt: [], tr: [], isOwner: false, usuarios: {}, ped: [] };
 const abertas = () => S.caut.filter(c => c.status === 'aberta');
 let db = null, user = null;
 const R = { func: null, itens: [] };
@@ -552,7 +553,28 @@ function kitsIncompletos() {
 
 /* ================= painel ================= */
 function kpi(t, n, k, s) { return `<div class="kpi ${k || ''}"><div class="n">${n}</div><div class="t">${t}</div>${s ? `<div class="s">${s}</div>` : ''}</div>`; }
+/* separação de EPI da mobilização (pedidos criados pela Admissão em epi_separacao) */
+const podeSep = () => ['admin', 'gerente', 'gestao', 'almox', 'tst'].includes(papelAtual());
+function renderSep() {
+  const w = $('#p-sep-wrap'); if (!w) return;
+  const L = (S.sep || []).filter(x => x.status === 'aberto').sort((a, b) => (b.asoApto - a.asoApto) || str(a.abertoEm).localeCompare(str(b.abertoEm)));
+  w.classList.toggle('hidden', !L.length || !podeSep()); if (!L.length || !podeSep()) return;
+  $('#p-sep').innerHTML = L.map(x => {
+    const k = S.kits.find(k => !k.adicional && kitFuncs(k).includes(norm(x.funcao))); const m = x.marc || {};
+    const it = ((k && k.epis) || []).map(e => ({ e, p: S.epis.find(p => p.id === e.epiId) || {} }));
+    const ok = it.filter(i => m[i.e.epiId] === 'ok').length, fal = it.filter(i => m[i.e.epiId] === 'falta').length;
+    const st = !it.length ? '<span class="badge b-bad">Função sem kit de EPI</span>' : fal ? `<span class="badge b-bad">Falta ${fal}</span>` : ok === it.length ? '<span class="badge b-ok">Tudo separado</span>' : `<span class="badge b-warn">${ok}/${it.length} separados</span>`;
+    return `<div class="item" style="cursor:default;display:block"><div style="display:flex;gap:8px;align-items:flex-start"><div class="main" style="flex:1"><div class="t1">${esc(x.nome)} <span class="t2">· ${esc(x.funcao)}</span></div><div class="t2">${esc(x.area || '')}${x.abertoEm ? ' · admissão aberta em ' + fmtD(x.abertoEm) : ''}</div></div><div class="side">${x.asoApto ? '<span class="badge b-ok">Liberado · ASO apto</span>' : '<span class="badge b-warn">Aguardando ASO</span>'} ${st}</div></div>
+      ${it.length ? `<table class="tb" style="margin-top:6px"><thead><tr><th>EPI</th><th>CA</th><th class="n">Qtd</th><th class="n">Estoque</th><th></th></tr></thead><tbody>${it.map(i => `<tr><td>${esc(i.p.nome || 'EPI removido do cadastro')}</td><td>${esc(i.p.ca || '')}</td><td class="n">${num(i.e.qtd) || 1}</td><td class="n">${i.p.id ? totalEpi(i.p) : '—'}</td><td style="white-space:nowrap;text-align:right">${S.canEdit ? `<button class="btn sm ${m[i.e.epiId] === 'ok' ? 'primary' : 'ghost'}" data-sep="${esc(x.id)}|${esc(i.e.epiId)}|ok" type="button">Separado</button> <button class="btn sm ${m[i.e.epiId] === 'falta' ? 'danger' : 'ghost'}" data-sep="${esc(x.id)}|${esc(i.e.epiId)}|falta" type="button">Falta</button>` : esc(m[i.e.epiId] === 'ok' ? 'Separado' : m[i.e.epiId] === 'falta' ? 'Falta' : '')}</td></tr>`).join('')}</tbody></table>` : ''}</div>`;
+  }).join('');
+  $$('#p-sep [data-sep]').forEach(b => b.onclick = async () => {
+    if (!guardWrite()) return; const [id, epi, v] = b.dataset.sep.split('|'); const x = (S.sep || []).find(y => y.id === id) || {}; const atual = (x.marc || {})[epi];
+    const quem = (window.__FB && window.__FB.perfil && window.__FB.perfil.nome) || (window.__FB && window.__FB.email) || '';
+    try { await db.doc('epi_separacao/' + id).update({ ['marc.' + epi]: atual === v ? '' : v, porAlmox: quem, emAlmox: new Date().toISOString() }); } catch (e) { handleErr(e); }
+  });
+}
 function renderPainel() {
+  renderSep();
   const F = S.ferr.filter(f => f.status !== 'baixada');
   const valor = F.filter(f => f.status !== 'extraviada').reduce((a, f) => a + num(f.valor), 0);
   const late = abertas().filter(isLate).sort((a, b) => str(a.previsaoDevolucao).localeCompare(str(b.previsaoDevolucao)));
@@ -2916,6 +2938,7 @@ show(); renderEpiItens();
   db.collection('cursos_priv').onSnapshot(q => { S.cursoSig = {}; q.docs.forEach(x => S.cursoSig[x.id] = (x.data() || {}).instrutorAssin || ''); }, () => {});
   db.doc('config/regras').onSnapshot(d => { const r = d.exists ? (d.data() || {}) : {}; S.regras = { epi: r.epi || {}, tipos: r.tipos || {} }; if (!RG.dirty) RG.d = null; sched(); }, e => console.warn(e));
   db.collection('autorizacoes').onSnapshot(s => { S.sol = s.docs.map(asObj); sched(); }, e => console.warn(e));
+  db.collection('epi_separacao').onSnapshot(s => { S.sep = s.docs.map(asObj); sched(); }, () => {});
   db.collection('decisoes').onSnapshot(s => { S.dec = s.docs.map(asObj); sched(); }, e => console.warn(e));
   if (!window.__FBMODE) db.doc('config/usuarios').onSnapshot(d => { S.usuarios = (d.exists && (d.data() || {}).users) || {}; S.usrReady = true; sched(); pedirAcesso(); }, e => console.warn(e));
   if (!window.__FBMODE) db.collection('pedidos_acesso').onSnapshot(s => { S.ped = s.docs.map(asObj); sched(); }, e => console.warn(e));

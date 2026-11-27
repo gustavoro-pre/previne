@@ -18,7 +18,7 @@ let tt; const toast = (t, k) => { const e = $('#toast'); e.textContent = t; e.cl
 const kpi = (t, n, k, s) => `<div class="kpi ${k || ''}"><div class="n">${n}</div><div class="t">${t}</div>${s ? `<div class="s">${s}</div>` : ''}</div>`;
 const PRAZO = 8;
 
-const D = { adm: [], func: [], areas: [], kits: [], cursos: [], cfg: {}, emp: {} };
+const D = { adm: [], func: [], areas: [], kits: [], cursos: [], cfg: {}, emp: {}, sep: {}, sepOk: false };
 const V = { tab: 'and', q: '', per: '180' };
 let db = null, PODE = false, MEU = ''; const VS = () => ((window.__FB || {}).perfil || {}).verSalarios === true;
 
@@ -232,13 +232,14 @@ function rMod() {
 
 /* ---------- dados ---------- */
 function ouvir() {
-  db.collection('admissoes').onSnapshot(s => { D.adm = s.docs.map(d => Object.assign({}, d.data(), { id: d.id })); render();
+  db.collection('admissoes').onSnapshot(s => { D.adm = s.docs.map(d => Object.assign({}, d.data(), { id: d.id })); syncSep(); render();
     const qs = new URLSearchParams(location.search), dl = qs.get('a'), dap = qs.get('aprov');
     if (dap && !window.__deep && D.adm.some(x => (x.envios || []).some(e => e.id === dap))) { window.__deep = 1; setTimeout(() => telaAprov(dap), 300); }
     else if (dl && !window.__deep && D.adm.some(x => x.id === dl)) { window.__deep = 1; setTimeout(() => detalhe(dl), 300); } if (ABERTO && !$('#modal').hidden) detalhe(ABERTO, true); }, () => toast('Sem permissão para ver as admissões.', 'bad'));
   db.collection('funcionarios').onSnapshot(s => { D.func = s.docs.map(d => Object.assign({}, d.data(), { id: d.id })); }, () => {});
   db.collection('areas').onSnapshot(s => { D.areas = s.docs.map(d => Object.assign({}, d.data(), { id: d.id })).sort((a, b) => str(a.nome).localeCompare(str(b.nome), 'pt')); render(); }, () => {});
   db.collection('kits').onSnapshot(s => { D.kits = s.docs.map(d => d.data()); }, () => {});
+  db.collection('epi_separacao').onSnapshot(s => { D.sep = {}; s.docs.forEach(d => D.sep[d.id] = d.data()); D.sepOk = true; syncSep(); if (V.tab === 'and') render(); }, () => {});
   db.collection('cursos').onSnapshot(s => { D.cursos = s.docs.map(d => Object.assign({}, d.data(), { id: d.id })).filter(c => c.ativo !== false).sort((a, b) => str(a.nome).localeCompare(str(b.nome), 'pt')); render(); }, () => {});
   db.doc('config/admissao').onSnapshot(s => { D.cfg = s.exists ? s.data() : {}; }, () => {});
   if (PODE) db.collection('contab_mail').where('status', '==', 'sem_candidato').onSnapshot(s => { D.ctSolto = s.docs.map(d => Object.assign({}, d.data(), { id: d.id })); if (V.tab === 'and') render(); }, () => {});
@@ -265,12 +266,33 @@ function render() {
   if (V.criando && V.tab === 'nova') return; /* abrindo admissão: não apaga o formulário nem a mensagem de progresso */
   ({ and: rAnd, nova: rNova, conc: rConc, kpi: rKpi, mod: rMod })[V.tab]();
 }
+/* ---------- separação de EPI pelo almoxarifado ----------
+   Cada admissão em andamento vira um pedido em epi_separacao/{id}. O almoxarifado vê no painel de Ferramentas & EPI
+   (com o kit da função) e marca item a item: separado ou falta. Liberado = ASO apto. */
+const kitDe = f => D.kits.find(k => !k.adicional && [k.funcao].concat(k.funcoesAlt || []).map(norm).includes(norm(f)));
+function sepDados(a) { const aso = etp(a).aso || {}; return { nome: str(a.nome), funcao: str(a.funcao), area: [a.area, a.subarea].filter(Boolean).join(' → '), unidade: str(a.unidade), abertoEm: str(a.abertoEm).slice(0, 10), asoApto: !!(aso.data && aso.apto !== false), asoData: str(aso.data), mobilizado: !!fimMob(a), status: a.status === 'aberto' ? 'aberto' : str(a.status || 'fechado') }; }
+let sepT = null;
+function syncSep() {
+  if (!PODE || !D.sepOk) return; clearTimeout(sepT);
+  sepT = setTimeout(async () => {
+    for (const a of D.adm) {
+      const ex = D.sep[a.id]; if (!ex && a.status !== 'aberto') continue;
+      const nv = sepDados(a); if (ex && Object.keys(nv).every(k => ex[k] === nv[k])) continue;
+      try { await db.doc('epi_separacao/' + a.id).set(Object.assign(nv, { atualizadoEm: new Date().toISOString() }, ex ? {} : { marc: {}, criadoEm: new Date().toISOString() }), { merge: true }); } catch (e) { console.warn('epi_separacao', e); return; }
+    }
+  }, 1500);
+}
+function sepBadge(a) {
+  const k = kitDe(a.funcao); const sp = (D.sep || {})[a.id]; if (!k || !(k.epis || []).length || a.status !== 'aberto') return '';
+  const m = (sp && sp.marc) || {}; const n = k.epis.length, ok = k.epis.filter(e => m[e.epiId] === 'ok').length, fal = k.epis.filter(e => m[e.epiId] === 'falta').length;
+  return `<span class="badge ${fal ? 'b-bad' : ok === n ? 'b-ok' : 'b-warn'}" title="Separação de EPI pelo almoxarifado">EPI ${ok}/${n}${fal ? ' · falta ' + fal : ''}</span>`;
+}
 function cardAdm(a) {
   const d = diasMob(a), ds = ADM.docsSt(a); const foto = ((a.cand || {}).docs || {}).foto; const th = foto && foto[0] && foto[0].thumb;
   return `<div class="card adm" data-open="${esc(a.id)}"><div style="display:flex;gap:12px;align-items:flex-start">${th ? `<img class="foto" src="${th}" alt="">` : ''}
     <div style="flex:1;min-width:0"><b>${esc(a.nome)}</b><div class="t2">${a.vinculo === 'PJ' ? '<span class="badge b-warn">PJ</span> ' : ''}${esc(a.funcao || '')}${a.area ? ' · ' + esc(a.area) : ''}${a.subarea ? ' → ' + esc(a.subarea) : ''}</div>
     <div class="t2">Aberto em ${fmtD(a.abertoEm)}${(a.cand || {}).em ? ' · candidato mexeu em ' + fmtD(a.cand.em) : ' · candidato ainda não abriu o link'}${ds.pendRev.length && a.status === 'aberto' ? ` · <b style="color:var(--info)">${ds.pendRev.length} doc(s) para conferir</b>` : ''}</div></div>
-    <div style="text-align:right"><div class="dias ${d > PRAZO ? 'bad' : ''}">${d}d</div><div class="t2">${fimMob(a) ? 'mobilizado' : 'mobilização'}</div>${precisaJust(a) && a.status === 'aberto' ? '<span class="badge b-bad">Justificar</span>' : ''}${(a.envios || []).some(x => x.status === 'aprovacao') ? '<span class="badge b-bad">Aguardando de acordo</span>' : ''}</div></div>${pills(a)}</div>`;
+    <div style="text-align:right"><div class="dias ${d > PRAZO ? 'bad' : ''}">${d}d</div><div class="t2">${fimMob(a) ? 'mobilizado' : 'mobilização'}</div>${precisaJust(a) && a.status === 'aberto' ? '<span class="badge b-bad">Justificar</span>' : ''}${(a.envios || []).some(x => x.status === 'aprovacao') ? '<span class="badge b-bad">Aguardando de acordo</span>' : ''}${sepBadge(a)}</div></div>${pills(a)}</div>`;
 }
 function rAnd() {
   let L = D.adm.filter(a => a.status === 'aberto'); if (V.q) { const q = norm(V.q); L = L.filter(a => norm(a.nome + ' ' + a.funcao + ' ' + a.area + ' ' + a.cpf).includes(q)); }
