@@ -105,7 +105,8 @@ const loadPdfLib = () => loadLib('https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/di
 const fmtDH = iso => { const d = new Date(iso); return isNaN(d) ? '—' : d.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }); };
 const evid = (a, s) => [`Assinado eletronicamente por ${a.nome}, CPF ${ADM.fmtCpf(a.cpf)}, em ${fmtDH(s.em)} (horário de Brasília), pelo link individual enviado pelo RH, após confirmar o CPF.`,
   `Código do processo: ${a.id}. Impressão digital do documento (SHA-256): ${s.hash}.`, `Aparelho: ${str(s.ua).slice(0, 160)}.`, 'Assinatura eletrônica nos termos da MP 2.200-2/2001, art. 10, § 2º, aceita pelas partes.'];
-async function baixar(nome, blob) { const dl = await claude.use('downloads'); if (!dl) return toast('Download indisponível.', 'bad'); try { await dl.save({ filename: nome, data: blob }); toast('PDF pronto.', 'ok'); } catch (e) { if (!(e && e.code === 'declined')) toast('Não foi possível salvar.', 'bad'); } }
+let CAPT = null; /* quando preenchido, os PDFs gerados vão para o envio à contabilidade em vez de baixar */
+async function baixar(nome, blob) { if (CAPT) { CAPT.push({ nome, blob }); return; } const dl = await claude.use('downloads'); if (!dl) return toast('Download indisponível.', 'bad'); try { await dl.save({ filename: nome, data: blob }); toast('PDF pronto.', 'ok'); } catch (e) { if (!(e && e.code === 'declined')) toast('Não foi possível salvar.', 'bad'); } }
 async function pdfTexto(a, q) {
   try { await loadPDF(); } catch (e) { return toast(e.message, 'bad'); }
   const d = await db.doc(`admissoes/${a.id}/d/${q}`).get(); if (!d.exists) return toast('Documento não encontrado.', 'bad');
@@ -283,6 +284,75 @@ let ABERTO = '', SUJO = false; /* SUJO: o RH mexeu em campos ainda não salvos; 
 document.addEventListener('input', e => { if (e.target.closest && e.target.closest('#sheet')) SUJO = true; });
 const sheet = h => { $('#sheet').innerHTML = h; $('#modal').hidden = false; };
 const fechar = () => { ABERTO = ''; SUJO = false; $('#modal').hidden = true; $('#sheet').innerHTML = ''; render(); };
+/* ---------- envio à contabilidade por e-mail ----------
+   O RH escolhe documentos, data de admissão e data/hora do envio. O portal grava o pedido em envios_contab (com os arquivos em partes)
+   e o script do Google (conta previneime@gmail.com) envia o e-mail na hora marcada e grava o resultado. */
+const ENV_ST = { agendado: ['Agendado', 'b-info'], enviado: ['Enviado', 'b-ok'], erro: ['Erro', 'b-bad'], cancelado: ['Cancelado', 'b-mut'] };
+function envLista(a) {
+  const L = (a.envios || []).slice().reverse(); if (!L.length) return '';
+  return `<div style="margin-top:8px">${L.map(x => { const st = ENV_ST[x.status] || ENV_ST.agendado; return `<div class="note" style="display:flex;gap:8px;align-items:center;padding:3px 0"><span class="badge ${st[1]}">${st[0]}</span><span style="flex:1">${x.status === 'enviado' ? 'Enviado em ' + fmtDH(x.enviadoEm) : x.status === 'erro' ? esc(x.erro || 'Falha no envio') : 'Para ' + fmtDH(x.quando)} · ${esc(x.para)} · ${x.n} arquivo(s) · admissão ${fmtD(x.dataAdmissao)}</span>${x.status === 'agendado' && PODE ? `<button class="link" data-envx="${esc(x.id)}" type="button">cancelar</button>` : ''}</div>`; }).join('')}</div>`;
+}
+async function envStatus(a) {
+  const pend = (a.envios || []).filter(x => x.status === 'agendado'); const url = (D.cfg || {}).envioUrl; if (!pend.length || !url) return;
+  let r; try { r = await (await fetch(url + '?ids=' + pend.map(x => x.id).join(','))).json(); } catch (e) { return; }
+  let mudou = false;
+  for (const x of pend) { const s2 = r[x.id]; if (!s2) continue; Object.assign(x, { status: s2.status, enviadoEm: s2.status === 'enviado' ? s2.em : '', erro: s2.erro || '' }); mudou = true;
+    db.doc('envios_contab/' + x.id).update({ status: s2.status, enviadoEm: s2.em || '', erro: s2.erro || '' }).catch(() => {}); }
+  if (mudou && PODE) { const e = etp(a); const ult = (a.envios || []).filter(x => x.status === 'enviado').map(x => str(x.enviadoEm).slice(0, 10)).sort().pop(); const u = { envios: a.envios }; if (ult) { e.contab = { data: ult }; u.etapas = e; } await db.doc('admissoes/' + a.id).update(u).catch(() => {}); if (ABERTO === a.id) detalhe(a.id); }
+}
+async function cancelarEnvio(a, id) {
+  if (!confirm('Cancelar este envio agendado?')) return;
+  try { await db.doc('envios_contab/' + id).update({ status: 'cancelado', canceladoPor: MEU, canceladoEm: new Date().toISOString() }); const x = (a.envios || []).find(y => y.id === id); if (x) x.status = 'cancelado'; await db.doc('admissoes/' + a.id).update({ envios: a.envios }); toast('Envio cancelado.', 'ok'); detalhe(a.id); } catch (e) { toast('Não foi possível cancelar.', 'bad'); }
+}
+function envioContab(a) {
+  const c = a.cand || {}, docs = c.docs || {}; const cfg = D.cfg || {};
+  const cand = []; ADM.slotsDe(a).forEach(sl => (docs[sl.id] || []).forEach((arq, i) => cand.push({ k: 'c|' + sl.id + '|' + i, t: sl.t + ((docs[sl.id] || []).length > 1 ? ' (' + (i + 1) + ')' : ''), sub: arq.nome })));
+  const ass = []; if ((a.textos || {}).carta) ass.push({ k: 't|carta', t: 'Carta-convite' + (assinado(a, 'carta') ? ' (assinada)' : ' (não assinada)') }); if ((a.textos || {}).lgpd) ass.push({ k: 't|lgpd', t: 'Termo LGPD' + (assinado(a, 'lgpd') ? ' (assinado)' : ' (não assinado)') });
+  Object.keys(a.assinar || {}).forEach(id => ass.push({ k: 'a|' + id, t: tituloDoc(a, id) + (assinado(a, id) ? ' (assinado)' : ' (não assinado)') }));
+  const amanha = new Date(Date.now() + 864e5); const dtl = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  const chk = (x, on) => `<label style="display:flex;gap:8px;align-items:flex-start;color:inherit;font-size:14px;margin:4px 0"><input type="checkbox" data-ek="${esc(x.k)}" ${on ? 'checked' : ''} style="width:18px;height:18px;margin-top:2px"><span>${esc(x.t)}${x.sub ? `<span class="note"> · ${esc(x.sub)}</span>` : ''}</span></label>`;
+  sheet(`<div class="top"><h2>Enviar à contabilidade</h2><button class="x" id="v-x" aria-label="Voltar">×</button></div>
+    <p class="note" style="margin:-4px 0 8px">${esc(a.nome)} · ${esc(a.funcao)} · ${esc(a.area)}</p>
+    <div class="card"><div class="grid2"><div><label class="req" for="v-para">Para (e-mail da contabilidade)</label><input id="v-para" type="email" value="${esc(cfg.contabEmail || '')}" placeholder="contabilidade@…"></div><div><label for="v-cc">Cópia (separe por vírgula)</label><input id="v-cc" value="${esc(cfg.contabCc || '')}"></div></div>
+      <div class="grid2"><div><label class="req" for="v-adm">Data de admissão (contratação)</label><input id="v-adm" type="date" value="${esc(a.dataAdmissao || '')}"></div><div><label class="req" for="v-quando">Enviar em</label><div style="display:flex;gap:6px"><input id="v-dia" type="date" value="${dtl(new Date())}"><input id="v-hora" type="time" value="${String(new Date().getHours()).padStart(2, '0')}:${String(new Date().getMinutes()).padStart(2, '0')}" style="max-width:120px"></div><p class="note" style="margin:2px 0 0">Data e hora de agora = envia em até 5 minutos. Pode marcar para outro dia (ex.: ${fmtD(dtl(amanha))}).</p></div></div>
+      <label for="v-ass">Assunto</label><input id="v-ass" value="${esc('Admissão – ' + a.nome + ' – ' + a.funcao)}">
+      <label for="v-msg">Mensagem</label><textarea id="v-msg" rows="8"></textarea></div>
+    <div class="card"><p class="ct" style="margin:0 0 4px">Documentos do candidato</p>${cand.map(x => chk(x, true)).join('') || '<p class="note">Nenhum documento enviado.</p>'}
+      <p class="ct" style="margin:12px 0 4px">Documentos da empresa</p>${ass.map(x => chk(x, /assinad/.test(x.t))).join('') || '<p class="note">Nenhum documento gerado.</p>'}
+      <p class="note">O e-mail sai de previneime@gmail.com. Limite de 25 MB por e-mail (os anexos são conferidos antes de agendar).</p></div>
+    <div class="actions"><button class="btn ghost" id="v-cancel" type="button">Voltar</button><button class="btn primary" id="v-ok" type="button">Agendar envio</button></div><p class="note" id="v-st"></p>`);
+  const msgPad = () => `Prezados,\n\nSegue a documentação para admissão de ${a.nome}, CPF ${ADM.fmtCpf(a.cpf)}.\n\nFunção: ${a.funcao}\nÁrea: ${a.area}${a.subarea ? ' / ' + a.subarea : ''}${a.unidade ? '\nUnidade: ' + a.unidade : ''}\nVínculo: ${a.vinculo || 'CLT'}\nData de admissão: ${$('#v-adm').value ? fmtD($('#v-adm').value) : '[escolha a data]'}\n\nFicamos à disposição.\n\nAtenciosamente,\nRH – PREVINE INSTALAÇÃO E MANUTENÇÃO ELÉTRICA LTDA`;
+  let msgEditada = false; $('#v-msg').value = msgPad(); $('#v-msg').oninput = () => { msgEditada = true; };
+  $('#v-adm').onchange = () => { if (!msgEditada) $('#v-msg').value = msgPad(); };
+  $('#v-x').onclick = $('#v-cancel').onclick = () => detalhe(a.id);
+  $('#v-ok').onclick = async () => {
+    const para = $('#v-para').value.trim(), cc = $('#v-cc').value.trim(), dAdm = $('#v-adm').value, quando = new Date($('#v-dia').value + 'T' + ($('#v-hora').value || '00:00'));
+    const sel = $$('#sheet [data-ek]:checked').map(x => x.dataset.ek);
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(para)) return toast('Informe o e-mail da contabilidade.', 'bad');
+    if (!dAdm) return toast('Escolha a data de admissão.', 'bad'); if (isNaN(quando)) return toast('Escolha o dia e a hora do envio.', 'bad');
+    if (!sel.length) return toast('Marque ao menos um documento.', 'bad');
+    const b = $('#v-ok'); b.disabled = true; const st = $('#v-st');
+    try {
+      st.textContent = 'Juntando os documentos…'; const files = [];
+      for (const k of sel) { const [t, x, i] = k.split('|');
+        if (t === 'c') { const arq = docs[x][+i]; const blob = await ADM.ler(arq, x, getPart(a.id)); const ext = (str(arq.nome).match(/\.[a-z0-9]+$/i) || [''])[0] || (/pdf/.test(arq.tipo) ? '.pdf' : '.jpg'); const tit = (ADM.SLOTS.find(z => z.id === x) || {}).t || x; files.push({ nome: (tit.split(' (')[0] + (docs[x].length > 1 ? ' ' + (+i + 1) : '') + ' - ' + a.nome + ext).replace(/[\\/:*?"<>|]+/g, ' '), tipo: arq.tipo, blob }); }
+        else { CAPT = []; try { if (t === 't') await pdfTexto(a, x); else await pdfDoc(a, x); } finally { const cap = CAPT; CAPT = null; cap.forEach(f => files.push({ nome: f.nome.replace(/[\\/:*?"<>|]+/g, ' '), tipo: 'application/pdf', blob: f.blob })); } }
+      }
+      const tot = files.reduce((s2, f) => s2 + f.blob.size, 0); if (tot > 24 * 1024 * 1024) { b.disabled = false; st.textContent = ''; return toast(`Os anexos somam ${(tot / 1048576).toFixed(1)} MB; o limite é 25 MB. Desmarque alguns.`, 'bad'); }
+      const ref = db.collection('envios_contab').doc(); const meta = [];
+      for (let fi = 0; fi < files.length; fi++) { const f = files[fi]; st.textContent = `Enviando para o portal: ${f.nome}…`;
+        const u8 = new Uint8Array(await f.blob.arrayBuffer()); let bin = ''; for (let j = 0; j < u8.length; j += 0x8000) bin += String.fromCharCode.apply(null, u8.subarray(j, j + 0x8000)); const b64 = btoa(bin); const partes = Math.max(1, Math.ceil(b64.length / 700000));
+        for (let p2 = 0; p2 < partes; p2++) await db.doc(`envios_contab/${ref.id}/p/${fi}_${p2}`).set({ f: fi, i: p2, d: b64.slice(p2 * 700000, (p2 + 1) * 700000) });
+        meta.push({ nome: f.nome, tipo: f.tipo || 'application/octet-stream', partes, bytes: f.blob.size }); }
+      const agora = new Date().toISOString();
+      await ref.set({ admissaoId: a.id, nome: a.nome, para, cc, assunto: $('#v-ass').value.trim() || 'Admissão – ' + a.nome, corpo: $('#v-msg').value, dataAdmissao: dAdm, quando: quando.toISOString(), status: 'agendado', arquivos: meta, criadoEm: agora, por: MEU });
+      const env = (a.envios || []).concat([{ id: ref.id, para, quando: quando.toISOString(), dataAdmissao: dAdm, n: meta.length, status: 'agendado' }]);
+      await db.doc('admissoes/' + a.id).update({ envios: env, dataAdmissao: dAdm }); a.envios = env; a.dataAdmissao = dAdm;
+      if (!cfg.contabEmail && PODE) db.doc('config/admissao').set({ contabEmail: para, contabCc: cc }, { merge: true }).then(() => { D.cfg.contabEmail = para; D.cfg.contabCc = cc; }).catch(() => {});
+      toast(quando - Date.now() < 5 * 60e3 ? 'Envio agendado: sai em até 5 minutos.' : 'Envio agendado para ' + fmtDH(quando.toISOString()) + '.', 'ok'); detalhe(a.id);
+    } catch (e) { console.error(e); b.disabled = false; st.textContent = ''; toast('Não foi possível agendar: ' + (e.message || e), 'bad'); }
+  };
+}
 async function detalhe(id, refresh) {
   const a = D.adm.find(x => x.id === id); if (!a) return; ABERTO = id;
   if (refresh) { const ae = document.activeElement; if (SUJO || (ae && ae.closest && ae.closest('#sheet') && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName))) return; }
@@ -311,7 +381,8 @@ async function detalhe(id, refresh) {
       <div class="grid2"><div><label for="e-asoap">Resultado</label><select id="e-asoap" ${ro}><option value="1" ${(e.aso || {}).apto !== false ? 'selected' : ''}>Apto</option><option value="0" ${(e.aso || {}).apto === false ? 'selected' : ''}>Inapto</option></select></div><div><label>Arquivo do ASO</label>${((e.aso || {}).arq || []).length ? `<div class="thumbs">${e.aso.arq.map((f, i) => `<button data-veraso="${i}">${f.thumb ? `<img src="${f.thumb}" alt="">` : 'PDF'}</button>`).join('')}</div>` : ''}${ro ? '' : '<button class="btn sm ghost" id="e-asof" style="margin-top:4px">Anexar ASO</button>'}</div></div></div>
     <div class="etf"><h4>Integração</h4><div class="grid2"><div><label for="e-ia">Agendada para</label><input type="date" id="e-ia" value="${esc((e.integ || {}).agendada || '')}" ${ro}></div><div><label for="e-ir">Realizada em</label><input type="date" id="e-ir" value="${esc((e.integ || {}).realizada || '')}" ${ro}></div></div><p class="note" style="margin:6px 0 0">A integração não vence.</p></div>
     <div class="etf"><h4>Treinamentos admissionais</h4><div id="m-trein"><p class="note">Carregando…</p></div><div class="grid2"><div><label for="e-te">Enviados em</label><input type="date" id="e-te" value="${esc((e.trein || {}).enviado || '')}" ${ro}></div><div><label for="e-tc">Concluídos em</label><input type="date" id="e-tc" value="${esc((e.trein || {}).concluido || '')}" ${ro}></div></div></div>
-    <div class="etf"><h4>Assinaturas e envio</h4><div class="grid3"><div><label for="e-epi">OS e ficha de EPI assinadas</label><input type="date" id="e-epi" value="${esc((e.epi || {}).data || '')}" ${ro}></div><div><label for="e-adm">Docs admissionais assinados</label><input type="date" id="e-adm" value="${esc((e.admiss || {}).data || '')}" ${ro}></div><div><label for="e-ct">Enviado à contabilidade</label><input type="date" id="e-ct" value="${esc((e.contab || {}).data || '')}" ${ro}></div></div></div>
+    <div class="etf"><h4>Assinaturas e envio</h4><div class="grid3"><div><label for="e-epi">OS e ficha de EPI assinadas</label><input type="date" id="e-epi" value="${esc((e.epi || {}).data || '')}" ${ro}></div><div><label for="e-adm">Docs admissionais assinados</label><input type="date" id="e-adm" value="${esc((e.admiss || {}).data || '')}" ${ro}></div><div><label for="e-ct">Enviado à contabilidade</label><input type="date" id="e-ct" value="${esc((e.contab || {}).data || '')}" ${ro}></div></div>
+      ${envLista(a)}${PODE ? '<div class="actions" style="justify-content:flex-start;margin-top:6px"><button class="btn sm accent" id="e-env" type="button">Enviar à contabilidade por e-mail…</button></div>' : ''}</div>
     <div class="etf"><h4>Justificativa de atraso ${atrasado(a) ? `<span class="badge ${precisaJust(a) ? 'b-bad' : 'b-ok'}">${precisaJust(a) ? 'obrigatória' : 'preenchida'}</span>` : ''}</h4>
       <div class="grid2"><div><label for="e-jm">Motivo</label><select id="e-jm" ${ro}><option value="">—</option>${['Documentos do candidato', 'Agenda do ASO / clínica', 'Agenda da integração (cliente)', 'Treinamentos', 'Candidato desistiu ou sumiu', 'Aprovação interna', 'Outro'].map(m => `<option ${a.justMotivo === m ? 'selected' : ''}>${m}</option>`).join('')}</select></div><div><label for="e-j">Detalhe</label><input id="e-j" value="${esc(a.justificativa || '')}" ${ro} placeholder="${atrasado(a) ? 'Obrigatório: passou de ' + PRAZO + ' dias' : 'Só se passar de ' + PRAZO + ' dias'}"></div></div></div>
     <div class="grid2"><div${VS() ? '' : ' hidden'}><label for="e-sal">Salário (R$) · só quem vê salários</label><input id="e-sal" inputmode="decimal" placeholder="Carregando…" disabled></div><div><label for="e-obs">Observação (só RH)</label><input id="e-obs" value="${esc(a.obs || '')}" ${ro}></div></div>
@@ -340,6 +411,9 @@ async function detalhe(id, refresh) {
   $('#m-x').onclick = fechar;
   const cp = $('#m-copy'); if (cp) cp.onclick = async () => { try { await navigator.clipboard.writeText(linkDe(a)); toast('Link copiado.', 'ok'); } catch (er) { $('#m-link').select(); toast('Selecione e copie o link.'); } };
   const sv = $('#e-save'); if (sv) sv.onclick = () => salvarEtapas(a);
+  const en = $('#e-env'); if (en) en.onclick = () => envioContab(a);
+  if (!refresh) envStatus(a);
+  $$('[data-envx]').forEach(b => b.onclick = () => cancelarEnvio(a, b.dataset.envx));
   const cc = $('#e-conc'); if (cc) cc.onclick = () => concluir(a);
   const cn = $('#e-canc'); if (cn) { let armed = false; cn.onclick = async () => { if (!armed) { armed = true; cn.textContent = 'Toque de novo para cancelar (o link deixa de funcionar)'; return; }
     try { await db.doc('admissoes/' + a.id).update({ status: 'cancelado', canceladoEm: new Date().toISOString(), canceladoPor: MEU });

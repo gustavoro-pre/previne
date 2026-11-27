@@ -141,6 +141,9 @@ service cloud.firestore {
       }
     }
     // salário: só o RH
+    // pedidos de envio da documentação de admissão à contabilidade (o script do Google lê e manda o e-mail)
+    match /envios_contab/{id} { allow read, write: if admi(['rh']);
+      match /p/{pid} { allow read, write: if admi(['rh']); } }
     match /admissoes_priv/{tk} { allow read, write: if admi(['rh']) && folhaOk(); }
     // folha mensal importada (salários, horas extras, faltas): só Admin, Gestão, Gerente e RH
     // salários: só quem tem a permissão 'Vê salários' no cadastro de usuário
