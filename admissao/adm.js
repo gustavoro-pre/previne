@@ -293,7 +293,7 @@ function envLista(a) {
   return `<div style="margin-top:8px">${L.map(x => { const st = ENV_ST[x.status] || ENV_ST.agendado; return `<div class="note" style="display:flex;gap:8px;align-items:center;padding:3px 0"><span class="badge ${st[1]}">${st[0]}</span><span style="flex:1">${x.status === 'enviado' ? 'Enviado em ' + fmtDH(x.enviadoEm) : x.status === 'erro' ? esc(x.erro || 'Falha no envio') : 'Para ' + fmtDH(x.quando)} · ${esc(x.para)} · ${x.n} arquivo(s) · admissão ${fmtD(x.dataAdmissao)}</span>${x.status === 'agendado' && PODE ? `<button class="link" data-envx="${esc(x.id)}" type="button">cancelar</button>` : ''}</div>`; }).join('')}</div>`;
 }
 async function envStatus(a) {
-  const pend = (a.envios || []).filter(x => x.status === 'agendado'); const url = (D.cfg || {}).envioUrl; if (!pend.length || !url) return;
+  const pend = (a.envios || []).filter(x => x.status === 'agendado'); const url = (D.cfg || {}).envioUrl || 'https://script.google.com/macros/s/AKfycbwxPg38bGnvm5053kBKgO8GYQFCpABP2NHzCD7p3caHa_m78ErgcV7o8V3DNdfFk6Az/exec'; if (!pend.length || !url) return;
   let r; try { r = await (await fetch(url + '?ids=' + pend.map(x => x.id).join(','))).json(); } catch (e) { return; }
   let mudou = false;
   for (const x of pend) { const s2 = r[x.id]; if (!s2) continue; Object.assign(x, { status: s2.status, enviadoEm: s2.status === 'enviado' ? s2.em : '', erro: s2.erro || '' }); mudou = true;
