@@ -47,7 +47,9 @@
 
   function build(P, tipo, opt) {
     opt = opt || {}; const d = opt.lib || X(); const K = opt.custos || {}; const F = opt.cfg || {};
-    const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, AlignmentType, BorderStyle, ShadingType, ImageRun, Header, Footer, PageNumber, VerticalAlign, LevelFormat, PageBreak, TableLayoutType } = d;
+    const { Document, Packer, Paragraph: Par0, TextRun, Table, TableRow, TableCell, WidthType, AlignmentType, BorderStyle, ShadingType, ImageRun, Header, Footer, PageNumber, VerticalAlign, LevelFormat, PageBreak, TableLayoutType } = d;
+    /* todo parágrafo sem alinhamento definido sai justificado (pedido do Gustavo: justificar todos os textos) */
+    const Paragraph = function (o) { return new Par0(Object.assign({ alignment: AlignmentType.JUSTIFIED }, o || {})); };
     const isT = tipo === 'tec';
     const mesmoCod = !!P.codPT && P.codPT === P.codPC; const cod = isT ? P.codPT : P.codPC, vinc = (isT ? P.codPC : P.codPT) === cod ? `${cod} (proposta ${isT ? 'comercial' : 'técnica'})` : (isT ? P.codPC : P.codPT);
     const titulo = isT ? 'PROPOSTA TÉCNICA' : 'PROPOSTA COMERCIAL';
@@ -78,7 +80,7 @@
 
     /* ---------- cabeçalho e rodapé ---------- */
     const logo = opt.logo ? new ImageRun({ type: 'png', data: opt.logo, transformation: { width: 46, height: 37 } }) : R('PREVINE', { bold: true, color: NAVY });
-    const L = (w, t) => C(w, new Paragraph({ spacing: { after: 0 }, children: [R(t, { size: 13, color: GRAY })] }), { shading: sh(LBL) });
+    const L = (w, t) => C(w, new Paragraph({ alignment: AlignmentType.LEFT, spacing: { after: 0 }, children: [R(t, { size: 13, color: GRAY })] }), { shading: sh(LBL) });
     const V = (w, t) => C(w, new Paragraph({ spacing: { after: 0 }, children: [R(t, { size: 15, bold: true, color: '111827' })] }));
     const lw = 1100, vw = Math.floor((W - 3 * lw) / 3); const gI = [lw, vw, lw, vw, lw, W - 3 * lw - 2 * vw];
     const info = TB(gI, [
@@ -98,7 +100,7 @@
     const footer = new Footer({ children: [new Paragraph({ border: { top: { style: BorderStyle.SINGLE, size: 4, color: LINE, space: 4 } }, tabStops: [{ type: 'right', position: W }], children: [R(EMP + ' – ' + CNPJ, { size: 14, color: GRAY }), new TextRun({ children: ['\t' + cod + ' – Página ', PageNumber.CURRENT, ' de ', PageNumber.TOTAL_PAGES], font: 'Arial', size: 14, color: GRAY })] })] });
 
     /* ---------- capa ---------- */
-    const ctrlRow = (a, b) => new TableRow({ children: [C(2400, new Paragraph({ spacing: { after: 0 }, children: [R(a, { size: 15, color: GRAY })] }), { shading: sh(LBL) }), C(W - 2400, new Paragraph({ spacing: { after: 0 }, children: [R(b, { size: 17, bold: true, color: '111827' })] }))] });
+    const ctrlRow = (a, b) => new TableRow({ children: [C(2400, new Paragraph({ alignment: AlignmentType.LEFT, spacing: { after: 0 }, children: [R(a, { size: 15, color: GRAY })] }), { shading: sh(LBL) }), C(W - 2400, new Paragraph({ spacing: { after: 0 }, children: [R(b, { size: 17, bold: true, color: '111827' })] }))] });
     const capa = [
       new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 200, after: 200 }, children: [opt.logo ? new ImageRun({ type: 'png', data: opt.logo, transformation: { width: 128, height: 103 } }) : R('PREVINE', { bold: true, size: 48, color: NAVY })] }),
       new Paragraph({ alignment: AlignmentType.CENTER, children: [R(EMP, { bold: true, size: 22, color: '111827' })] }),
