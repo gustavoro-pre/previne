@@ -320,7 +320,7 @@ const imgB64 = async blob => { // qualquer imagem -> JPEG base64 (ExcelJS aceita
     return { b64: cv.toDataURL('image/jpeg', .9).split(',')[1], w: cv.width, h: cv.height }; } finally { URL.revokeObjectURL(url); } };
 async function fichaXlsx(a, o = {}) {
   const X = await exceljs(); const dd = (a.cand || {}).dados || {}, docs = (a.cand || {}).docs || {}; const dAdm = o.dataAdmissao || a.dataAdmissao || '';
-  const wb = new X.Workbook(); wb.creator = empNome(); const ws = wb.addWorksheet('Ficha cadastral', { pageSetup: { paperSize: 9, orientation: 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 0, margins: { left: .5, right: .5, top: .6, bottom: .6, header: .3, footer: .3 } }, views: [{ showGridLines: false }] });
+  const wb = new X.Workbook(); wb.creator = empNome(); const ws = wb.addWorksheet('Ficha cadastral', { pageSetup: { paperSize: 9, orientation: 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 1, margins: { left: .5, right: .5, top: .6, bottom: .6, header: .3, footer: .3 } }, views: [{ showGridLines: false }] });
   ws.columns = [{ width: 26 }, { width: 30 }, { width: 22 }, { width: 22 }];
   const AZ = 'FF1F3A5F', CINZA = 'FFF2F4F7', borda = { style: 'thin', color: { argb: 'FFC9D1DB' } }, B4 = { top: borda, left: borda, bottom: borda, right: borda };
   // cabeçalho: logo + empresa
