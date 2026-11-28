@@ -1,0 +1,28 @@
+name: Gravar dados do OCR do RH no cadastro
+on:
+  workflow_dispatch:
+    inputs:
+      modo:
+        description: 'teste (só conta) ou gravar'
+        required: true
+        default: 'teste'
+permissions:
+  contents: read
+jobs:
+  gravar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Ler o OCR e gravar
+        env:
+          FIREBASE_SA: ${{ secrets.FIREBASE_SA }}
+          MODO: ${{ inputs.modo }}
+        run: |
+          cd tools
+          npm init -y >/dev/null
+          npm install firebase-admin@12 googleapis@144 --no-audit --no-fund >/dev/null
+          node ocr-gravar.mjs
