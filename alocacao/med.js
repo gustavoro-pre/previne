@@ -173,7 +173,7 @@ if (typeof module !== 'undefined') module.exports = MEDC;
 
 /* ---------- tela ---------- */
 if (typeof window !== 'undefined') (() => {
-  const M = { mes: (new Date().toISOString().slice(0, 7)), docs: null, carregando: false, sub: 'mapa', loc: '', grupo: '', busca: '', cfg: { tolMin: 30, almocoMin: 60 }, mapa: {} };
+  const M = { mes: (new Date().toISOString().slice(0, 7)), docs: null, carregando: false, sub: 'mapa', loc: '', grupo: '', busca: '', cfg: { tolMin: 30, almocoMin: 60 }, mapa: {}, lista: {}, listaInfo: null, area: '' };
   window.MED = M;
   const SUBS = { mapa: 'Mapa do mês', func: 'Por funcionário', om: 'Por OM', local: 'Por local', faltam: 'Faltam lançar', rep: 'Reprovados', prev: 'Previsto × realizado', div: 'Medido × ponto × roleta' };
   const COR = { ok: '#2e9e5b', menor: '#f08c00', nao: '#d93025', sempres: '#7b3fbf' };
@@ -187,7 +187,8 @@ if (typeof window !== 'undefined') (() => {
   async function carregar() {
     if (M.carregando) return; M.carregando = true; render();
     try {
-      const [q, c, mp] = await Promise.all([db.collection('med_mes').where('mes', '==', M.mes).get(), db.doc('med_cfg/geral').get(), db.doc('med_cfg/pn').get()]);
+      const [q, c, mp, ls] = await Promise.all([db.collection('med_mes').where('mes', '==', M.mes).get(), db.doc('med_cfg/geral').get(), db.doc('med_cfg/pn').get(), db.doc('med_lista/' + M.mes).get().catch(() => null)]);
+      M.lista = ls && ls.exists ? (ls.data().pessoas || {}) : {}; M.listaInfo = ls && ls.exists ? ls.data() : null;
       M.docs = q.docs.map(d => Object.assign({}, d.data(), { id: d.id }));
       if (c.exists) Object.assign(M.cfg, c.data()); M.mapa = mp.exists ? (mp.data().map || {}) : {};
       M.docs.forEach(d => { if (M.mapa[d.pn]) d.fid = M.mapa[d.pn]; });
@@ -208,7 +209,13 @@ if (typeof window !== 'undefined') (() => {
   /* ---------- linhas calculadas ---------- */
   function linhas() {
     const L = []; const nd = diasMes(M.mes); const tol = +M.cfg.tolMin || 0;
-    for (const d of M.docs || []) {
+    const docs = (M.docs || []).slice(); const tem = new Set(docs.map(d => d.pn));
+    // quem está na lista do mês (contrato fixo de HH) e não teve roleta/ponto/medição também aparece (tudo "sem presença")
+    Object.entries(M.lista || {}).forEach(([pn, l]) => { if (!tem.has(pn) && !/DEMITID|DESLIG/i.test(l.status || '')) docs.push({ pn, nome: l.nome, dias: {}, fid: M.mapa[pn] || acharFunc(pn, l.nome), soLista: true }); });
+    for (const d of docs) {
+      const li = (M.lista || {})[d.pn] || null;
+      if (M.grupo === 'lista' && !li) continue;
+      if (M.area && (!li || MEDC.nk(li.area) !== MEDC.nk(M.area))) continue;
       const f = funcDoc(d); const nome = f ? f.nome : d.nome;
       if (M.grupo === 'med' && !Object.values(d.dias || {}).some(x => x && x.med)) continue;
       if (M.grupo === 'fixa' && !(d.fid && fixaAtual(d.fid))) continue;
@@ -220,9 +227,12 @@ if (typeof window !== 'undefined') (() => {
         const prev = d.fid ? diaDe(d.fid, data).filter(a => a.omNumero) : [];
         dias.push(Object.assign({ dd, data, x: x || {}, loc, prev }, s));
       }
-      const locP = (() => { const c = {}; dias.forEach(z => { if (z.loc) c[z.loc] = (c[z.loc] || 0) + 1; }); return Object.keys(c).sort((a, b) => c[b] - c[a])[0] || ''; })();
+      const locR = (() => { const c = {}; dias.forEach(z => { if (z.loc) c[z.loc] = (c[z.loc] || 0) + 1; }); return Object.keys(c).sort((a, b) => c[b] - c[a])[0] || ''; })();
+      const locL = li ? (/RESEND/i.test(li.unidade || '') ? 'RES' : /BARRA/i.test(li.unidade || '') ? 'BM' : '') : '';
+      const locP = locL || locR;
       if (M.loc && locP !== M.loc) continue;
-      L.push({ d, f, nome, pn: d.pn, dias, loc: locP });
+      if (li && li.om) dias.forEach(z => { if (!z.prev.length) z.prevLista = li.om; });
+      L.push({ d, f, nome, pn: d.pn, dias, loc: locP, locRol: locR, li });
     }
     return L.sort((a, b) => a.nome.localeCompare(b.nome, 'pt'));
   }
@@ -246,15 +256,17 @@ if (typeof window !== 'undefined') (() => {
       <button class="btn sm primary" data-medimp="med">Importar medição (portalRDO)</button>
       <button class="btn sm ghost" data-medimp="rol">Importar roleta</button>
       <button class="btn sm ghost" data-medimp="pto">Importar ponto (RHiD)</button>
+      <button class="btn sm ghost" data-medimp="lista">Importar lista de funcionários (local e OM)</button>
       <button class="btn sm ghost" data-medcfg>Tolerância: ${M.cfg.tolMin} min · almoço ${M.cfg.almocoMin} min</button></div>` : '';
     B.innerHTML = `<div class="card"><div class="ct">Medição × presença</div>
       <p class="cs">Compara o que foi medido no portalRDO com a roleta, o ponto e a alocação prevista. Importe os arquivos do mês e veja dia a dia.</p>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
         <input type="month" id="med-mes" value="${esc(M.mes)}" style="padding:8px;border:1px solid #cfd4dc;border-radius:8px">
         <select id="med-loc" style="padding:8px;border:1px solid #cfd4dc;border-radius:8px"><option value="">Todos os locais</option><option value="RES" ${M.loc === 'RES' ? 'selected' : ''}>Resende</option><option value="BM" ${M.loc === 'BM' ? 'selected' : ''}>Barra Mansa</option></select>
-        <select id="med-grupo" style="padding:8px;border:1px solid #cfd4dc;border-radius:8px"><option value="">Todos da roleta/ponto</option><option value="med" ${M.grupo === 'med' ? 'selected' : ''}>Só quem teve medição no mês</option><option value="fixa" ${M.grupo === 'fixa' ? 'selected' : ''}>Só quem tem OM fixa (contrato HH)</option></select>
+        <select id="med-grupo" style="padding:8px;border:1px solid #cfd4dc;border-radius:8px"><option value="">Todos da roleta/ponto</option><option value="med" ${M.grupo === 'med' ? 'selected' : ''}>Só quem teve medição no mês</option><option value="lista" ${M.grupo === 'lista' ? 'selected' : ''}>Só quem está na lista do mês</option><option value="fixa" ${M.grupo === 'fixa' ? 'selected' : ''}>Só quem tem OM fixa (contrato HH)</option></select>
+        ${(() => { const A = [...new Set(Object.values(M.lista || {}).map(l => l.area).filter(Boolean))].sort(); return A.length ? `<select id="med-area" style="padding:8px;border:1px solid #cfd4dc;border-radius:8px"><option value="">Todas as áreas</option>${A.map(a => `<option ${M.area === a ? 'selected' : ''}>${esc(a)}</option>`).join('')}</select>` : ''; })()}
         <input id="med-busca" placeholder="Buscar funcionário ou PN" value="${esc(M.busca)}" style="flex:1;min-width:160px;padding:8px;border:1px solid #cfd4dc;border-radius:8px">
-      </div>${imp}
+      </div>${M.listaInfo ? `<p class="cs" style="margin:6px 0 0">Lista de funcionários de ${esc(M.mes)}: ${Object.keys(M.lista).length} pessoas (${esc(M.listaInfo.arquivo || '')}, ${fmtD(String(M.listaInfo.em || '').slice(0, 10))}). Local, área e OM prevista vêm dela.</p>` : PODE ? '<p class="cs" style="margin:6px 0 0">Sem lista de funcionários neste mês: o local vem da roleta. Importe a "LISTA DE FUNCIONÁRIOS – PREVINE" do mês (pasta MEDIÇÕES) para ter área, subárea, unidade e OM de cada um.</p>' : ''}${imp}
       <input type="file" id="med-file" multiple accept=".csv,.txt,.xlsx,.xls" hidden></div>
     ${M.carregando ? '<div class="card">Carregando…</div>' : !L.length ? `<div class="card"><p class="cs" style="margin:0">Nenhum dado de medição em ${esc(M.mes)}${M.busca || M.loc ? ' com esse filtro' : ''}. ${PODE ? 'Importe o acompanhamento do portalRDO e a roleta do mês.' : ''}</p></div>` : `
     <div class="kpis">
@@ -310,9 +322,9 @@ if (typeof window !== 'undefined') (() => {
     const g = k => O[k] = O[k] || { om: k, func: new Set(), hm: 0, falta: 0, nRep: 0, hRep: 0, val: 0, vRep: 0, dNao: 0 };
     L.forEach(p => { const pri = omPrincipal(p); p.dias.forEach(z => {
       const m = z.x.med || {}; Object.entries(m.oms || {}).forEach(([o, h]) => { const x = g(o); x.hm += h; x.func.add(p.pn); });
-      if (m.nRep) { const o = Object.keys(m.oms || {})[0] || (z.prev[0] || {}).omNumero || pri || 'Sem OM'; const x = g(o); x.nRep += m.nRep; x.hRep += m.hRep || 0; x.vRep += m.valRep || 0; }
+      if (m.nRep) { const o = Object.keys(m.oms || {})[0] || (z.prev[0] || {}).omNumero || z.prevLista || pri || 'Sem OM'; const x = g(o); x.nRep += m.nRep; x.hRep += m.hRep || 0; x.vRep += m.valRep || 0; }
       if (m.val) { const tot = Object.values(m.oms || {}).reduce((a, b) => a + b, 0) || 1; Object.entries(m.oms || {}).forEach(([o, h]) => g(o).val += m.val * h / tot); }
-      if (z.falta > 0) { const o = (z.prev[0] || {}).omNumero || pri || 'Sem OM'; const x = g(o); x.falta += z.falta; x.func.add(p.pn); if (z.st === 'nao') x.dNao++; }
+      if (z.falta > 0) { const o = (z.prev[0] || {}).omNumero || z.prevLista || pri || 'Sem OM'; const x = g(o); x.falta += z.falta; x.func.add(p.pn); if (z.st === 'nao') x.dNao++; }
     }); });
     return Object.values(O).sort((a, b) => (b.hm + b.falta) - (a.hm + a.falta));
   }
@@ -322,13 +334,13 @@ if (typeof window !== 'undefined') (() => {
     return tab('Medição por OM (a medir atribuído à OM prevista do dia)', cols, rows);
   }
   function vLocal(L) {
-    const G = {}; L.forEach(p => p.dias.forEach(z => { const k = z.loc || (z.pres ? 'Só ponto' : z.med ? 'Sem presença' : ''); if (!k) return;
+    const G = {}; L.forEach(p => p.dias.forEach(z => { const k = p.li && p.li.area ? [p.li.unidade, p.li.area, p.li.subarea].filter(Boolean).join(' › ') : z.loc || (z.pres ? 'Só ponto' : z.med ? 'Sem presença' : ''); if (!k) return;
       const x = G[k] = G[k] || { func: new Set(), dt: 0, ht: 0, hm: 0, falta: 0, nao: 0, menor: 0, nRep: 0, val: 0 };
       x.func.add(p.pn); if (z.pres) { x.dt++; x.ht += z.trab; x.falta += z.falta; } x.hm += z.med; if (z.st === 'nao') x.nao++; if (z.st === 'menor') x.menor++; const m = z.x.med; if (m) { x.nRep += m.nRep || 0; x.val += m.val || 0; } }));
     const nomeL = { RES: 'Resende', BM: 'Barra Mansa' };
     const cols = [{ t: 'Local' }, { t: 'Funcionários', tipo: 'int' }, { t: 'Dias trab.', tipo: 'int' }, { t: 'H trabalhadas', tipo: 'h' }, { t: 'H medidas', tipo: 'h' }, { t: 'H a medir', tipo: 'h' }, { t: '% medido', tipo: 'pct' }, { t: 'Dias não medidos', tipo: 'int' }, { t: 'Dias a menor', tipo: 'int' }, { t: 'Reprovados', tipo: 'int' }].concat(PODE ? [{ t: 'Valor medido', tipo: 'brl' }] : []);
     const rows = Object.entries(G).map(([k, x]) => [nomeL[k] || k, x.func.size, x.dt, x.ht, x.hm, x.falta, x.ht ? x.hm / x.ht : null, x.nao, x.menor, x.nRep].concat(PODE ? [x.val] : []));
-    return tab('Medição por local (pela roleta)', cols, rows);
+    return tab(Object.keys(M.lista || {}).length ? 'Medição por local (unidade › área › subárea da lista do mês)' : 'Medição por local (pela roleta)', cols, rows);
   }
   function vFaltam(L) {
     const cols = [{ t: 'Funcionário' }, { t: 'PN' }, { t: 'Data', tipo: 'data' }, { t: 'Dia' }, { t: 'Situação' }, { t: 'Local' }, { t: 'Roleta' }, { t: 'Ponto' }, { t: 'H trabalhadas', tipo: 'h' }, { t: 'H medidas', tipo: 'h' }, { t: 'Falta medir', tipo: 'h' }, { t: 'OM prevista' }];
@@ -346,7 +358,7 @@ if (typeof window !== 'undefined') (() => {
   function vPrev(L) {
     const cols = [{ t: 'Funcionário' }, { t: 'Data', tipo: 'data' }, { t: 'Dia' }, { t: 'Previsto (alocação)' }, { t: 'Medido (OM)' }, { t: 'Presença' }, { t: 'Diferença' }];
     const rows = []; L.forEach(p => p.dias.forEach(z => {
-      const prev = z.prev.map(a => a.omNumero); const med = Object.keys((z.x.med || {}).oms || {});
+      const prev = z.prev.length ? z.prev.map(a => a.omNumero) : (z.prevLista ? [z.prevLista] : []); const med = Object.keys((z.x.med || {}).oms || {});
       let dif = '';
       if (prev.length && !z.pres) dif = 'Previsto e sem presença';
       else if (!prev.length && z.pres) dif = 'Trabalhou sem estar previsto';
@@ -399,7 +411,8 @@ if (typeof window !== 'undefined') (() => {
     const buf = await file.arrayBuffer();
     if (/\.xlsx?$/i.test(file.name)) {
       if (!window.ExcelJS) await new Promise((ok, err) => { const sc = document.createElement('script'); sc.src = 'https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js'; sc.onload = ok; sc.onerror = err; document.head.appendChild(sc); });
-      const wb = new ExcelJS.Workbook(); await wb.xlsx.load(buf); const ws = wb.worksheets[0]; const out = [];
+      const wb = new ExcelJS.Workbook(); await wb.xlsx.load(buf); let ws = wb.worksheets[0]; const out = [];
+      if (TIPO === 'lista') { const cab = w => { const r = []; w.eachRow({ includeEmpty: false }, (row, i) => { if (i <= 5) r.push(row.values.slice(1).map(c => MEDC.nk(c && c.text ? c.text : c))); }); return r; }; ws = wb.worksheets.find(w => cab(w).some(r => r.includes('MATRICULA') && r.includes('OM'))) || wb.worksheets.find(w => cab(w).some(r => r.includes('NOME') && r.includes('UNIDADE'))) || ws; }
       ws.eachRow({ includeEmpty: false }, row => { const v = row.values.slice(1).map(c => c && typeof c === 'object' && !(c instanceof Date) ? (c.result !== undefined ? c.result : c.text !== undefined ? c.text : (c.richText ? c.richText.map(x => x.text).join('') : '')) : c); out.push(v); });
       return out;
     }
@@ -408,6 +421,7 @@ if (typeof window !== 'undefined') (() => {
   const mesesDe = datas => [...new Set(datas.map(d => d.slice(0, 7)))].sort();
   async function importar(files) {
     const tipo = TIPO; if (!files.length) return;
+    if (tipo === 'lista') return importarLista(files[0]);
     toast('Lendo ' + files.length + ' arquivo(s)…');
     try {
       let todas = [];
@@ -427,6 +441,38 @@ if (typeof window !== 'undefined') (() => {
       $('#med-ok').onclick = async () => { $('#med-ok').disabled = true; $('#med-ok').textContent = 'Gravando…';
         try { const n = await gravar(tipo, P, ini, fim, meses); toast(`Importado: ${n} funcionário(s)/mês atualizados.`, 'ok'); fechar(); M.docs = null; if (meses.length) M.mes = meses[meses.length - 1]; carregar(); }
         catch (e) { console.error(e); toast('Não foi possível gravar: ' + (e.message || e), 'bad'); $('#med-ok').disabled = false; $('#med-ok').textContent = 'Importar'; } };
+    } catch (e) { console.error(e); toast(e.message || 'Não foi possível ler o arquivo.', 'bad'); }
+  }
+  /* lista de funcionários do mês (pasta MEDIÇÕES do Drive, aba "FUNCIONÁRIOS COM OM"): matrícula ArcelorMittal, status, área, subárea, unidade e OM.
+     Só esses campos são lidos: salário e valores da planilha NÃO entram no portal. */
+  async function importarLista(file) {
+    try {
+      const R = await lerArquivo(file); const hi = R.findIndex(r => r.some(c => MEDC.nk(c) === 'NOME') && r.some(c => ['UNIDADE', 'AREA', 'OM'].includes(MEDC.nk(c))));
+      if (hi < 0) return toast('Não achei o cabeçalho (NOME, ÁREA, UNIDADE, OM).', 'bad');
+      const H = R[hi].map(c => MEDC.nk(c)); const col = (...n) => H.findIndex(h => n.includes(h));
+      const c = { mat: col('MATRICULA', 'CADASTRO', 'PN'), st: col('STATUS'), nome: col('NOME'), fn: col('FUNCAO'), ar: col('AREA'), sub: col('SUB-AREA', 'SUBAREA', 'SUB AREA'), un: col('UNIDADE'), om: col('OM'), lan: col('LANCADO?', 'LANCADO') };
+      const P = {}; let semMat = 0;
+      const v = (r, i) => i < 0 ? '' : String(r[i] == null ? '' : r[i]).replace(/\s+/g, ' ').trim();
+      for (const r of R.slice(hi + 1)) {
+        const nome = v(r, c.nome); if (!nome) continue;
+        let pn = v(r, c.mat).replace(/\D/g, '');
+        if (!pn) { const fid = acharFunc('', nome); const ex = Object.entries(M.mapa).find(([, f]) => f === fid); pn = ex ? ex[0] : ''; }
+        if (!pn) { semMat++; continue; }
+        const om = v(r, c.om).replace(/\D/g, '').length >= 8 ? v(r, c.om).replace(/\D/g, '') : v(r, c.om);
+        P[pn] = { nome, funcao: v(r, c.fn), area: v(r, c.ar).replace(/^\?+$/, ''), subarea: v(r, c.sub), unidade: v(r, c.un), om, status: v(r, c.st), lancado: v(r, c.lan) };
+      }
+      const n = Object.keys(P).length; if (!n) return toast('Nenhuma linha com matrícula.', 'bad');
+      const sit = {}; Object.values(P).forEach(p => { const k = p.status || 'Ativo'; sit[k] = (sit[k] || 0) + 1; });
+      const comOm = Object.values(P).filter(p => /\d{8,}/.test(p.om)).length;
+      sheet(`<div class="top"><h2>Lista de funcionários do mês</h2><button class="btn sm ghost" id="m-x">Cancelar</button></div>
+        <p>${esc(file.name)}</p><p><b>${n}</b> pessoas · ${comOm} com OM · ${Object.entries(sit).map(([k, x]) => esc(k) + ': ' + x).join(' · ')}${semMat ? ` · ${semMat} sem matrícula (não importadas)` : ''}</p>
+        <label>Mês da lista</label><input type="month" id="ls-mes" value="${esc(M.mes)}" style="width:100%;padding:9px;border:1px solid #cfd4dc;border-radius:8px;margin:4px 0 10px">
+        <p class="cs">Grava só matrícula, nome, função, área, subárea, unidade, OM, status e "lançado?". Salários e valores da planilha não são lidos. A lista anterior do mês é substituída.</p>
+        <button class="btn big primary" id="ls-ok">Importar</button>`);
+      $('#m-x').onclick = fechar;
+      $('#ls-ok').onclick = async () => { const mes = $('#ls-mes').value; if (!mes) return; $('#ls-ok').disabled = true;
+        try { await db.doc('med_lista/' + mes).set({ mes, pessoas: P, arquivo: file.name, em: new Date().toISOString(), por: MEU }); toast('Lista importada: ' + n + ' pessoas.', 'ok'); fechar(); M.mes = mes; M.docs = null; carregar(); }
+        catch (e) { $('#ls-ok').disabled = false; toast('Não foi possível gravar (publique a regra med_lista).', 'bad'); } };
     } catch (e) { console.error(e); toast(e.message || 'Não foi possível ler o arquivo.', 'bad'); }
   }
   // ponto: CPF/matrícula/nome → funcionário do portal → PN (pelo mapa e pelos dados já importados)
@@ -493,6 +539,7 @@ if (typeof window !== 'undefined') (() => {
     if (e.target.id === 'med-mes' && e.target.value) { M.mes = e.target.value; M.docs = null; render(); }
     if (e.target.id === 'med-loc') { M.loc = e.target.value; render(); }
     if (e.target.id === 'med-grupo') { M.grupo = e.target.value; render(); }
+    if (e.target.id === 'med-area') { M.area = e.target.value; render(); }
     if (e.target.id === 'med-file') importar([...e.target.files]);
   });
   let tb; document.addEventListener('input', e => { if (e.target.id === 'med-busca') { clearTimeout(tb); tb = setTimeout(() => { M.busca = e.target.value; render(); const i = $('#med-busca'); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }, 300); } });
