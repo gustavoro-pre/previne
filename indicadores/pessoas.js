@@ -112,7 +112,7 @@ function vida(fid) {
     <h3>Resumo 360°</h3><div class="card" id="vi-360">${resumo360(f)}</div>
     <h3>Documentos</h3>
     <div class="card"><p class="ct">Documentos de segurança gerados pelo portal</p><p class="note" style="margin:0 0 8px">Saem na hora com os dados atuais do cadastro, no modelo aprovado.</p>
-      <div class="actions" style="justify-content:flex-start;flex-wrap:wrap;gap:8px"><button class="btn ghost sm" data-gdoc="os">Ordem de Serviço (PDF)</button><button class="btn ghost sm" data-gdoc="ficha">Ficha de EPI (PDF)</button><button class="btn ghost sm" data-gdoc="termo">Termo de EPI (PDF)</button>${certs.length ? `<button class="btn ghost sm" data-gcert="${esc(certs.join(','))}">Certificados (${certs.length}) (PDF)</button>` : ''}${D.ext.filter(x => x.funcionarioId === fid && x.arquivoId).map(x => `<button class="btn ghost sm" data-arq="${esc(x.arquivoId)}">${esc(x.tipo)} (externo)</button>`).join('')}</div></div>
+      <div class="actions" style="justify-content:flex-start;flex-wrap:wrap;gap:8px"><button class="btn primary sm" id="vi-dos" type="button">Dossiê de mobilização (PDF)</button><button class="btn ghost sm" data-gdoc="os">Ordem de Serviço (PDF)</button><button class="btn ghost sm" data-gdoc="ficha">Ficha de EPI (PDF)</button><button class="btn ghost sm" data-gdoc="termo">Termo de EPI (PDF)</button>${certs.length ? `<button class="btn ghost sm" data-gcert="${esc(certs.join(','))}">Certificados (${certs.length}) (PDF)</button>` : ''}${D.ext.filter(x => x.funcionarioId === fid && x.arquivoId).map(x => `<button class="btn ghost sm" data-arq="${esc(x.arquivoId)}">${esc(x.tipo)} (externo)</button>`).join('')}</div></div>
     <div class="card" id="vi-rh"><p class="ct">Documentos pessoais e de RH (Drive do RH)</p><p class="note">Carregando…</p></div>
     <h3>Linha do tempo na empresa (${ev.length})</h3>
     <div class="card" style="padding:4px 12px;max-height:560px;overflow:auto">${ev.map(([d, ic, t, s]) => `<div class="ritem"><div style="font-size:18px;width:28px;flex:none">${ic}</div><div class="main"><b>${esc(t)}</b>${s ? `<div class="note">${esc(s)}</div>` : ''}</div><span class="note" style="white-space:nowrap">${fmtD(d)}</span></div>`).join('') || '<p class="note">Nada registrado ainda.</p>'}</div>
@@ -123,6 +123,7 @@ function vida(fid) {
   $('#vi-bk').onclick = () => { V.pes = ''; tPesHub(); };
   PB().querySelectorAll('[data-gdoc]').forEach(b => b.onclick = () => gerarDoc(b, '#gerar-func=' + fid + '.' + b.dataset.gdoc, 'previne-func-doc', ({ os: 'OS - ', ficha: 'Ficha EPI - ', termo: 'Termo EPI - ' }[b.dataset.gdoc]) + f.nome + '.pdf'));
   PB().querySelectorAll('[data-gcert]').forEach(b => b.onclick = () => gerarDoc(b, '#gerar-cert=' + b.dataset.gcert, 'previne-cert', 'Certificados - ' + f.nome + '.pdf'));
+  { const bd = document.getElementById('vi-dos'); if (bd) bd.onclick = () => dossie(bd, f, certs); }
   rhBox(f); if (pf && window.ccBox) ccBox(f); resumo360Extra(f);
 }
 /* ---------- resumo 360°: o que a pessoa precisa ter em dia, o que está com ela e o que aconteceu ---------- */
@@ -269,6 +270,44 @@ document.addEventListener('click', async e => {
 });
 
 /* importação: lê o PDF no navegador, confere, mostra o resumo e grava */
+/* gera um PDF dos módulos (OS, ficha, termo, certificados) e devolve os bytes, sem baixar */
+function pdfBytes(hash, tipo) {
+  return new Promise((ok, err) => { const fr = document.createElement('iframe'); fr.style.cssText = 'position:fixed;width:1px;height:1px;left:-9999px;top:0;border:0'; let feito = false;
+    const fim = () => { window.removeEventListener('message', on); fr.remove(); };
+    const on = ev => { if (ev.origin !== location.origin || !ev.data || ev.data.tipo !== tipo) return; feito = true; fim(); if (ev.data.erro) return err(new Error(ev.data.erro));
+      const bin = atob(ev.data.b64); const u8 = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i); ok(u8); };
+    window.addEventListener('message', on); fr.src = new URL('../ferramentas/' + hash, location.href).href; document.body.appendChild(fr);
+    setTimeout(() => { if (!feito) { fim(); err(new Error('tempo esgotado')); } }, 60000); });
+}
+/* Dossiê de mobilização: capa + OS + ficha de EPI + termo + certificados válidos, num PDF só (para enviar ao cliente) */
+async function dossie(btn, f, certs) {
+  if (btn.disabled) return; const t0 = btn.textContent; btn.disabled = true;
+  try {
+    if (!window.PDFLib) await new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js'; sc.onload = res; sc.onerror = rej; document.head.appendChild(sc); });
+    const { PDFDocument, StandardFonts, rgb } = window.PDFLib; const out = await PDFDocument.create(); const fonte = await out.embedFont(StandardFonts.Helvetica), neg = await out.embedFont(StandardFonts.HelveticaBold);
+    const partes = []; const falhas = [];
+    for (const [k, nome] of [['os', 'Ordem de Serviço'], ['ficha', 'Ficha de EPI'], ['termo', 'Termo de responsabilidade de EPI']]) {
+      btn.textContent = 'Gerando ' + nome + '…'; try { partes.push([nome, await pdfBytes('#gerar-func=' + f.id + '.' + k, 'previne-func-doc')]); } catch (e) { falhas.push(nome); } }
+    const hj = hoje(); const val = D.tr.filter(r => certs.includes(r.id) && (!r.validade || str(r.validade) >= hj));
+    if (val.length) { btn.textContent = 'Gerando certificados…'; try { partes.push(['Certificados', await pdfBytes('#gerar-cert=' + val.map(r => r.id).join(','), 'previne-cert')]); } catch (e) { falhas.push('Certificados'); } }
+    // capa
+    const pg = out.addPage([595.28, 841.89]); let y = 790; const tx = (t, x, tam, b, cor) => { pg.drawText(String(t || ''), { x, y, size: tam, font: b ? neg : fonte, color: cor || rgb(0.1, 0.12, 0.2) }); };
+    tx('PREVINE INSTALAÇÃO E MANUTENÇÃO ELÉTRICA LTDA · CNPJ 03.052.261/0001-43', 50, 9, true); y -= 30;
+    tx('DOSSIÊ DE MOBILIZAÇÃO', 50, 20, true, rgb(0.12, 0.31, 0.61)); y -= 34;
+    [['Nome', f.nome], ['Matrícula', f.matricula], ['CPF', f.cpf ? String(f.cpf).replace(/\D/g, '').replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4') : '—'], ['Função', f.funcao], ['Área', [f.area, f.subarea].filter(Boolean).join(' / ')], ['Trabalho em altura', f.altura ? 'Sim' : 'Não'], ['Gerado em', fmtD(hj)]]
+      .forEach(([k, v]) => { tx(k + ':', 50, 11, true); tx(v || '—', 170, 11); y -= 18; });
+    y -= 14; tx('Treinamentos válidos', 50, 13, true); y -= 20;
+    (val.length ? val : [{ tipoNome: 'Nenhum treinamento válido no portal' }]).slice(0, 22).forEach(r => { tx('• ' + str(r.tipoNome) + (r.validade ? '  (válido até ' + fmtD(r.validade) + ')' : ''), 60, 10); y -= 15; });
+    y -= 14; tx('Conteúdo deste dossiê', 50, 13, true); y -= 20; partes.forEach(([n]) => { tx('• ' + n, 60, 10); y -= 15; });
+    tx('• ASO: anexar o atestado de saúde ocupacional válido (não gerado pelo portal).', 60, 10); y -= 15;
+    if (falhas.length) { y -= 6; tx('Não foi possível gerar agora: ' + falhas.join(', '), 60, 9, false, rgb(0.7, 0.1, 0.1)); }
+    for (const [, b] of partes) { const src = await PDFDocument.load(b); (await out.copyPages(src, src.getPageIndices())).forEach(p => out.addPage(p)); }
+    const bytes = await out.save(); const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' })); a.download = ('Dossie de mobilizacao - ' + f.nome + '.pdf').replace(/[\\/:*?"<>|]+/g, ' ');
+    document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 4000);
+    toast(falhas.length ? 'Dossiê gerado, mas sem: ' + falhas.join(', ') : 'Dossiê gerado.', falhas.length ? 'bad' : 'ok');
+  } catch (e) { toast('Não foi possível gerar o dossiê.', 'bad'); }
+  btn.disabled = false; btn.textContent = t0;
+}
 async function pdfLib() {
   if (window.pdfjsLib) return window.pdfjsLib;
   await new Promise((res, rej) => { const s = document.createElement('script'); s.src = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js'; s.onload = res; s.onerror = rej; document.head.appendChild(s); });
