@@ -97,6 +97,7 @@ service cloud.firestore {
     // registro de acesso a dados sensíveis (LGPD): cada um grava o próprio; só o Administrador lê; ninguém altera
     match /acessos/{id} { allow create: if request.auth != null && request.resource.data.uid == request.auth.uid; allow read: if tem(['admin']); allow update, delete: if false; }
     match /desligamentos/{id} { allow read: if admi(['rh', 'consulta']) || tem(['admin', 'gerente', 'gestao']); allow write: if admi(['rh']) || tem(['admin', 'gerente', 'gestao']); }
+    match /pedidos/{id}  { allow read, write: if tem(['admin', 'gestao', 'gerente']); }
     match /legais/{id}   { allow read: if equipe(); allow write: if tem(['admin', 'gerente', 'gestao', 'tst']); }
     match /licencas/{id} { allow read: if equipe(); allow write: if tem(['admin', 'gerente', 'gestao', 'tst']); }
     match /ocorrencias/{id} {
