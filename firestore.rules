@@ -102,6 +102,7 @@ service cloud.firestore {
     match /pedidos/{id}  { allow read, write: if tem(['admin', 'gestao', 'gerente']); }
     match /legais/{id}   { allow read: if equipe(); allow write: if tem(['admin', 'gerente', 'gestao', 'tst']); }
     match /licencas/{id} { allow read: if equipe(); allow write: if tem(['admin', 'gerente', 'gestao', 'tst']); }
+    match /apadrinhamento/{id} { allow read: if equipe(); allow write: if tem(['admin', 'gerente', 'gestao', 'tst', 'rh']); }
     match /campo/{id} { allow read, create: if equipe(); allow update, delete: if tem(['admin', 'gerente', 'gestao', 'tst']); }
     match /ocorrencias/{id} {
       allow read, create: if equipe();

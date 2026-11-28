@@ -156,7 +156,8 @@ Pedidos novos de 27/11 22h10:
 - Tela inicial (28/11): 7 grupos (RH, Segurança do Trabalho, Operações, Financeiro, Comercial, Gestão, Portal do Aluno; GRUPOS/EXTRA no index.html; #g=<id>) e bloco "Assinaturas pendentes" no topo.
   Módulo assinaturas/ (ass.js): Para mim / Enviados por mim / Histórico, lendo treinamentos+aprov_lotes, docs, envios_contab, autorizacoes+decisoes, matriz_funcao (sem coleção nova).
 - Checklists FOR-SST-101..129 (tools/checklists): semanais, marcação com X, leitor OMR (leitor.py; simulação 99,9%). Aguardando aprovação do Gustavo.
-- Regras novas a publicar: med_lista, campo, avaliacoes, med_mes, med_cfg, cart, cart_cfg, listas_presenca, matriz_funcao, ocorrencias, drive_inv, epi_separacao, admissoes/d/carta.
+- 28/11 tarde: Medição mostra OM e base no mapa, letra da unidade em todo dia (cinza previsto, preta roleta) e amarelo quando fora da base. Indicadores › Pessoas: sexo (cadastro `sexo` ou estimado pelo 1º nome), % mulheres/homens, filtros sexo/faixa/função. Apadrinhamento (apadrinhamento/, coleção apadrinhamento) — aguardando o modelo do Gustavo.
+- Regras novas a publicar: apadrinhamento, med_lista, campo, avaliacoes, med_mes, med_cfg, cart, cart_cfg, listas_presenca, matriz_funcao, ocorrencias, drive_inv, epi_separacao, admissoes/d/carta.
 
 ## Feito em 27/11 (tarde)
 - Propostas: código SIG-AAAA-XXXXX (3 letras da sigla do cliente, ano, 5 números aleatórios), sem "Controle Previne"; canceladas fora da lista;

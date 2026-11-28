@@ -228,6 +228,7 @@ const MODS = [
   { id: 'indicadores', icone: '🧭', nome: 'Painel da direção', desc: 'Resumo do mês para a análise crítica: pessoas, segurança, qualidade, EPI e medição do contrato, com destaques e PDF.', href: 'direcao/', pronto: true },
   { id: 'treinamentos', icone: '🧩', nome: 'Matriz por função', desc: 'O que cada função exige: NRs obrigatórias, exames do PCMSO, riscos, kit de EPI e padrões operacionais. Revise e aprove por função.', href: 'matriz/', pronto: true },
   { id: 'ferramentas', icone: '⚖️', nome: 'Requisitos legais e licenças', desc: 'Normas e leis que se aplicam à Previne (com evidência de atendimento) e vencimentos da empresa: PGR, PCMSO, laudos, AVCB, alvarás, certidões.', href: 'legais/', pronto: true },
+  { id: 'ferramentas', icone: '🤝', nome: 'Apadrinhamento', desc: 'Novato acompanhado por um padrinho experiente: quem falta padrinho, acompanhamento, prazo e liberação.', href: 'apadrinhamento/', pronto: true },
   { id: 'ferramentas', icone: '🗣️', nome: 'DDS e inspeções', desc: 'DDS com assinatura dos participantes no celular, inspeções com checklist (não conforme vira ocorrência) e observações comportamentais.', href: 'campo/', pronto: true },
   { id: 'ferramentas', icone: '⚠️', nome: 'Ocorrências e ações', desc: 'Registre pelo celular acidentes, quase-acidentes, condições inseguras e não conformidades, com foto. Investigação, ações com prazo e verificação de eficácia.', href: 'ocorrencias/', pronto: true },
   { id: 'ferramentas', icone: '🛒', nome: 'Previsão de compra de EPI', desc: 'Quanto comprar de cada EPI nos próximos 30 a 120 dias: estoque, consumo médio, trocas que vencem e kits das admissões em andamento.', href: 'compras/', pronto: true },
@@ -236,7 +237,7 @@ const MODS = [
 ];
 const GRUPOS = [
   { id: 'rh', icone: '👥', nome: 'RH', desc: 'Admissão, desligamento, avaliação de desempenho e indicadores de pessoas (folha, salários, horas, contracheques, turnover).', hrefs: ['admissao/', 'desligamento/', 'avaliacao/', 'indicadores/'] },
-  { id: 'sst', icone: '🦺', nome: 'Segurança do Trabalho', desc: 'Ferramentas e EPI, treinamentos, matriz por função, DDS e inspeções, ocorrências, carteirinhas e compra de EPI.', hrefs: ['ferramentas/', 'treinamentos/', 'matriz/', 'campo/', 'ocorrencias/', 'carteirinhas/', 'compras/'] },
+  { id: 'sst', icone: '🦺', nome: 'Segurança do Trabalho', desc: 'Ferramentas e EPI, treinamentos, matriz por função, DDS e inspeções, apadrinhamento, ocorrências, carteirinhas e compra de EPI.', hrefs: ['ferramentas/', 'treinamentos/', 'matriz/', 'campo/', 'apadrinhamento/', 'ocorrencias/', 'carteirinhas/', 'compras/'] },
   { id: 'op', icone: '🗓️', nome: 'Operações', desc: 'Alocação em OM e medição × roleta × ponto do contrato de HH.', hrefs: ['alocacao/'] },
   { id: 'fin', icone: '💰', nome: 'Financeiro', desc: 'Pedidos do cliente, boletins de medição, BRO, NF e saldo a medir.', hrefs: ['pedidos/'] },
   { id: 'com', icone: '📈', nome: 'Comercial', desc: 'Propostas técnicas e comerciais no modelo Previne.', hrefs: ['propostas/'] },
