@@ -9,7 +9,7 @@
     rel_funcionarios: ['Relação de funcionários', 'REL-RH-001'], rel_folha: ['Folha: horas e remuneração', 'REL-RH-002'], rel_absenteismo: ['Absenteísmo', 'REL-RH-003'],
     rel_cautelas: ['Relatório de cautelas de ferramentas', 'REL-ALM-001'], rel_ocorrencias: ['Ocorrências com ferramentas', 'REL-ALM-002'], rel_entregas_epi: ['Entregas de EPI', 'REL-SST-001'],
     rel_ficha_epi: ['Histórico de EPI do funcionário', 'REL-SST-002'], rel_matriz_trein: ['Matriz de treinamentos', 'REL-SST-003'], rel_deacordo: ['Registro de de acordo', 'REL-SST-004'],
-    rel_lista_mestra: ['Lista mestra de documentos', 'REL-SGI-001'], rel_deslocamentos: ['Deslocamentos (alocação em OM)', 'REL-OPE-001'], rel_alocacao: ['Alocação em OM', 'REL-OPE-002'], rel_medicao: ['Medição de HH × presença', 'REL-OPE-003'],
+    rel_lista_mestra: ['Lista mestra de documentos', 'REL-SGI-001'], rel_deslocamentos: ['Deslocamentos (alocação em OM)', 'REL-OPE-001'], rel_alocacao: ['Alocação em OM', 'REL-OPE-002'], rel_medicao: ['Medição de HH × presença', 'REL-OPE-003'], rel_ocorrencias_sst: ['Ocorrências e ações corretivas', 'REL-SGI-002'],
     rel_indicador: ['Base de indicador', 'REL-GER-001'], rel_painel: ['Painel de indicadores', 'REL-GER-002'], relatorio: ['Relatório', 'REL-GER-000']
   };
   const AZUL = '1F3A8A', AZUL_RGB = [31, 58, 138], CINZA = 'D9DEE8';
