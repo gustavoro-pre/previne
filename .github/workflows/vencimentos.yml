@@ -1,0 +1,23 @@
+name: Resumo semanal de vencimentos
+on:
+  schedule:
+    - cron: '7 10 * * 1'   # segunda-feira, 7h07 (Brasília)
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  venc:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Calcular e avisar
+        env:
+          FIREBASE_SA: ${{ secrets.FIREBASE_SA }}
+        run: |
+          cd tools
+          npm init -y >/dev/null
+          npm install firebase-admin@12 --no-audit --no-fund >/dev/null
+          node vencimentos.mjs
