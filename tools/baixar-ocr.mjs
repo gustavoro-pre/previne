@@ -11,7 +11,7 @@ const PASTA = process.env.PASTA;
 const out = { ocr: {}, func: [] };
 let tok;
 do {
-  const r = await drive.files.list({ q: `'${PASTA}' in parents and name contains '_ocr_' and trashed = false`, fields: 'nextPageToken, files(id,name)', pageSize: 200, pageToken: tok, supportsAllDrives: true, includeItemsFromAllDrives: true });
+  const r = await drive.files.list({ q: `'${PASTA}' in parents and name contains '_ocr_' and mimeType = 'application/json' and trashed = false`, fields: 'nextPageToken, files(id,name)', pageSize: 200, pageToken: tok, supportsAllDrives: true, includeItemsFromAllDrives: true });
   for (const f of r.data.files) { const c = await drive.files.get({ fileId: f.id, alt: 'media', supportsAllDrives: true }, { responseType: 'text' }); out.ocr[f.name] = c.data; }
   tok = r.data.nextPageToken;
 } while (tok);
