@@ -95,12 +95,34 @@ const GRP = { sexo: ['Sexo', f => SEXN[sexoDe(f).s]], area: ['Área', f => f.are
 function filtroPes(L) {
   return L.filter(f => (!V.fsx || sexoDe(f).s === V.fsx) && (!V.ffn || str(f.funcao).trim() === V.ffn) && (!V.fid || (() => { const a = anosEntre(f.nascimento); if (a == null) return false; const [x, y] = V.fid.split('-').map(Number); return a >= x && a < y; })()));
 }
+/* desligamentos tirados da folha importada (situação "Demitido" no extrato do mês): só para quem vê a folha.
+   Junta com o cadastro: quem já está desligado no cadastro conta uma vez; quem só aparece na folha entra com a data da folha. */
+const isoBR = v => { const m = str(v).match(/(\d{2})\/(\d{2})\/(\d{4})/); return m ? m[3] + '-' + m[2] + '-' + m[1] : /^\d{4}-\d{2}-\d{2}/.test(str(v)) ? str(v).slice(0, 10) : ''; };
+function folhaDeslig() {
+  if (!(typeof podeFolha === 'function' && podeFolha()) || !(D.folha || []).length) return { extra: [], diverg: [] };
+  const P = {};
+  D.folha.filter(x => /demit|rescis|deslig/i.test(str(x.situacao))).sort((a, b) => str(a.comp).localeCompare(str(b.comp))).forEach(x => {
+    const k = x.funcionarioId || str(x.cpf).replace(/\D/g, '') || x.cod; if (P[k]) return;
+    const dt = isoBR(x.situacao) || isoBR(x.obs) || (str(x.comp).slice(0, 7) + '-28');
+    P[k] = { x, dt };
+  });
+  const extra = [], diverg = [];
+  Object.values(P).forEach(({ x, dt }) => {
+    const f = x.funcionarioId ? D.func.find(q => q.id === x.funcionarioId) : D.func.find(q => str(q.cpf).replace(/\D/g, '') && str(q.cpf).replace(/\D/g, '') === str(x.cpf).replace(/\D/g, ''));
+    if (f && f.ativo === false && f.demissao) return;                    // já contado pelo cadastro
+    if (f && f.ativo === false) { extra.push(Object.assign({}, f, { demissao: dt, origemFolha: true })); return; }
+    const o = Object.assign({}, f || {}, { id: f ? f.id : 'folha_' + x.cod, nome: (f && f.nome) || x.nome, funcao: (f && f.funcao) || x.cargo, admissao: (f && f.admissao) || isoBR(x.adm), demissao: dt, origemFolha: true, ativo: false });
+    if (f && f.ativo !== false) diverg.push(o);
+    extra.push(o);
+  });
+  return { extra, diverg };
+}
 function tPes() {
   const F0 = pessoas(); const F = filtroPes(F0); const n = F.length;
   const idades = F.map(f => anosEntre(f.nascimento)).filter(v => v != null && v > 14 && v < 90);
   const casas = F.map(f => anosEntre(f.admissao)).filter(v => v != null && v >= 0);
   const af = F.filter(f => f.situacao === 'Afastado').length, fe = F.filter(f => f.situacao === 'Férias').length;
-  const DS = filtroPes(desligados()), DSd = DS.filter(f => f.demissao), semDem = DS.length - DSd.length;
+  const FDL = folhaDeslig(); const DS0 = desligados(); const DS = filtroPes(DS0.filter(f => !FDL.extra.some(e => e.id === f.id)).concat(FDL.extra)), DSd = DS.filter(f => f.demissao), semDem = DS.length - DSd.length, nFolha = DSd.filter(f => f.origemFolha).length;
   const M12 = meses(12); const adm = M12.map(m => F.concat(DS).filter(f => str(f.admissao).slice(0, 7) === m).length); const dem = M12.map(m => DSd.filter(f => str(f.demissao).slice(0, 7) === m).length);
   const adm12 = adm.reduce((a, b) => a + b, 0), dem12 = dem.reduce((a, b) => a + b, 0), mesAt = M12[11];
   if (!V.dm || !M12.includes(V.dm)) V.dm = dem[11] ? mesAt : (M12.slice().reverse().find((m, i) => dem[11 - i]) || mesAt);
@@ -147,7 +169,7 @@ function tPes() {
     <div class="card"><p class="ct">Cadastro incompleto</p>${barras([{ t: 'Sem data de nascimento', v: semNasc, max: n }, { t: 'Sem tamanhos completos', v: semTam, max: n }, { t: 'Sem admissão', v: semAdm, max: n }, { t: 'Sem área', v: semArea, max: n }, { t: 'Sem matrícula', v: semMat, max: n }].map(x => Object.assign(x, { s: x.v + ' de ' + n, cor: x.v ? 'var(--bad)' : 'var(--ok)' })))}</div></div>
     <h3>Desligamentos</h3>
     <div class="kpis">${kpi('Desligados em 12 meses', dem12, dem12 ? 'warn' : '', `${adm12} admitidos no mesmo período`, 'dem12') + kpi('Desligados nos últimos 3 meses', dem3, dem3 ? 'warn' : '', '', 'dem3') + kpi('Tempo de casa no desligamento', cd.length ? fmtAnos(media(cd)) : '—', 'info', 'média de 12 meses', 'dem12') + kpi('Saíram com menos de 3 meses', precoce, precoce ? 'bad' : '', cd.length ? pct(precoce, cd.length) + '% dos desligados' : '', 'precoce') + kpi('Por iniciativa da empresa', comTipo ? pct(empr, comTipo) + '%' : '—', '', `${empr} de ${comTipo} com tipo informado`, 'empr') + kpi('Recontrataria', rec.length ? pct(recS, rec.length) + '%' : '—', '', `${recS} de ${rec.length} avaliados`, 'recont')}</div><div id="kb-det2"></div>
-    <div class="rgrid"><div class="card"><p class="ct">Desligamentos por mês (12 meses)</p>${barras(M12.map((m, i) => ({ t: mesNome(m), v: dem[i], s: dem[i] + (adm[i] ? ' · ' + adm[i] + ' adm.' : ''), cor: m === V.dm ? 'var(--bad)' : '#c98a00', data: `data-dm="${m}"` })))}<p class="note">Toque num mês para ver quem foi desligado.${semDem ? ` ${semDem} inativo(s) sem data de desligamento no cadastro.` : ''}</p></div>
+    <div class="rgrid"><div class="card"><p class="ct">Desligamentos por mês (12 meses)</p>${barras(M12.map((m, i) => ({ t: mesNome(m), v: dem[i], s: dem[i] + (adm[i] ? ' · ' + adm[i] + ' adm.' : ''), cor: m === V.dm ? 'var(--bad)' : '#c98a00', data: `data-dm="${m}"` })))}<p class="note">Toque num mês para ver quem foi desligado.${semDem ? ` ${semDem} inativo(s) sem data de desligamento no cadastro.` : ''}${nFolha ? ` ${nFolha} desligamento(s) vieram da folha (situação "Demitido" no extrato; data do extrato ou fim do mês).` : ''}${FDL.diverg.length ? ` <b style="color:var(--bad)">${FDL.diverg.length} aparecem como demitidos na folha mas estão ativos no cadastro:</b> ${FDL.diverg.slice(0, 8).map(f => esc(f.nome)).join(', ')}${FDL.diverg.length > 8 ? '…' : ''}. Confira e atualize o cadastro (Desligamento).` : ''}</p></div>
     <div class="card"><p class="ct">Motivos (12 meses)</p>${motivos.length ? barras(motivos.map(([t, v]) => ({ t, v, s: v + ' · ' + pct(v, dem12) + '%', cor: /não informado/.test(t) ? 'var(--mut, #9aa3b2)' : 'var(--bad)' }))) : '<div class="empty">Nenhum desligamento nos últimos 12 meses.</div>'}</div>
     <div class="card"><p class="ct">Tipo de desligamento (12 meses)</p>${tipos.length ? barras(tipos.map(([t, v]) => ({ t, v, s: v + ' · ' + pct(v, dem12) + '%', cor: 'var(--s2)' }))) : '<div class="empty">Sem dados.</div>'}</div>
     <div class="card"><p class="ct">Tempo de casa no desligamento</p>${cd.length ? barras(fxTcD) : '<div class="empty">Sem dados.</div>'}</div></div>
@@ -158,7 +180,7 @@ function tPes() {
     <div class="card" style="padding:4px 12px">${F.filter(f => f.admissao).sort((a, b) => str(b.admissao).localeCompare(str(a.admissao))).slice(0, 8).map(f => `<button class="ritem lk" data-pessoa="${esc(f.id)}"><div class="main"><b>${esc(f.nome)}</b><div class="note">${esc(f.funcao || '')} · admitido em ${fmtD(f.admissao)}</div></div><span class="badge b-mut">${fmtAnos(anosEntre(f.admissao))}</span></button>`).join('')}</div></div>`;
   /* base de cada KPI: ao tocar, mostra as pessoas e a conta por trás do número */
   const pessoaL = (L, fx) => `<div class="card" style="padding:4px 12px;max-height:520px;overflow:auto">${L.map(f => `<button class="ritem lk" data-pessoa="${esc(f.id)}"><div class="main"><b>${esc(f.nome)}</b><div class="note">${esc([f.matricula, f.funcao, f.area].filter(Boolean).join(' · '))}${f.vinculo === 'PJ' ? ' · PJ' : ''}</div>${fx ? `<div class="note">${fx(f)}</div>` : ''}</div></button>`).join('') || '<p class="note">Ninguém.</p>'}</div>`;
-  const demTxt = f => `Admitido em ${fmtD(f.admissao) || '—'} · desligado em ${fmtD(f.demissao)} · ${esc([f.demissaoTipo, f.demissaoMotivo || 'motivo não informado'].filter(Boolean).join(' · '))}${f.admissao ? ' · ' + fmtAnos(casaDem(f)) + ' de casa' : ''}`;
+  const demTxt = f => (f.origemFolha ? '[pela folha] ' : '') + `Admitido em ${fmtD(f.admissao) || '—'} · desligado em ${fmtD(f.demissao)} · ${esc([f.demissaoTipo, f.demissaoMotivo || 'motivo não informado'].filter(Boolean).join(' · '))}${f.admissao ? ' · ' + fmtAnos(casaDem(f)) + ' de casa' : ''}`;
   const A12 = F.concat(DS).filter(f => M12.includes(str(f.admissao).slice(0, 7))).sort((a, b) => str(b.admissao).localeCompare(str(a.admissao)));
   const BASE = {
     mulheres: () => ['Mulheres', `${nF} de ${n} (${pct(nF, n)}%).${nEst ? ' Parte estimada pelo primeiro nome.' : ''}`, pessoaL(F.filter(f => sexoDe(f).s === 'F').sort((a, b) => str(a.nome).localeCompare(str(b.nome))), f => (f.funcao || '') + (sexoDe(f).est ? ' · estimado' : ''))],
