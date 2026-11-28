@@ -45,8 +45,8 @@ class P:
             else: out.append(cur); cur = w
         if cur: out.append(cur)
         return out
-    def circ(s, x, y, r, lw=0.5):
-        c = s.c; c.setLineWidth(lw); c.setStrokeColor(HexColor('#4B5563')); c.circle(x * mm, s.y(y), r * mm, stroke=1, fill=0)
+    def circ(s, x, y, r, lw=0.5):  # quadradinho para marcar com X (lado = 2r)
+        c = s.c; c.setLineWidth(lw); c.setStrokeColor(HexColor('#4B5563')); c.rect((x - r) * mm, s.y(y + r), 2 * r * mm, 2 * r * mm, stroke=1, fill=0)
 
 def gerar(d, dst, lay_dst):
     code = 'FOR-SST-%03d' % d['n']; rev = '000'
@@ -86,10 +86,11 @@ def gerar(d, dst, lay_dst):
         p.rect(X0, y, X1 - X0, 7); p.text(X0 + 1.5, y + 4.6, cp, 'A', 7.5); y += 7
     # legenda
     p.rect(X0, y, X1 - X0, 8, fill=LB)
-    p.text(X0 + 1.5, y + 3.4, 'Use caneta azul ou preta e PINTE a bolinha inteira:  C = conforme   NC = não conforme   NA = não se aplica.  Uma bolinha por item em cada dia de uso.', 'AB', 6.6, NAVY)
-    p.text(X0 + 1.5, y + 6.8, '● na coluna IMP. = item impeditivo: se NC, o equipamento NÃO pode ser usado.   Dia sem uso: deixe em branco.   Exemplo:', 'A', 6.6, NAVY)
-    ex = X0 + 133; c.setFillColor(black); c.circle(ex * mm, p.y(y + 6.0), BR * mm, stroke=0, fill=1); p.text(ex + 2.5, y + 6.8, 'certo', 'A', 6.3)
-    p.circ(ex + 13, y + 6.0, BR); c.setLineWidth(0.7); c.setStrokeColor(black); c.line((ex+12.2)*mm, p.y(y+6.0), (ex+12.9)*mm, p.y(y+6.9)); c.line((ex+12.9)*mm, p.y(y+6.9), (ex+14.3)*mm, p.y(y+4.6)); p.text(ex + 15.5, y + 6.8, 'errado (não marque com tique nem X)', 'A', 6.3)
+    p.text(X0 + 1.5, y + 3.4, 'Use caneta azul ou preta e marque um X DENTRO do quadrado:  C = conforme   NC = não conforme   NA = não se aplica.  Um X por item em cada dia de uso.', 'AB', 6.6, NAVY)
+    p.text(X0 + 1.5, y + 6.8, '● IMP. = impeditivo: se NC, NÃO use o equipamento. Dia sem uso: em branco. Errou? Pinte o quadrado errado e marque X no certo.  Ex.:', 'A', 6.6, NAVY)
+    ex = X0 + 152; p.circ(ex, y + 5.8, BR); c.setLineWidth(0.8); c.setStrokeColor(black)
+    c.line((ex-1.1)*mm, p.y(y+4.7), (ex+1.1)*mm, p.y(y+6.9)); c.line((ex-1.1)*mm, p.y(y+6.9), (ex+1.1)*mm, p.y(y+4.7)); p.text(ex + 2.5, y + 6.8, 'certo', 'A', 6.3)
+    p.circ(ex + 13, y + 5.8, BR); c.line((ex+12.2)*mm, p.y(y+5.8), (ex+12.9)*mm, p.y(y+6.7)); c.line((ex+12.9)*mm, p.y(y+6.7), (ex+14.3)*mm, p.y(y+4.4)); p.text(ex + 15.5, y + 6.8, 'errado (tique)', 'A', 6.3)
     y += 8
     # ---- cabeçalho da tabela
     th = 8.5
@@ -102,17 +103,17 @@ def gerar(d, dst, lay_dst):
     y += th; ytab = y
     # ---- linhas
     ng = len(d['g']); ni = sum(len(g[1]) for g in d['g'])
-    rod = 52  # rodapé reservado (mm)
+    rod = 57  # rodapé reservado (mm)
     disp = (H - 15) - rod - y
-    gh = 4.2; rh = min(8.0, (disp - gh * ng) / ni)
+    gh = 4.6; rh = min(10.0, (disp - gh * ng) / ni)
     n = 0
     for grupo, itens in d['g']:
-        p.rect(XN, y, X1 - XN, gh, fill=LG); p.text(XN + 1.5, y + 3.0, grupo.upper(), 'AB', 6.2, NAVY); y += gh
+        p.rect(XN, y, X1 - XN, gh, fill=LG); p.text(XN + 1.5, y + 3.3, grupo.upper(), 'AB', 6.8, NAVY); y += gh
         for txt, imp in itens:
             n += 1
             p.rect(XN, y, XI - XN, rh); p.rect(XI, y, XIMP - XI, rh); p.rect(XIMP, y, XD - XIMP, rh)
             p.text((XN + XI) / 2, y + rh / 2 + 1.1, str(n), 'AB', 7, black, 'c')
-            sz = 6.6; ls = p.wrap(txt, 'A', sz, XIMP - XI - 2.5)
+            sz = 7.6 if rh >= 7.5 else (7.0 if rh >= 6 else 6.6); ls = p.wrap(txt, 'A', sz, XIMP - XI - 2.5)
             if len(ls) > 2 or (len(ls) == 2 and rh < 5.4): sz = 5.9; ls = p.wrap(txt, 'AN', sz, XIMP - XI - 2.5); fn = 'AN'
             else: fn = 'A'
             ls = ls[:3]; lh = sz * 0.36
@@ -148,8 +149,8 @@ def gerar(d, dst, lay_dst):
         y += 6
     p.text(XN, y + 3.5, 'Declaro que as informações desta folha são verdadeiras.  Inspecionado por: ______________________________  Matrícula: __________  Assinatura: _______________________', 'A', 6.6)
     # rodapé padrão
-    p.text(X0 + 2, H - 9.5, EMP + ' – ' + CNPJ, 'A', 5.8, GRAY)
-    p.text(X1 - 7, H - 9.5, code + ' · Rev. ' + rev + ' · Página 1 de 1', 'AB', 5.8, GRAY, 'r')
+    p.text(X0 + 6, H - 9.5, EMP + ' – ' + CNPJ, 'A', 5.8, GRAY)
+    p.text(X1 - 11, H - 9.5, code + ' · Rev. ' + rev + ' · Página 1 de 1', 'AB', 5.8, GRAY, 'r')
     c.showPage(); c.save()
     lay['altura_linha'] = round(rh, 3)
     json.dump(lay, open(lay_dst, 'w', encoding='utf-8'), ensure_ascii=False)
