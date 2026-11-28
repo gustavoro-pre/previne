@@ -125,6 +125,10 @@ Notificações no celular: `.github/workflows/push.yml` (a cada 5 min, 6h–20h)
 - OCR do RH gravado no cadastro (aprovado pelo Gustavo 28/11): workflow `ocr-gravar.yml` (modo teste/gravar) + tools/ocr-gravar.mjs.
   Só preenche campo vazio (ASO/integração só se mais novos; ASO só se ainda no prazo de 12 meses). Origem em funcionarios/{id}.ocrRH; relatório em config/ocr_rh_gravacao.
   Resultado: 136 pessoas · nascimento 136 · CPF 2 · PIS 11 · ASO 128 · integração 46. NRs/certificados NÃO gravados (vão com o arquivo anexado, pelo inventário).
+- Treinamentos do sistema antigo (trein-hist.yml / tools/trein-hist.mjs, modo teste/gravar): drive_inv → treinamentos/hist_<arquivo> (origem historico, arquivoDrive).
+  1ª carga: 575 (integração 295, NR 140, outros 133, Take Care 7). Rodar de novo quando o inventário terminar (não duplica). Certificado: abre o original no Drive.
+- Ficha/termo de EPI antigos (epi-hist.yml / tools/epi-hist.mjs): entregas/hist_<arquivo>_<linha> (origem historico, sem estoque/custo/troca) e funcionarios.termoEpi (origem historico).
+  1ª carga: 1.670 linhas de 115 pessoas (899 ligadas ao cadastro de EPI, 771 com o nome da ficha), 123 termos; 112 fichas sem linha legível. Links do original no cadastro do funcionário.
 - Auditorias de piso/cruzada (campo/, aba Auditorias, checklists SSTSF ST DD 0042), advertências e nota de promoção (avaliacao/). Regra nova a publicar: advertencias.
 
 ## Lista de implementação (27/11 noite)
