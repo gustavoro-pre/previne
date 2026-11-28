@@ -3,7 +3,7 @@
 import { chromium } from 'playwright';
 import { spawn } from 'node:child_process';
 const PAGINAS = ['index.html', 'ferramentas/index.html', 'treinamentos/index.html', 'indicadores/index.html', 'alocacao/index.html', 'admissao/index.html',
-  'admissao/enviar.html', 'documentos/index.html', 'propostas/index.html', 'aluno/index.html', 'carteirinhas/index.html', 'matriz/index.html', 'ocorrencias/index.html', 'acessos/index.html', 'desligamento/index.html', 'direcao/index.html', 'legais/index.html'];
+  'admissao/enviar.html', 'documentos/index.html', 'propostas/index.html', 'aluno/index.html', 'carteirinhas/index.html', 'matriz/index.html', 'ocorrencias/index.html', 'acessos/index.html', 'desligamento/index.html', 'direcao/index.html', 'legais/index.html', 'compras/index.html'];
 const srv = spawn('python3', ['-m', 'http.server', '8799'], { stdio: 'ignore' });
 await new Promise(r => setTimeout(r, 1500));
 const nav = await chromium.launch(process.env.CHROME ? { executablePath: process.env.CHROME, args: ['--no-sandbox'] } : {}); let falhas = 0;
