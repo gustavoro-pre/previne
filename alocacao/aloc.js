@@ -85,7 +85,7 @@ function render() {
   $$('#seg button').forEach(b => b.classList.toggle('on', b.dataset.tab === V.tab));
   const pb = $('#seg [data-tab="pend"]'); const np = new Set(D.pend.map(a => a.lote || a.id)).size; pb.textContent = np ? `Pendências (${np})` : 'Pendências';
   const ae = document.activeElement; if (ae && ae.closest && ae.closest('#body') && /^(INPUT|TEXTAREA)$/.test(ae.tagName) && ae.type !== 'checkbox') return;
-  ({ dia: rDia, prog: rProg, pend: rPend, desl: rDesl, func: rFunc, oms: rOms })[V.tab]();
+  ({ dia: rDia, prog: rProg, pend: rPend, desl: rDesl, func: rFunc, oms: rOms, med: () => window.MED && window.MED.render() })[V.tab]();
 }
 const optAreas = sel => `<option value="">Todas as áreas</option>` + D.areas.map(a => `<option value="${esc(a.id)}" ${sel === a.id ? 'selected' : ''}>${esc(a.nome)}</option>`).join('');
 function entHtml(a, clic) {

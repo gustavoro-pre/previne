@@ -210,7 +210,7 @@ main{padding-bottom:40px}
   <button id="usermenu" hidden type="button"><b></b><span>Sair</span></button>
 </div></header>
 <main>
-  <div class="seg" id="seg"><button data-tab="dia" class="on">Dia</button><button data-tab="prog">Programar</button><button data-tab="pend">Pendências</button><button data-tab="desl">Deslocamentos</button><button data-tab="func">Funcionário</button><button data-tab="oms">OMs</button></div>
+  <div class="seg" id="seg"><button data-tab="dia" class="on">Dia</button><button data-tab="prog">Programar</button><button data-tab="pend">Pendências</button><button data-tab="desl">Deslocamentos</button><button data-tab="func">Funcionário</button><button data-tab="oms">OMs</button><button data-tab="med">Medição</button></div>
   <div id="body"></div>
 </main>
 <div class="modal" id="modal" hidden><div class="sheet" id="sheet"></div></div>
@@ -222,7 +222,8 @@ window.__FBMODE = true; window.__MODULO = 'alocacao';
 window.claude = { use: n => new Promise(r => { const go = () => window.__fbUse ? r(window.__fbUse(n)) : setTimeout(go, 50); go(); }) };
 </script>
 <script type="module" src="../fb.js"></script>
-<script src="../rel.js?v=2" defer></script>
-<script src="aloc.js"></script>
+<script src="../rel.js?v=3" defer></script>
+<script src="aloc.js?v=2"></script>
+<script src="med.js?v=1"></script>
 </body>
 </html>

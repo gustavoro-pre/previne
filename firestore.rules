@@ -118,6 +118,8 @@ service cloud.firestore {
     match /om_fixa/{id}      { allow read: if aloc(['adm', 'consulta']); allow write: if aloc(['adm']); }
     match /alocacoes/{id}    { allow read: if aloc(['adm', 'consulta']); allow write: if aloc(['adm']); }
     match /apontamentos/{id} { allow read: if aloc(['adm', 'consulta']); allow write: if aloc(['adm']); }
+    match /med_mes/{id}      { allow read: if aloc(['adm', 'consulta']); allow write: if aloc(['adm']); }
+    match /med_cfg/{id}      { allow read: if aloc(['adm', 'consulta']); allow write: if aloc(['adm']); }
 
     // ---------- módulo Admissão ----------
     // o candidato não faz login: abre o processo pelo código do link (não dá para listar) e só mexe no campo "cand"
