@@ -1,0 +1,28 @@
+name: Treinamentos do sistema antigo (Drive → portal)
+on:
+  workflow_dispatch:
+    inputs:
+      modo:
+        description: 'teste (só conta) ou gravar'
+        required: true
+        default: 'teste'
+permissions:
+  contents: read
+jobs:
+  importar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Importar
+        env:
+          FIREBASE_SA: ${{ secrets.FIREBASE_SA }}
+          MODO: ${{ inputs.modo }}
+        run: |
+          cd tools
+          npm init -y >/dev/null
+          npm install firebase-admin@12 --no-audit --no-fund >/dev/null
+          node trein-hist.mjs

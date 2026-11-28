@@ -2695,6 +2695,8 @@ function certInto(doc, r, novaPagina) {
   const mc = (S.modelos || {}).certificado; if (mc && mc.codigo) { font(6.8, false, [130, 136, 146]); doc.text(mc.codigo + ' · Rev. ' + String(+mc.rev || 0).padStart(2, '0') + ' de ' + fmtD(mc.data) + (mc.elaborador ? ' · Elaborado por ' + mc.elaborador : '') + (mc.aprovador ? ' · Aprovado por ' + mc.aprovador : ''), 20, 193); }
 }
 async function gerarCertificados(regs, nome) {
+  const hist = regs.filter(r => r.origem === 'historico');
+  if (hist.length) { hist.slice(0, 5).forEach(r => { if (r.arquivoDrive && r.arquivoDrive.id) window.open('https://drive.google.com/file/d/' + encodeURIComponent(r.arquivoDrive.id) + '/view', '_blank', 'noopener'); }); toast(hist.length + ' certificado(s) do sistema antigo: aberto(s) o arquivo original no Drive.', 'ok'); regs = regs.filter(r => r.origem !== 'historico'); if (!regs.length) return; await sleep(1200); }
   if (regs.some(r => str(r.termino) > todayStr())) { toast('Há treinamento ainda não concluído (término no futuro). O certificado só deve ser emitido após a conclusão.', 'bad'); await sleep(2600); }
   toast('Gerando certificado(s)…');
   try { await loadPDF(); } catch (_) { return toast('Sem conexão para gerar o PDF.', 'bad'); }
