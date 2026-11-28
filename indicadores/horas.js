@@ -18,8 +18,14 @@ function hzFiltro(k, X) {
   const fora = x => x[c.excl] === true || val(x) > lim;
   return { lim, fora, limpa: X.filter(x => !fora(x)), out: X.filter(fora) };
 }
+/* filtros da Visão geral (sexo, função, faixa etária) também valem aqui */
+function hzFiltroPes(X) {
+  if (!V.fsx && !V.ffn && !V.fid) return X;
+  return X.filter(x => { const f = funcDe(x.funcionarioId); if (!f) return false; return filtroPes([f]).length > 0; });
+}
+const hzSexo = x => { const f = funcDe(x.funcionarioId); return f ? SEXN[sexoDe(f).s] : 'Sem cadastro'; };
 function hzResumo(k, comp) {
-  const c = HZ[k], X = doMes(comp).filter(ativoNaFolha), F = hzFiltro(k, X), L = F.limpa;
+  const c = HZ[k], X = hzFiltroPes(doMes(comp).filter(ativoNaFolha)), F = hzFiltro(k, X), L = F.limpa;
   const h = L.reduce((a, x) => a + num((x.ag || {})[c.campo]), 0), hm = L.reduce((a, x) => a + (num(x.horasMes) || 220), 0);
   const af = L.reduce((a, x) => a + num((x.ag || {}).afasth), 0);
   return { h, hm, af, t: hm ? h / hm * 100 : 0, ta: hm ? (h + af) / hm * 100 : 0, v: L.reduce((a, x) => a + c.valor(x), 0), pessoas: L.filter(x => num((x.ag || {})[c.campo]) > 0), L, F, X };
@@ -69,6 +75,10 @@ function hzDetalhe(k) {
     <p class="note" style="margin:0 0 8px">Quem sai da conta sai inteiro (as horas e as horas contratadas dele). Automático: retira quem passou do 3º quartil + 1,5 × a distância entre quartis do mês. Dá para marcar pessoas uma a uma no fim deste quadro.</p>
     <div class="kpis">${kp}${kc}</div>
     <div class="rgrid"><div class="card"><p class="ct">Por mês</p>${barras(M12.map(m => { const r = hzResumo(k, m); return { t: mesNome(m), v: c.taxa ? r.t : r.h, s: c.taxa ? hzPct(r.t) + ' · ' + hh(r.h) : hh(r.h) + ' · ' + brl(r.v), cor: m === comp ? 'var(--s2)' : 'var(--s1)', data: `data-hzm="${m}"` }; }))}</div>
+      <div class="card"><p class="ct">Por sexo</p>${(() => { const G = grp(hzSexo); const tot = (g) => { const Y = L.filter(x => hzSexo(x) === g); return Y.reduce((a, x) => a + (num(x.horasMes) || 220), 0); };
+        const T = ['Masculino', 'Feminino'].map(g => { const r = G.find(x => x.g === g) || { g, h: 0, t: 0, n: 0 }; const hm = tot(g); return { g, h: r.h, t: hm ? r.h / hm * 100 : 0, n: r.n, pes: L.filter(x => hzSexo(x) === g).length }; });
+        return barras(T.map(r => ({ t: r.g + ' (' + r.pes + ' pessoas)', v: c.taxa ? r.t : r.h, s: lab(r), cor: r.g === 'Feminino' ? '#d6336c' : 'var(--s1)' }))) + `<p class="note" style="margin:4px 0 0">${c.taxa ? 'Taxa = horas de falta das mulheres (ou dos homens) ÷ horas contratadas delas (deles).' : 'Horas no mês por sexo.'} Sexo do cadastro ou estimado pelo primeiro nome.</p>`; })()}</div>
+      ${c.taxa ? `<div class="card"><p class="ct">Absenteísmo por sexo, mês a mês</p><div class="tbwrap" style="margin:0"><table class="tb"><thead><tr><th>Mês</th><th class="n">Homens</th><th class="n">Mulheres</th></tr></thead><tbody>${M12.slice(-6).reverse().map(m => { const r = hzResumo(k, m); const t = g => { const Y = r.L.filter(x => hzSexo(x) === g); const hm = Y.reduce((a, x) => a + (num(x.horasMes) || 220), 0); return hm ? hzPct(Y.reduce((a, x) => a + val(x), 0) / hm * 100) : '—'; }; return `<tr><td>${mesNome(m)}</td><td class="n">${t('Masculino')}</td><td class="n">${t('Feminino')}</td></tr>`; }).join('')}</tbody></table></div></div>` : ''}
       <div class="card"><p class="ct">Por área</p>${barras(grp(area).map(r => ({ t: r.g, v: c.taxa ? r.t : r.h, s: lab(r) })))}</div>
       <div class="card"><p class="ct">Por cargo</p>${barras(grp(x => str(x.cargo).trim() || 'Sem cargo').slice(0, 12).map(r => ({ t: r.g, v: c.taxa ? r.t : r.h, s: lab(r), cor: 'var(--s3)' })))}</div>
       <div class="card"><p class="ct">Quem mais ${c.taxa ? 'faltou' : 'fez'}</p>${barras(quem.slice(0, 12).map(x => ({ t: x.nome, v: val(x), s: hh(val(x)), cor: 'var(--s2)', data: x.funcionarioId ? `data-pessoa="${esc(x.funcionarioId)}"` : '' })))}</div></div>
