@@ -121,6 +121,12 @@ Notificações no celular: `.github/workflows/push.yml` (a cada 5 min, 6h–20h)
 7. Antigas: e-mail das NFs, OAuth do Conta Azul, lista de papéis dos padrões, valor do plano de saúde, OS por função para as outras funções,
    separar o cinto dos kits da trefilaria, filtro de outliers em Folha/Salários, texto da carta-convite com salário visível para todo o RH.
 
+## Feito em 28/11
+- OCR do RH gravado no cadastro (aprovado pelo Gustavo 28/11): workflow `ocr-gravar.yml` (modo teste/gravar) + tools/ocr-gravar.mjs.
+  Só preenche campo vazio (ASO/integração só se mais novos; ASO só se ainda no prazo de 12 meses). Origem em funcionarios/{id}.ocrRH; relatório em config/ocr_rh_gravacao.
+  Resultado: 136 pessoas · nascimento 136 · CPF 2 · PIS 11 · ASO 128 · integração 46. NRs/certificados NÃO gravados (vão com o arquivo anexado, pelo inventário).
+- Auditorias de piso/cruzada (campo/, aba Auditorias, checklists SSTSF ST DD 0042), advertências e nota de promoção (avaliacao/). Regra nova a publicar: advertencias.
+
 ## Lista de implementação (27/11 noite)
 Planilha (Sheets) com 57 itens, prioridade, status e dependências: https://claude.ai/artifact/2e9JqJwpzFZfTF4kcp3eSH
 Pedidos novos de 27/11 22h10:
