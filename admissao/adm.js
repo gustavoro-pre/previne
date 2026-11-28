@@ -440,7 +440,7 @@ const imgB64 = async blob => { // qualquer imagem -> JPEG base64 (ExcelJS aceita
   const url = URL.createObjectURL(blob); try { const im = await new Promise((ok, er) => { const i = new Image(); i.onload = () => ok(i); i.onerror = er; i.src = url; });
     const cv = document.createElement('canvas'); const k = Math.min(1, 600 / Math.max(im.width, im.height)); cv.width = Math.round(im.width * k); cv.height = Math.round(im.height * k); const cx = cv.getContext('2d'); cx.fillStyle = '#fff'; cx.fillRect(0, 0, cv.width, cv.height); cx.drawImage(im, 0, 0, cv.width, cv.height);
     return { b64: cv.toDataURL('image/jpeg', .9).split(',')[1], w: cv.width, h: cv.height }; } finally { URL.revokeObjectURL(url); } };
-const salarioDe = async a => { if (!VS()) return null; const p = await db.doc('admissoes_priv/' + a.id).get().catch(() => null); return p && p.exists && p.data().salario != null ? p.data().salario : null; };
+const salarioDe = async a => { if (!VS()) return null; (window.__FB && window.__FB.logAcesso ? window.__FB.logAcesso : () => {})('Salário da admissão', a.nome || '', a.id); const p = await db.doc('admissoes_priv/' + a.id).get().catch(() => null); return p && p.exists && p.data().salario != null ? p.data().salario : null; };
 function envioContab(a) {
   const c = a.cand || {}, docs = c.docs || {}; const cfg = D.cfg || {};
   const cand = []; ADM.slotsDe(a).forEach(sl => (docs[sl.id] || []).forEach((arq, i) => cand.push({ k: 'c|' + sl.id + '|' + i, t: sl.t + ((docs[sl.id] || []).length > 1 ? ' (' + (i + 1) + ')' : ''), sub: arq.nome })));
@@ -539,7 +539,7 @@ async function detalhe(id, refresh) {
       <div class="actions" style="margin-top:6px"><button class="btn sm danger" id="e-canc">Cancelar admissão (desistência)</button></div>`}`);
   $('#sheet').scrollTop = y;
   treinBox(a, !!ro);
-  $$('[data-pdft]').forEach(b => b.onclick = () => pdfTexto(a, b.dataset.pdft));
+  $$('[data-pdft]').forEach(b => b.onclick = () => { if (b.dataset.pdft === 'carta') (window.__FB && window.__FB.logAcesso ? window.__FB.logAcesso : () => {})('Carta-convite (PDF com salário)', a.nome || '', a.id); pdfTexto(a, b.dataset.pdft); });
   const osv = $('#as-osv'); if (osv) osv.onclick = () => pdfDoc(a, 'osepi');
   $$('[data-ctv]').forEach(b => b.onclick = () => ctVer(a, b.dataset.ctv));
   $$('[data-ctx]').forEach(b => { let armed = false; b.onclick = () => { if (!armed) { armed = true; b.textContent = 'Retirar?'; return; } ctRetirar(a, b.dataset.ctx); }; });

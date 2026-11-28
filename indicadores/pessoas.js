@@ -174,6 +174,7 @@ function idsAreaF() { return (AREA_FIXA || V.area) ? new Set(daArea(D.func).map(
 const custoF = x => num(x.proventos) + num(x.fgts);
 const ativoNaFolha = x => !/demit/i.test(str(x.situacao));
 function tFolha() {
+  (window.__FB && window.__FB.logAcesso ? window.__FB.logAcesso : () => {})('Folha e horas (painel)', V.comp || '');
   const C = comps(); if (!V.comp || !C.includes(V.comp)) V.comp = C[0] || '';
   const imp = `<div class="card"><div class="head" style="margin:0"><p class="ct" style="margin:0;margin-right:auto">Importar a folha do mês</p><label class="btn primary sm" style="margin:0;cursor:pointer">Escolher o extrato (PDF)<input type="file" id="fo-file" accept="application/pdf,.pdf" hidden></label></div>
     <p class="note" style="margin:6px 0 0">Use o <b>Extrato Mensal</b> que a contabilidade manda (o PDF com todos os funcionários). Todo mês: importe o do mês fechado. Se importar o mesmo mês de novo, ele é substituído. CPF, matrícula e admissão que estiverem vazios no cadastro são preenchidos com os dados da folha.</p><div id="fo-prev"></div></div>`;

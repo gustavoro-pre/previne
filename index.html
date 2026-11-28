@@ -266,6 +266,7 @@ function renderMods() {
   $('#p-hello').textContent = 'Olá, ' + str(F.nome).split(' ')[0];
   const L = MODS.filter(m => temModulo(d, m.id));
   $('#p-mods').innerHTML = (L.length ? L.map(m => `<a class="mod" href="${m.href}"><div class="mi">${m.icone}</div><h3>${esc(m.nome)}</h3>${m.id === 'admissao' && PADM ? `<span class="bn">${PADM} aguardando seu de acordo</span>` : ''}${m.href === 'treinamentos/' && PEND ? `<span class="bn">${PEND} aguardando seu de acordo</span>` : ''}${m.href === 'ferramentas/' && PAUT ? `<span class="bn">${PAUT} aguardando sua autorização</span>` : ''}${m.id === 'documentos' && PDOC ? `<span class="bn">${PDOC} aguardando sua aprovação</span>` : ''}<p>${esc(m.desc)}</p><div class="pf">Seu perfil: ${esc(nomeMod(m.id, papelMod(d, m.id)))}</div></a>`).join('') : '<div class="empty">Nenhum módulo liberado para você ainda. Fale com o administrador.</div>')
+    + (d.papel === 'admin' ? `<a class="mod" href="acessos/"><div class="mi">🔐</div><h3>Registro de acessos</h3><p>Quem viu salários, contracheques, carta-convite e salário de admissão (LGPD). Só o Administrador vê.</p></a>` : '')
     + (temModulo(d, 'treinamentos') ? `<a class="mod" href="aluno/" target="_blank" rel="noopener"><div class="mi">👷</div><h3>Portal do aluno</h3><p>Onde o funcionário entra com a matrícula para fazer os cursos on-line e assinar os padrões. Envie este link para a equipe.</p><div class="pf">${esc(new URL('aluno/', location.href).href)}</div></a>` : '');
 }
 function renderPush() {

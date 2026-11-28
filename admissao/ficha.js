@@ -230,6 +230,7 @@ async function lerArqEnvio(id, fi, tipo) {
   const bin = atob(b64); const u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return new Blob([u], { type: tipo || 'application/pdf' });
 }
 async function telaAprov(envId) {
+  (window.__FB && window.__FB.logAcesso ? window.__FB.logAcesso : () => {})('De acordo do envio à contabilidade (com salário)', '', envId);
   const a = D.adm.find(x => (x.envios || []).some(e => e.id === envId)); if (!a) return toast('Pedido não encontrado.', 'bad');
   ABERTO = ''; let ed = {}; try { ed = (await db.doc('envios_contab/' + envId).get()).data() || {}; } catch (e) { return toast('Sem acesso a este pedido.', 'bad'); }
   const pend = ed.status === 'aprovacao';

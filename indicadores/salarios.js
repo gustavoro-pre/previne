@@ -13,6 +13,7 @@ function semForaDaCurva(X) { if (X.length < 8) return { X, fora: [] }; const s =
 const custoEnc = x => num(x.proventos) + num(x.fgts) + num(x.baseInss || x.proventos) * ENC;
 
 function tSal() {
+  (window.__FB && window.__FB.logAcesso ? window.__FB.logAcesso : () => {})('Salários (painel)', V.comp || '');
   const C = comps(); if (!C.length) { PB().innerHTML = '<div class="empty">Nenhuma folha importada. Importe os extratos em <b>Folha e horas</b>.</div>'; return; }
   if (!V.comp || !C.includes(V.comp)) V.comp = C[0];
   const L = doMes(V.comp), at0 = L.filter(ativoNaFolha).filter(x => salM(x) > 0); const SF = V.semOut ? semForaDaCurva(at0) : { X: at0, fora: [] }; const at = SF.X; const sal = at.map(x => salM(x));
