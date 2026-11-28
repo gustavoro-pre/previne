@@ -100,6 +100,7 @@ service cloud.firestore {
     match /pedidos/{id}  { allow read, write: if tem(['admin', 'gestao', 'gerente']); }
     match /legais/{id}   { allow read: if equipe(); allow write: if tem(['admin', 'gerente', 'gestao', 'tst']); }
     match /licencas/{id} { allow read: if equipe(); allow write: if tem(['admin', 'gerente', 'gestao', 'tst']); }
+    match /campo/{id} { allow read, create: if equipe(); allow update, delete: if tem(['admin', 'gerente', 'gestao', 'tst']); }
     match /ocorrencias/{id} {
       allow read, create: if equipe();
       allow update: if tem(['admin', 'gerente', 'gestao', 'tst']) || (equipe() && resource.data.criadoUid == request.auth.uid && resource.data.status == 'aberta');
