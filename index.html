@@ -176,6 +176,11 @@ a.mod:hover{transform:translateY(-1px);box-shadow:0 4px 14px rgba(20,33,61,.12)}
 .pushbox{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--card,#fff);border:1px solid var(--line);border-radius:12px;padding:10px 14px;margin:8px 0 4px;font-size:14px}.pushbox .m{flex:1;min-width:200px}
 .mod .bn{align-self:flex-start;background:#c62828;color:#fff;border-radius:999px;font-size:12px;font-weight:700;padding:3px 9px}
 .mod.off{opacity:.6}.mod .pf{margin-top:auto;font-size:12px;color:var(--muted)}
+.assbox{background:#fff;border:2px solid #f2a900;border-radius:14px;padding:12px 14px;margin:10px 0 6px}.assbox.ok{border-color:var(--line);padding:10px 14px}
+.assbox .ah{display:flex;align-items:center;gap:8px;font-weight:700}.assbox .ah .n{background:#c62828;color:#fff;border-radius:999px;font-size:13px;padding:2px 9px}
+.assbox a.ai{display:flex;gap:10px;align-items:center;padding:8px 0;border-top:1px solid var(--line);text-decoration:none;color:inherit}.assbox a.ai .t{flex:1;min-width:0}.assbox a.ai small{display:block;color:var(--muted)}
+.assbox .go{margin-left:auto;font-size:13px;font-weight:600;color:#1f4e9c;text-decoration:none}
+.mod.grp .mi{background:#e8eef8}.mod.grp .lst{font-size:12px;color:var(--muted)}
 .urow{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:10px 0;border-bottom:1px solid var(--line)}.urow .main{flex:1;min-width:180px}
 </style>
 </head>
@@ -188,12 +193,10 @@ a.mod:hover{transform:translateY(-1px);box-shadow:0 4px 14px rgba(20,33,61,.12)}
 </div></header>
 <main>
   <div class="hello" id="p-hello"></div>
-  <a id="p-aviso" class="aviso" href="treinamentos/#aprov" hidden></a>
-  <a id="p-aviso2" class="aviso" href="ferramentas/#painel" hidden></a>
-  <a id="p-aviso3" class="aviso" href="documentos/#aprov" hidden></a>
-  <a id="p-aviso4" class="aviso" href="admissao/?aprov=1" hidden></a>
+  <div id="p-ass" class="assbox" hidden></div>
   <div id="p-push" class="pushbox" hidden></div>
-  <p class="note" style="margin:0">Escolha o módulo. Você vê apenas os módulos liberados para o seu usuário.</p>
+  <div id="p-gtop" hidden><button class="btn ghost sm" id="p-voltar" type="button">← Voltar</button> <b id="p-gnome" style="font-size:18px;margin-left:6px"></b></div>
+  <p class="note" id="p-nota" style="margin:0">Escolha a área. Você vê apenas o que está liberado para o seu usuário.</p>
   <div class="mods" id="p-mods"></div>
   <section id="p-users" hidden>
     <div class="head"><h2>Usuários e acessos</h2></div>
@@ -231,6 +234,23 @@ const MODS = [
   { id: 'ferramentas', icone: '🔒', nome: 'Carteirinhas', desc: 'Etiqueta de bloqueio no modelo da Previne (com foto) e CRC da ArcelorMittal guardada por funcionário, para imprimir várias numa folha.', href: 'carteirinhas/', pronto: true },
   { id: 'propostas', icone: '📄', nome: 'Propostas', desc: 'Orçamentos: proposta técnica e comercial no modelo Previne, HH ou preço global, custos internos, anexos do cliente e cotações recebidas.', href: 'propostas/', pronto: true }
 ];
+const GRUPOS = [
+  { id: 'rh', icone: '👥', nome: 'RH', desc: 'Admissão, desligamento, avaliação de desempenho e indicadores de pessoas (folha, salários, horas, contracheques, turnover).', hrefs: ['admissao/', 'desligamento/', 'avaliacao/', 'indicadores/'] },
+  { id: 'sst', icone: '🦺', nome: 'Segurança do Trabalho', desc: 'Ferramentas e EPI, treinamentos, matriz por função, DDS e inspeções, ocorrências, carteirinhas e compra de EPI.', hrefs: ['ferramentas/', 'treinamentos/', 'matriz/', 'campo/', 'ocorrencias/', 'carteirinhas/', 'compras/'] },
+  { id: 'op', icone: '🗓️', nome: 'Operações', desc: 'Alocação em OM e medição × roleta × ponto do contrato de HH.', hrefs: ['alocacao/'] },
+  { id: 'fin', icone: '💰', nome: 'Financeiro', desc: 'Pedidos do cliente, boletins de medição, BRO, NF e saldo a medir.', hrefs: ['pedidos/'] },
+  { id: 'com', icone: '📈', nome: 'Comercial', desc: 'Propostas técnicas e comerciais no modelo Previne.', hrefs: ['propostas/'] },
+  { id: 'ges', icone: '🏛️', nome: 'Gestão', desc: 'Documentação ISO, requisitos legais e licenças, painel da direção, registro de acessos e usuários.', hrefs: ['documentos/', 'legais/', 'direcao/', 'acessos/'] },
+  { id: 'aluno', icone: '👷', nome: 'Portal do Aluno', desc: 'Onde o funcionário entra com a matrícula para fazer os cursos on-line e assinar padrões e documentos.', hrefs: ['aluno/'] }
+];
+const EXTRA = [
+  { cond: d => ['admin', 'gestao', 'gerente'].includes(d.papel), icone: '🧾', nome: 'Pedidos e medições', desc: 'Pedidos do cliente, boletins de medição (%), de acordo, BRO, NF e saldo a medir de cada pedido.', href: 'pedidos/' },
+  { cond: d => ['admin', 'gestao', 'gerente', 'rh'].includes(d.papel), icone: '📋', nome: 'Avaliação de desempenho', desc: 'Fim da experiência (45 e 90 dias) e avaliação anual por competência, com lista de quem falta avaliar.', href: 'avaliacao/' },
+  { cond: d => d.papel === 'admin', icone: '🔐', nome: 'Registro de acessos', desc: 'Quem viu salários, contracheques, carta-convite e salário de admissão (LGPD). Só o Administrador vê.', href: 'acessos/' },
+  { cond: d => temModulo(d, 'treinamentos'), icone: '👷', nome: 'Portal do aluno', desc: 'Onde o funcionário entra com a matrícula para fazer os cursos on-line e assinar os padrões. Envie este link para a equipe.', href: 'aluno/', blank: true }
+];
+let GRP = (location.hash.match(/^#g=(\w+)/) || [])[1] || '';
+const PENDS = { cert: [], doc: [], adm: [], aut: [], mat: [] };
 const PAPEIS = {
   admin: ['Administrador', 'Acesso total a todos os módulos, usuários e aprovações'],
   gerente: ['Gerente', 'Ferramentas & EPI: tudo, inclusive aprovar EPI caro ou fora da lista'],
@@ -249,7 +269,7 @@ const PAPEIS_MOD = {
   propostas: { comercial: 'Comercial: tudo, inclusive custos', tecnico: 'Técnico: edita a proposta, sem custos', consulta: 'Consulta (só vê, sem custos)', nenhum: 'Sem acesso' }
 };
 const DESC_MOD = [['Treinamentos · Gestor', 'Tudo no módulo: tipos, turmas, admissão, externos, áreas, padrões, cursos e acesso do aluno'], ['Treinamentos · TST / RH', 'Turmas, admissão, externos, padrões, cursos, áreas e funcionários'], ['Treinamentos · Instrutor', 'Turmas, padrões (listas e assinaturas) e cursos'], ['Treinamentos · Consulta', 'Vê tudo, não altera'], ['Indicadores', 'Todas as áreas, ou só uma área escolhida'], ['Alocação em OM · Lança', 'Cadastra OMs e equipe fixa, programa preventivas, completa pendências de OM e marca o apontamento'], ['Alocação em OM · Consulta', 'Vê tudo e tira PDF, não altera'], ['Admissão · RH', 'Abre a admissão, envia o link, confere documentos, registra ASO e integração e cadastra o funcionário'], ['Admissão · Consulta', 'Acompanha as admissões, sem ver salário e sem alterar']];
-let AREAS = [], PEND = 0, PAUT = 0, PDOC = 0, PADM = 0;
+let AREAS = [], PEND = 0, PAUT = 0, PDOC = 0, PADM = 0, PMAT = 0;
 /* mesmo cálculo do fb.js: perfil efetivo em cada módulo */
 function papelMod(d, id) {
   if (!d) return 'nenhum'; if (d.papel === 'admin') return 'admin'; if (d.papel === 'funcionario') return 'nenhum';
@@ -266,16 +286,57 @@ function papelMod(d, id) {
 }
 const temModulo = (d, id) => papelMod(d, id) !== 'nenhum';
 const nomeMod = (id, v) => v === 'admin' ? 'Administrador' : v === 'gestao' ? 'Gestão' : id === 'ferramentas' ? (PAPEIS[v] || [v])[0] : /^area:/.test(v) ? 'Só ' + ((AREAS.find(a => 'area:' + a.id === v) || {}).nome || 'uma área') : ((PAPEIS_MOD[id] || {})[v] || v);
+function modsDisp(d) {
+  return MODS.filter(m => temModulo(d, m.id)).concat(EXTRA.filter(m => m.cond(d)));
+}
+function bnMod(href) {
+  const n = { 'admissao/': PADM, 'treinamentos/': PEND, 'ferramentas/': PAUT, 'documentos/': PDOC, 'matriz/': PMAT }[href] || 0;
+  return n ? `<span class="bn">${n} aguardando você</span>` : '';
+}
+function cardMod(m) {
+  return `<a class="mod" href="${m.href}"${m.blank ? ' target="_blank" rel="noopener"' : ''}><div class="mi">${m.icone}</div><h3>${esc(m.nome)}</h3>${bnMod(m.href)}<p>${esc(m.desc)}</p>${m.href === 'aluno/' ? `<div class="pf">${esc(new URL('aluno/', location.href).href)}</div>` : ''}</a>`;
+}
+function renderAss() {
+  const box = $('#p-ass'); if (!box) return;
+  const L = [];
+  if (PENDS.cert.length) L.push({ ic: '🎓', t: PENDS.cert.length + (PENDS.cert.length === 1 ? ' certificado aguardando' : ' certificados aguardando') + ' o seu de acordo', s: 'Treinamentos', h: 'treinamentos/#aprov' });
+  PENDS.doc.forEach(d => L.push({ ic: '📁', t: 'Aprovar ' + d.t, s: 'Documentação · ' + d.s, h: 'documentos/#aprov' }));
+  PENDS.adm.forEach(d => L.push({ ic: '🪪', t: 'De acordo na contratação de ' + d.t, s: 'Admissão · envio à contabilidade', h: 'admissao/?aprov=' + d.id }));
+  PENDS.mat.forEach(m => L.push({ ic: '🧩', t: 'Aprovar a matriz de ' + m, s: 'Matriz por função · revisada', h: 'matriz/' }));
+  if (PENDS.aut.length) L.push({ ic: '🧰', t: PENDS.aut.length + (PENDS.aut.length === 1 ? ' pedido de EPI ou ferramenta' : ' pedidos de EPI ou ferramenta') + ' aguardando autorização', s: 'Ferramentas & EPI', h: 'ferramentas/#painel' });
+  const n = PEND + PDOC + PADM + PAUT + PMAT;
+  box.hidden = false; box.className = 'assbox' + (n ? '' : ' ok');
+  box.innerHTML = n ? `<div class="ah"><span>✍️ Assinaturas pendentes</span><span class="n">${n}</span><a class="go" href="assinaturas/">Ver todas →</a></div>`
+      + L.slice(0, 6).map(x => `<a class="ai" href="${x.h}"><span style="font-size:18px">${x.ic}</span><span class="t">${esc(x.t)}<small>${esc(x.s)}</small></span><span class="btn sm primary">Assinar</span></a>`).join('')
+      + (L.length > 6 ? `<a class="ai" href="assinaturas/"><span class="t">e mais ${L.length - 6}…</span></a>` : '')
+    : `<div class="ah" style="font-weight:600"><span>✍️ Nenhuma assinatura pendente</span><a class="go" href="assinaturas/">Assinaturas e histórico →</a></div>`;
+}
 function renderMods() {
   const F = window.__FB, d = F.perfil;
   $('#p-hello').textContent = 'Olá, ' + str(F.nome).split(' ')[0];
-  const L = MODS.filter(m => temModulo(d, m.id));
-  $('#p-mods').innerHTML = (L.length ? L.map(m => `<a class="mod" href="${m.href}"><div class="mi">${m.icone}</div><h3>${esc(m.nome)}</h3>${m.href === 'admissao/' && PADM ? `<span class="bn">${PADM} aguardando seu de acordo</span>` : ''}${m.href === 'treinamentos/' && PEND ? `<span class="bn">${PEND} aguardando seu de acordo</span>` : ''}${m.href === 'ferramentas/' && PAUT ? `<span class="bn">${PAUT} aguardando sua autorização</span>` : ''}${m.id === 'documentos' && PDOC ? `<span class="bn">${PDOC} aguardando sua aprovação</span>` : ''}<p>${esc(m.desc)}</p><div class="pf">Seu perfil: ${esc(nomeMod(m.id, papelMod(d, m.id)))}</div></a>`).join('') : '<div class="empty">Nenhum módulo liberado para você ainda. Fale com o administrador.</div>')
-    + (['admin', 'gestao', 'gerente'].includes(d.papel) ? `<a class="mod" href="pedidos/"><div class="mi">🧾</div><h3>Pedidos e medições</h3><p>Pedidos do cliente, boletins de medição (%), de acordo, BRO, NF e saldo a medir de cada pedido.</p></a>` : '')
-    + (['admin', 'gestao', 'gerente', 'rh'].includes(d.papel) ? `<a class="mod" href="avaliacao/"><div class="mi">📋</div><h3>Avaliação de desempenho</h3><p>Fim da experiência (45 e 90 dias) e avaliação anual por competência, com lista de quem falta avaliar.</p></a>` : '')
-    + (d.papel === 'admin' ? `<a class="mod" href="acessos/"><div class="mi">🔐</div><h3>Registro de acessos</h3><p>Quem viu salários, contracheques, carta-convite e salário de admissão (LGPD). Só o Administrador vê.</p></a>` : '')
-    + (temModulo(d, 'treinamentos') ? `<a class="mod" href="aluno/" target="_blank" rel="noopener"><div class="mi">👷</div><h3>Portal do aluno</h3><p>Onde o funcionário entra com a matrícula para fazer os cursos on-line e assinar os padrões. Envie este link para a equipe.</p><div class="pf">${esc(new URL('aluno/', location.href).href)}</div></a>` : '');
+  renderAss();
+  const disp = modsDisp(d);
+  const G = GRUPOS.map(g => Object.assign({}, g, { mods: g.hrefs.map(h => disp.find(m => m.href === h)).filter(Boolean) })).filter(g => g.mods.length || (g.id === 'ges' && ['admin', 'gestao'].includes(d.papel)));
+  const g = G.find(x => x.id === GRP);
+  $('#p-gtop').hidden = !g; $('#p-nota').hidden = !!g;
+  const users = $('#p-users'); if (users) users.style.display = (g && g.id === 'ges') ? '' : 'none';
+  if (g) {
+    $('#p-gnome').textContent = g.icone + ' ' + g.nome;
+    $('#p-mods').innerHTML = g.mods.map(cardMod).join('') || (g.id === 'ges' ? '' : '<p class="note">Nenhum módulo liberado nesta área.</p>');
+    return;
+  }
+  // grupo com um módulo só abre direto
+  $('#p-mods').innerHTML = G.length ? G.map(x => {
+    const n = x.mods.reduce((a, m) => a + ({ 'admissao/': PADM, 'treinamentos/': PEND, 'ferramentas/': PAUT, 'documentos/': PDOC, 'matriz/': PMAT }[m.href] || 0), 0);
+    const um = x.mods.length === 1 && x.id !== 'ges' ? x.mods[0] : null;
+    return `<a class="mod grp" ${um ? `href="${um.href}"${um.blank ? ' target="_blank" rel="noopener"' : ''}` : `href="#g=${x.id}" data-g="${x.id}"`}><div class="mi">${x.icone}</div><h3>${esc(x.nome)}</h3>${n ? `<span class="bn">${n} aguardando você</span>` : ''}<p>${esc(x.desc)}</p><div class="lst">${x.mods.map(m => esc(m.nome)).join(' · ')}</div></a>`;
+  }).join('') : '<p class="note">Nenhum módulo liberado para o seu usuário. Fale com o administrador.</p>';
 }
+document.addEventListener('click', e => {
+  const a = e.target.closest('[data-g]'); if (a) { e.preventDefault(); GRP = a.dataset.g; history.pushState(null, '', '#g=' + GRP); renderMods(); renderUsers(); window.scrollTo(0, 0); return; }
+  if (e.target.id === 'p-voltar') { GRP = ''; history.pushState(null, '', location.pathname); renderMods(); }
+});
+window.addEventListener('popstate', () => { GRP = (location.hash.match(/^#g=(\w+)/) || [])[1] || ''; renderMods(); renderUsers(); });
 function renderPush() {
   const F = window.__FB || {}, el = $('#p-push'); if (!el || !F.pushStatus) return; const st = F.pushStatus();
   if (st === 'sem-suporte') { el.hidden = true; return; } el.hidden = false;
@@ -341,26 +402,25 @@ function renderUsers() {
   if (temModulo(F.perfil, 'treinamentos')) db.collection('treinamentos').onSnapshot(q => {
     const nr = v => str(v).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim().replace(/\s+/g, ' '), eu = nr(F.nome), k = eu.replace(/[^a-z0-9]+/g, '_');
     PEND = eu ? q.docs.map(x => x.data()).filter(r => [r.instrutor, r.rt, r.tst].some(n => nr(n) === eu) && !((r.aprov || {})[k])).length : 0;
-    const av = $('#p-aviso'); av.hidden = !PEND; av.innerHTML = PEND ? `<span class="n">${PEND}</span><span>${PEND === 1 ? 'Certificado aguardando' : 'Certificados aguardando'} o seu de acordo</span><span class="go">Ver agora</span>` : '';
-    renderMods();
+    PENDS.cert = new Array(PEND).fill(1); renderMods();
   }, () => {});
   /* documentos (novos ou novas revisões) aguardando a aprovação deste usuário */
   if (temModulo(F.perfil, 'documentos')) db.collection('docs').onSnapshot(q => {
     const nr = v => str(v).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim().replace(/\s+/g, ' '), eu = nr(F.nome);
-    PDOC = eu ? q.docs.map(x => x.data()).filter(d => d.pend && !d.pend.recusa && nr(d.pend.aprovador) === eu).length : 0;
-    const av = $('#p-aviso3'); av.hidden = !PDOC; av.innerHTML = PDOC ? `<span class="n">${PDOC}</span><span>${PDOC === 1 ? 'Documento aguardando' : 'Documentos aguardando'} a sua aprovação</span><span class="go">Ver agora</span>` : ''; renderMods();
+    const P = eu ? q.docs.map(x => x.data()).filter(d => d.pend && !d.pend.recusa && nr(d.pend.aprovador) === eu) : []; PDOC = P.length;
+    PENDS.doc = P.map(d => ({ t: [d.codigo, d.titulo].filter(Boolean).join(' – '), s: 'enviado por ' + str(d.pend.por || '—') })); renderMods();
   }, () => {});
   /* contratações aguardando o de acordo (Gustavo ou Josilaine, conforme config/admissao.aprovEmails) */
   if (temModulo(F.perfil, 'admissao')) db.doc('config/admissao').get().then(c => {
     const em = str(F.email || (F.user || {}).email).toLowerCase(); const ap = str((c.data() || {}).aprovEmails).toLowerCase().split(/[,;\s]+/).filter(Boolean);
     if (!em || !ap.includes(em)) return;
-    db.collection('envios_contab').where('status', '==', 'aprovacao').onSnapshot(q => { const nomes = q.docs.map(x => str(x.data().nome)); PADM = nomes.length;
-      const av = $('#p-aviso4'); av.href = PADM === 1 ? 'admissao/?aprov=' + q.docs[0].id : 'admissao/'; av.hidden = !PADM; av.innerHTML = PADM ? `<span class="n">${PADM}</span><span>${PADM === 1 ? 'Contratação aguardando' : 'Contratações aguardando'} o seu de acordo: ${esc(nomes.slice(0, 3).join(', '))}${nomes.length > 3 ? '…' : ''}</span><span class="go">Ver agora</span>` : ''; renderMods(); }, e => console.warn(e));
+    db.collection('envios_contab').where('status', '==', 'aprovacao').onSnapshot(q => { PADM = q.docs.length; PENDS.adm = q.docs.map(x => ({ id: x.id, t: str(x.data().nome) })); renderMods(); }, e => console.warn(e));
   }, () => {});
+  /* matriz por função revisada esperando o Administrador */
+  if (F.perfil && F.perfil.papel === 'admin') db.collection('matriz_funcao').where('status', '==', 'revisada').onSnapshot(q => { PENDS.mat = q.docs.map(x => str(x.data().funcao || x.id)); PMAT = PENDS.mat.length; renderMods(); }, () => {});
   /* pedidos de EPI ou ferramenta fora do previsto: quem aprova é Administrador ou Gerente */
   if (F.perfil && ['admin', 'gerente'].includes(F.perfil.papel)) { let SOL = [], DEC = new Set();
-    const upd = () => { const L = SOL.filter(x => !DEC.has(x.id)); PAUT = L.length; const av = $('#p-aviso2'); av.hidden = !PAUT;
-      av.innerHTML = PAUT ? `<span class="n">${PAUT}</span><span>${PAUT === 1 ? 'Pedido de EPI ou ferramenta aguardando' : 'Pedidos de EPI ou ferramenta aguardando'} a sua autorização</span><span class="go">Ver agora</span>` : ''; renderMods(); };
+    const upd = () => { const L = SOL.filter(x => !DEC.has(x.id)); PAUT = L.length; PENDS.aut = L; renderMods(); };
     db.collection('autorizacoes').onSnapshot(q => { SOL = q.docs.map(x => ({ id: x.id })); upd(); }, () => {});
     db.collection('decisoes').onSnapshot(q => { DEC = new Set(q.docs.map(x => x.id)); upd(); }, () => {}); }
 })();
