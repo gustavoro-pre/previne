@@ -1,0 +1,23 @@
+name: Teste das páginas
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  paginas:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Sintaxe dos scripts
+        run: |
+          for f in $(git ls-files '*.js' | grep -v '^tools/' | grep -v '^fb.js$' | grep -v 'firebase-config.js'); do node --check "$f" || exit 1; done
+      - name: Abrir cada página no navegador
+        run: |
+          cd tools && npm init -y >/dev/null && npm install playwright@1.47.2 --no-audit --no-fund >/dev/null && npx playwright install --with-deps chromium >/dev/null
+          cd .. && node tools/teste-paginas.mjs

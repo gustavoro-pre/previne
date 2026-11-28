@@ -163,3 +163,36 @@ function mapaPlanilha() {
   [[p, MAPA_CAB_P], [a, MAPA_CAB_A]].forEach(([sh, cab]) => { sh.getRange(1, 1, 1, cab.length).setValues([cab]).setFontWeight('bold').setBackground('#1f4e9c').setFontColor('#ffffff'); sh.setFrozenRows(1); });
   return ss;
 }
+
+/* ---------- Cópia de segurança diária do banco do portal (Firestore) para o Drive ----------
+ * Pasta DOCUMENTAÇÃO PORTAL / _BACKUP DO BANCO / AAAA-MM-DD / <coleção>.json (só os documentos de primeiro nível;
+ * os arquivos anexados já são copiados pelo sincronizar). Guarda os últimos 30 dias; as pastas mais antigas ficam
+ * listadas no log para o Gustavo decidir (nada é apagado). Instalar com instalarBackupBanco (todo dia às 2h).
+ * Custo: ~1 chamada por 300 documentos.
+ */
+const BK_PASTA = '_BACKUP DO BANCO';
+const BK_PULAR = ['partes', 'push_estado']; // pedaços de arquivo (base64) e controle interno
+function instalarBackupBanco() {
+  ScriptApp.getProjectTriggers().forEach(t => { if (t.getHandlerFunction() === 'backupBanco') ScriptApp.deleteTrigger(t); });
+  ScriptApp.newTrigger('backupBanco').timeBased().everyDays(1).atHour(2).create();
+  backupBanco();
+}
+function backupBanco() {
+  const t0 = Date.now(); const dia = Utilities.formatDate(new Date(), 'America/Sao_Paulo', 'yyyy-MM-dd');
+  const raiz = invSub(DriveApp.getFolderById(PASTA.raiz), BK_PASTA, {}); const pasta = invSub(raiz, dia, {});
+  const r = UrlFetchApp.fetch(BASE + ':listCollectionIds', { method: 'post', contentType: 'application/json', payload: JSON.stringify({ pageSize: 300 }),
+    headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() }, muteHttpExceptions: true });
+  if (r.getResponseCode() !== 200) throw new Error('Firestore ' + r.getResponseCode() + ': ' + r.getContentText().slice(0, 300));
+  const cols = (JSON.parse(r.getContentText()).collectionIds || []).filter(c => BK_PULAR.indexOf(c) < 0);
+  const feitos = {}; const it = pasta.getFiles(); while (it.hasNext()) feitos[it.next().getName()] = true;
+  let n = 0;
+  for (const c of cols) {
+    if (Date.now() - t0 > 5 * 60 * 1000) { Logger.log('Tempo esgotado; continua na próxima execução.'); ScriptApp.newTrigger('backupBanco').timeBased().after(60 * 1000).create(); return; }
+    if (feitos[c + '.json']) continue;
+    const docs = listar(c); pasta.createFile(c + '.json', JSON.stringify(docs), 'application/json'); n += docs.length;
+  }
+  // antigos: só lista (não apaga)
+  const antigas = []; const ps = raiz.getFolders(); const lim = Utilities.formatDate(new Date(Date.now() - 30 * 864e5), 'America/Sao_Paulo', 'yyyy-MM-dd');
+  while (ps.hasNext()) { const p = ps.next(); if (p.getName() < lim) antigas.push(p.getName()); }
+  Logger.log('Backup ' + dia + ': ' + cols.length + ' coleções, ' + n + ' documentos.' + (antigas.length ? ' Pastas com mais de 30 dias (apague se quiser): ' + antigas.join(', ') : ''));
+}

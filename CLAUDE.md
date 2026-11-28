@@ -72,7 +72,10 @@ Notificações no celular: `.github/workflows/push.yml` (a cada 5 min, 6h–20h)
   sem cadastro → .../_SEM CADASTRO NO PORTAL/NOME; salário → subpasta "Restrito - salário". Planilha "Inventário de cópias (origem → destino)".
 - Depende do Gustavo: (1) ativar a Google Drive API no projeto ferramentas-epi (console do Google Cloud); (2) compartilhar as pastas antigas
   (RH, SEGURANÇA DO TRABALHO, Mobilização…) com o e-mail da conta de serviço, como Leitor; (3) publicar a regra `drive_inv` do Firestore;
-  (4) colar `tools/inventario.gs` no Apps Script e rodar `pararRotinasAntigas` e `instalarInventario` (ou eu faço quando o navegador voltar).
+  (4) colar `tools/inventario.gs` no Apps Script e rodar `pararRotinasAntigas`, `instalarInventario`, `instalarMapa` e `instalarBackupBanco` (ou eu faço quando o navegador voltar).
+- BACKUP DO BANCO: `backupBanco` (inventario.gs) todo dia às 2h → DOCUMENTAÇÃO PORTAL/_BACKUP DO BANCO/AAAA-MM-DD/<coleção>.json.
+- TESTE ANTES DE PUBLICAR: `.github/workflows/teste.yml` (a cada push) roda `node --check` nos scripts e abre cada página (tools/teste-paginas.mjs); falha se houver erro de JavaScript.
+- NOVOS MÓDULOS 27/11 noite: Alocação → aba Medição (alocacao/med.js; med_mes, med_cfg) e Carteirinhas (carteirinhas/; cart, cart_cfg).
 - ESCOPO (27/11, 19h14): Gustavo vai compartilhar o Drive INTEIRO. Funcionário ativo → pasta dele; inativo → arquivo morto; lista de origens para excluir depois.
   Todo o resto → planilha "Mapa geral do Drive" (função `mapaGeral` em inventario.gs, `instalarMapa` = a cada 2 h): abas Pastas e Arquivos,
   com "O que fazer" e "Finalidade" para o Gustavo preencher. Sem gastar tokens do Claude nem a cota de UrlFetch.
