@@ -82,7 +82,7 @@ for (const [fid, c] of C) {
   if (!cpfOk(f.cpf)) { const P = dominante(c.cpf); if (P.amb) { rel.ambiguos.push({ fid, nome: f.nome, campo: 'cpf', valores: P.amb }); cont.ambiguos++; } else if (P.v && !usados.has(P.v)) { set.cpf = P.v.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4'); usados.add(P.v); } }
   if (!f.pis) { const P = dominante(c.pis); if (P.v) set.pis = P.v; }
   const aso = c.aso.sort((x, y) => y.d.localeCompare(x.d))[0];
-  if (aso && aso.apto && (!f.asoData || String(f.asoData) < aso.d)) { set.asoData = aso.d; if (!f.asoValidade || String(f.asoValidade) < addMeses(aso.d, 12)) set.asoValidade = addMeses(aso.d, 12); }
+  if (aso && aso.apto && addMeses(aso.d, 12) >= HOJE && (!f.asoData || String(f.asoData) < aso.d)) { set.asoData = aso.d; if (!f.asoValidade || String(f.asoValidade) < addMeses(aso.d, 12)) set.asoValidade = addMeses(aso.d, 12); }
   const it = c.integ.sort((x, y) => y.d.localeCompare(x.d))[0];
   if (it && (!f.integracaoData || String(f.integracaoData) < it.d)) set.integracaoData = it.d;
   const campos = Object.keys(set); if (!campos.length) continue;
