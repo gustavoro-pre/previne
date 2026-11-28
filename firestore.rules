@@ -94,6 +94,7 @@ service cloud.firestore {
       allow write: if trein(['gestor', 'tst', 'rh', 'instrutor']);
     }
     match /padroes/{id}   { allow read: if ativo(); allow write: if trein(['gestor', 'tst', 'rh', 'instrutor']); }
+    match /listas_presenca/{id} { allow read: if equipe(); allow write: if trein(['gestor', 'tst', 'rh', 'instrutor']); }
     match /padrao_reg/{id} {
       allow read: if equipe() || (aluno() && resource.data.funcionarioId == meuFunc());
       allow create: if trein(['gestor', 'tst', 'rh', 'instrutor'])

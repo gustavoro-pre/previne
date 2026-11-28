@@ -68,7 +68,7 @@ const vt = secao('turmas', `<div id="tu-host"></div>
   <p class="note" style="margin-top:0">Treinamentos dados pela ArcelorMittal ou por terceiros, com o certificado anexado. Entram na matriz e nos alertas de vencimento.</p>
   <input id="ex-q" placeholder="Buscar participante, treinamento, entidade" autocomplete="off"><div class="chips" id="ex-ch"></div><div id="ex-list" class="list"></div>`);
 const subT = $('#sub-trein'); subT.classList.remove('sub'); subT.hidden = false; $('#tu-host').appendChild(subT);
-secao('padroes', `<div class="head"><h2>Padrões operacionais</h2><button class="btn primary" id="pd-new" type="button">+ Novo padrão</button></div>
+secao('padroes', `<div class="head"><h2>Padrões operacionais</h2><button class="btn ghost" id="pd-ficha" type="button">Ficha de presença em branco</button><button class="btn primary" id="pd-new" type="button">+ Novo padrão</button></div>
   <div class="kpis k5" id="pd-kpis" style="margin-bottom:12px"></div>
   <div class="filters"><select id="pd-area"></select><input id="pd-q" placeholder="Buscar código ou título" style="width:auto;flex:1;min-width:160px;padding:7px 10px"></div>
   <div id="pd-list"></div>`);
@@ -559,6 +559,7 @@ function tPadroes() {
 $('#pd-area').onchange = e => { PDF.area = e.target.value; tPadroes(); };
 $('#pd-q').addEventListener('input', tPadroes);
 $('#pd-new').onclick = () => editPadrao(null);
+{ const fb = $('#pd-ficha'); if (fb) fb.onclick = () => fichaPresenca({}); }
 document.addEventListener('click', e => { const b = e.target.closest('[data-padrao]'); if (b) openPadrao(b.dataset.padrao); });
 
 /* prova: texto simples → questões. Formato:
@@ -622,13 +623,14 @@ function openPadrao(id) {
     <dt>Reciclagem</dt><dd>${num(p.reciclMeses) ? 'a cada ' + num(p.reciclMeses) + ' meses' : 'quando sair revisão nova'}</dd><dt>Prova</dt><dd>${p.quiz && (p.quiz.qs || []).length ? `${p.quiz.qs.length} questões · mínimo ${num(p.quiz.min)}%` : 'sem prova'}</dd><dt>Situação</dt><dd>${r.ok}/${r.n} treinados na revisão atual</dd></dl>
     <div class="actions">${arqBtn(p.arquivoId, 'Abrir PDF (rev. ' + esc(p.rev) + ')')}${(p.hist || []).map(h => arqBtn(h.arquivoId, 'Rev. ' + esc(h.rev))).join('')}</div></div>
     ${w ? `<div class="actions" style="margin-top:0"><button class="btn accent" id="pp-app" type="button">Assinar no app</button><button class="btn ghost" id="pp-lista" type="button">Lançar lista assinada</button></div>
-    <div class="actions" style="margin-top:6px"><button class="btn ghost" id="pp-pdf" type="button">Lista de presença (PDF)</button><button class="btn ghost" id="pp-inc" type="button">+ Incluir pessoa</button><button class="btn ghost" id="pp-rev" type="button">Nova revisão</button><button class="btn ghost" id="pp-ed" type="button">Editar</button></div>` : `<div class="actions" style="margin-top:0"><button class="btn ghost" id="pp-pdf" type="button">Lista de presença (PDF)</button></div>`}
+    <div class="actions" style="margin-top:6px"><button class="btn ghost" id="pp-pdf" type="button">Lista de presença (PDF)</button><button class="btn ghost" id="pp-ficha" type="button">Ficha de presença para o treinamento</button><button class="btn ghost" id="pp-inc" type="button">+ Incluir pessoa</button><button class="btn ghost" id="pp-rev" type="button">Nova revisão</button><button class="btn ghost" id="pp-ed" type="button">Editar</button></div>` : `<div class="actions" style="margin-top:0"><button class="btn ghost" id="pp-pdf" type="button">Lista de presença (PDF)</button></div>`}
     <h3>Pendentes (${grp('pend').length})</h3><div class="card" style="padding:4px 12px">${grp('pend').map(linha).join('') || '<p class="note">Ninguém.</p>'}</div>
     <h3>Revisão desatualizada ou reciclagem vencida (${grp('rev').length})</h3><div class="card" style="padding:4px 12px">${grp('rev').map(linha).join('') || '<p class="note">Ninguém.</p>'}</div>
     <h3>Treinados na revisão ${esc(p.rev)} (${grp('ok').length})</h3><div class="card" style="padding:4px 12px">${grp('ok').map(linha).join('') || '<p class="note">Ninguém ainda.</p>'}</div>
     ${(p.exc || []).length ? `<p class="note">Não se aplica a: ${(p.exc || []).map(i => esc((funcDe(i) || {}).nome || '?')).join(', ')}${w ? ' · <button class="link" id="pp-exc0" type="button">desfazer</button>' : ''}</p>` : ''}
     ${w ? `<div class="actions"><button class="btn danger" id="pp-at" type="button">${p.ativo === false ? 'Reativar padrão' : 'Desativar padrão'}</button></div>` : ''}`);
   $('#pp-pdf').onclick = () => pdfListaPadrao(p);
+  { const fb = $('#pp-ficha'); if (fb) fb.onclick = () => fichaPresenca({ padrao: p, pend: grp('pend').concat(grp('rev')).map(x => x.f) }); }
   if (!w) return;
   $('#pp-ed').onclick = () => editPadrao(p.id);
   $('#pp-rev').onclick = () => novaRevisao(p);
@@ -700,6 +702,50 @@ function assinarNoApp(p) {
     };
     tela();
   }, { ok: 'Começar assinaturas' });
+}
+/* Ficha de presença (treinamento de padrão, palestra, reunião, DDS…) no modelo FOR-SST-002, com número de verificação.
+   O número e os dados ficam em listas_presenca/{numero}; depois a ficha assinada é lançada em "Lançar lista assinada". */
+function fichaPresenca(o) {
+  o = o || {}; const p = o.padrao; const hj = todayStr();
+  const inp = 'style="width:100%"';
+  openModal(mtop('Ficha de presença' + (p ? ' · ' + esc(p.codigo) : '')) + `<div class="card">
+    <label>Tipo de evento</label><select id="fp-tipo" ${inp}>${['Treinamento', 'Palestra', 'Reunião', 'DDS', 'Outros'].map(t => `<option>${t}</option>`).join('')}</select>
+    <label>Título</label><input id="fp-tit" ${inp} value="${esc(p ? `${p.codigo} rev. ${p.rev} – ${p.titulo}` : '')}">
+    <div class="grid2"><div><label>Data</label><input type="date" id="fp-data" value="${hj}"></div><div><label>Carga horária (h)</label><input id="fp-ch" inputmode="decimal" value="${esc(p && num(p.cargaHoraria) ? num(p.cargaHoraria) : '')}"></div></div>
+    <div class="grid2"><div><label>Início</label><input type="time" id="fp-hi" value="07:30"></div><div><label>Término</label><input type="time" id="fp-hf" value=""></div></div>
+    <label>Local</label><input id="fp-loc" ${inp}>
+    <label>Instrutor / responsável</label><input id="fp-ins" ${inp} value="${esc((window.__FB || {}).nome || '')}">
+    <label>Conteúdo</label><textarea id="fp-cont" rows="3" ${inp}>${esc(p ? `Leitura e explicação do padrão operacional ${p.codigo} (revisão ${p.rev}): ${p.titulo}.` : '')}</textarea>
+    ${o.pend && o.pend.length ? `<label class="chk"><input type="checkbox" id="fp-pend" checked> Já preencher com os ${o.pend.length} pendente(s) deste padrão</label>` : ''}
+    <label>Linhas em branco a mais</label><input id="fp-extra" type="number" min="0" max="60" value="${o.pend && o.pend.length ? 5 : 20}">
+    <div class="actions"><button class="btn ghost" data-close type="button">Cancelar</button><button class="btn primary" id="fp-ok" type="button">Gerar PDF</button></div></div>`);
+  $('#fp-ok').onclick = async () => {
+    const d = { tipo: $('#fp-tipo').value, titulo: $('#fp-tit').value.trim(), data: $('#fp-data').value, hi: $('#fp-hi').value, hf: $('#fp-hf').value, carga: $('#fp-ch').value.trim(), local: $('#fp-loc').value.trim(), instrutor: $('#fp-ins').value.trim(), conteudo: $('#fp-cont').value.trim(),
+      padraoId: p ? p.id : '', rev: p ? str(p.rev) : '' };
+    if (!d.titulo || !d.data) return toast('Informe o título e a data.', 'bad');
+    const usaPend = $('#fp-pend') && $('#fp-pend').checked; const extra = Math.max(0, Math.min(60, +$('#fp-extra').value || 0));
+    d.participantes = usaPend ? o.pend.slice().sort((a, b) => str(a.nome).localeCompare(str(b.nome), 'pt')).map(f => ({ fid: f.id, nome: str(f.nome), matricula: str(f.matricula), funcao: str(f.funcao) })) : [];
+    const b = $('#fp-ok'); b.disabled = true; b.textContent = 'Gerando…';
+    try {
+      await loadPDF();
+      const hash = await sha256Hex(JSON.stringify([d.tipo, d.titulo, d.data, d.hi, d.hf, d.carga, d.local, d.instrutor, d.conteudo, d.participantes.map(x => x.fid)]));
+      const numero = 'LP-' + d.data.replace(/-/g, '') + '-' + hash.slice(0, 6).toUpperCase();
+      try { if (db) await db.doc('listas_presenca/' + numero).set(Object.assign({}, d, { numero, hash, criadoEm: new Date().toISOString(), por: str((window.__FB || {}).nome) })); } catch (e) { /* sem permissão: gera mesmo assim */ }
+      const P = PDFW(); const doc = P.doc;
+      const mc = modeloCab('lista', '', '', d.tipo + (p ? ' de padrão operacional' : '')); P.ctlProx = mc.ctl || ''; P.header('FICHA DE PRESENÇA', mc.cod ? mc.sub : d.tipo, mc.cod);
+      P.box([['Evento', d.tipo], ['Data', fmtD(d.data)], ['Título', d.titulo], ['Horário', (d.hi || '__:__') + ' às ' + (d.hf || '__:__')], ['Local', d.local || '—'], ['Carga horária', d.carga ? d.carga + ' h' : '—'], ['Instrutor', d.instrutor || '—'], ['Nº de verificação', numero]]);
+      P.section(1, 'Conteúdo'); P.text(d.conteudo || '—', { size: 9 });
+      P.text('Declaro que participei do evento acima, recebi as orientações sobre o conteúdo apresentado e me comprometo a cumpri-las.', { size: 8.5, color: [70, 76, 90] });
+      P.section(2, 'Participantes');
+      const cols = [['Nº', 9], ['Matrícula', 22], ['Nome completo', 66], ['Função', 33], ['Assinatura', 50]];
+      const linhas = d.participantes.map(x => [x.matricula, x.nome, x.funcao]); for (let i = 0; i < extra; i++) linhas.push(['', '', '']);
+      P.table(cols, linhas.map((r, i) => [String(i + 1)].concat(r).concat([''])), { size: 8.5, minH: 9, noZebra: true });
+      P.sign([d.instrutor ? d.instrutor + ' · Instrutor' : 'Instrutor / responsável', 'Técnico de Segurança do Trabalho']);
+      P.text(`Nº de verificação ${numero} · registrado no Portal PREVINE em ${fmtDT(new Date().toISOString())} · SHA-256 ${hash.slice(0, 32)}…`, { size: 7, color: [120, 126, 140] });
+      P.footer(numero + ' · ' + d.titulo.slice(0, 60));
+      await salvarPDF(P, 'ficha_presenca_' + numero + '.pdf', 1); closeModal(); toast('Ficha ' + numero + ' gerada. Depois de assinada, lance em "Lançar lista assinada".', 'ok');
+    } catch (e) { handleErr(e); b.disabled = false; b.textContent = 'Gerar PDF'; }
+  };
 }
 async function pdfListaPadrao(p) {
   toast('Gerando lista…'); try { await loadPDF(); } catch (_) { return toast('Sem conexão para gerar o PDF.', 'bad'); }
