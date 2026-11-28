@@ -109,6 +109,7 @@ function vida(fid) {
   PB().innerHTML = `<button class="link" id="vi-bk" style="margin:0 0 6px">‹ Voltar</button>
     <div class="card"><b style="font-size:19px">${esc(f.nome)}</b><div style="margin:4px 0 10px">${subsDe(f).map(s => `<span class="badge b-info" style="margin:2px">${esc(subNome(s))}</span>`).join('')}</div>
       <dl class="kv">${kv.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v || '—')}</dd>`).join('')}</dl></div>
+    <h3>Resumo 360°</h3><div class="card" id="vi-360">${resumo360(f)}</div>
     <h3>Documentos</h3>
     <div class="card"><p class="ct">Documentos de segurança gerados pelo portal</p><p class="note" style="margin:0 0 8px">Saem na hora com os dados atuais do cadastro, no modelo aprovado.</p>
       <div class="actions" style="justify-content:flex-start;flex-wrap:wrap;gap:8px"><button class="btn ghost sm" data-gdoc="os">Ordem de Serviço (PDF)</button><button class="btn ghost sm" data-gdoc="ficha">Ficha de EPI (PDF)</button><button class="btn ghost sm" data-gdoc="termo">Termo de EPI (PDF)</button>${certs.length ? `<button class="btn ghost sm" data-gcert="${esc(certs.join(','))}">Certificados (${certs.length}) (PDF)</button>` : ''}${D.ext.filter(x => x.funcionarioId === fid && x.arquivoId).map(x => `<button class="btn ghost sm" data-arq="${esc(x.arquivoId)}">${esc(x.tipo)} (externo)</button>`).join('')}</div></div>
@@ -122,7 +123,31 @@ function vida(fid) {
   $('#vi-bk').onclick = () => { V.pes = ''; tPesHub(); };
   PB().querySelectorAll('[data-gdoc]').forEach(b => b.onclick = () => gerarDoc(b, '#gerar-func=' + fid + '.' + b.dataset.gdoc, 'previne-func-doc', ({ os: 'OS - ', ficha: 'Ficha EPI - ', termo: 'Termo EPI - ' }[b.dataset.gdoc]) + f.nome + '.pdf'));
   PB().querySelectorAll('[data-gcert]').forEach(b => b.onclick = () => gerarDoc(b, '#gerar-cert=' + b.dataset.gcert, 'previne-cert', 'Certificados - ' + f.nome + '.pdf'));
-  rhBox(f); if (pf && window.ccBox) ccBox(f);
+  rhBox(f); if (pf && window.ccBox) ccBox(f); resumo360Extra(f);
+}
+/* ---------- resumo 360°: o que a pessoa precisa ter em dia, o que está com ela e o que aconteceu ---------- */
+function resumo360(f) {
+  const fid = f.id, hj = hoje();
+  const req = D.tt.filter(t => t.ativo !== false && ((t.obrig || []).includes(str(f.funcao)) || (f.altura && /nr-?\s?35/i.test(str(t.norma) + ' ' + str(t.nome)))));
+  const ult = t => D.tr.concat(D.ext).filter(r => r.funcionarioId === fid && r.tipoId === t.id).sort((a, b) => str(b.validade || b.termino).localeCompare(str(a.validade || a.termino)))[0];
+  const nrs = req.map(t => { const r = ult(t); const v = r ? str(r.validade) : ''; const st = !r ? ['Não feita', 'b-bad'] : v && v < hj ? ['Vencida em ' + fmtD(v), 'b-bad'] : v && v <= new Date(Date.now() + 30 * 864e5).toISOString().slice(0, 10) ? ['Vence em ' + fmtD(v), 'b-warn'] : ['Em dia' + (v ? ' até ' + fmtD(v) : ''), 'b-ok'];
+    return `<div style="display:flex;justify-content:space-between;gap:8px;padding:4px 0;border-bottom:1px solid var(--line)"><span>${esc(t.norma || t.nome)}</span><span class="badge ${st[1]}">${esc(st[0])}</span></div>`; });
+  const inap = req.filter(t => { const r = ult(t); return !r || (r.validade && str(r.validade) < hj); }).length;
+  const posse = D.caut.filter(c => c.funcionarioId === fid && c.status === 'aberta').flatMap(c => (c.itens || []).filter(i => !i.devolvido).map(i => str(i.codigo || i.descricao)));
+  const ue = D.ent.filter(e => e.funcionarioId === fid).map(e => str(e.data).slice(0, 10)).sort().pop();
+  return `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">${f.ativo === false ? '<span class="badge b-mut">Desligado</span>' : inap ? `<span class="badge b-bad">Não apto: ${inap} NR obrigatória vencida ou não feita</span>` : req.length ? '<span class="badge b-ok">Apto: NRs obrigatórias em dia</span>' : '<span class="badge b-warn">Função sem NR obrigatória cadastrada (ver Matriz por função)</span>'}
+      ${posse.length ? `<span class="badge b-warn">Com ${posse.length} ferramenta(s): ${esc(posse.slice(0, 4).join(', '))}${posse.length > 4 ? '…' : ''}</span>` : '<span class="badge b-mut">Sem ferramenta em posse</span>'}
+      <span class="badge b-mut">Última entrega de EPI: ${ue ? fmtD(ue) : '—'}</span></div>
+    ${req.length ? `<p class="note" style="margin:0 0 4px">NRs obrigatórias da função${f.altura ? ' (e NR-35 por trabalho em altura)' : ''}</p>${nrs.join('')}` : ''}
+    <div id="vi-360x" class="note" style="margin-top:8px">Carregando ocorrências, desligamento e carteirinhas…</div>`;
+}
+async function resumo360Extra(f) {
+  const el = document.getElementById('vi-360x'); if (!el) return; const out = [];
+  try { const q = await db.collection('ocorrencias').get(); const n = norm(f.nome); const O = q.docs.map(d => d.data()).filter(o => (o.envolvidos || []).some(x => norm(x) === n));
+    out.push(O.length ? `<b>Ocorrências em que aparece (${O.length}):</b> ` + O.slice(0, 5).map(o => esc(o.numero + ' · ' + fmtD(o.data) + ' · ' + o.titulo)).join('; ') : 'Nenhuma ocorrência registrada com o nome dele.'); } catch (e) {}
+  try { const d = await db.doc('desligamentos/' + f.id).get(); if (d.exists) { const x = d.data(); out.push(`<b>Desligamento:</b> ${x.status === 'concluido' ? 'concluído' : 'em andamento'} · saída ${fmtD(x.data)} · ${esc(x.tipo || '')} · <a href="../desligamento/">abrir o checklist</a>`); } } catch (e) {}
+  try { const c = await db.doc('cart/' + f.id).get(); const x = c.exists ? c.data() : {}; out.push(`<b>Carteirinhas:</b> ${x.foto ? 'foto da etiqueta de bloqueio ok' : 'sem foto para a etiqueta'} · ${x.crc && x.crc.frente ? 'CRC guardada' + (x.crc.validade ? ' (validade ' + fmtD(x.crc.validade) + ')' : '') : 'CRC não guardada'} · <a href="../carteirinhas/">abrir</a>`); } catch (e) {}
+  el.innerHTML = out.join('<br>') || '';
 }
 /* PDFs gerados pelo módulo Ferramentas & EPI / Treinamentos, aberto escondido (mesmo mecanismo da Admissão) */
 function gerarDoc(btn, hash, tipo, nome) {
