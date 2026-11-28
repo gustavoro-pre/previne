@@ -142,7 +142,8 @@ Pedidos novos de 27/11 22h10:
 - Matriz por função (matriz/, gate treinamentos; matriz_funcao): proposta automática, revisão (gestor/TST) e aprovação (só admin; aprovar grava trein_tipos.obrig).
 - Alocação: aptidão (NR obrigatória/NR-35) com badge "Não apto", filtro e justificativa ao programar (aptoJust).
 - Ocorrências e ações (ocorrencias/, gate ferramentas): acidente, quase-acidente, NC, reclamação, auditoria; 5 porquês, ações, eficácia.
-- Regras novas a publicar: med_mes, med_cfg, cart, cart_cfg, listas_presenca, matriz_funcao, ocorrencias, drive_inv, epi_separacao, admissoes/d/carta.
+- Medição (28/11): importa a "LISTA DE FUNCIONÁRIOS – PREVINE – <MÊS>" (Drive › MEDIÇÕES, aba FUNCIONÁRIOS COM OM) → med_lista/{AAAA-MM}: matrícula AM, unidade, área, subárea, OM, status. Não lê salário. eSocial SST foi retirado a pedido do Gustavo.
+- Regras novas a publicar: med_lista, campo, avaliacoes, med_mes, med_cfg, cart, cart_cfg, listas_presenca, matriz_funcao, ocorrencias, drive_inv, epi_separacao, admissoes/d/carta.
 
 ## Feito em 27/11 (tarde)
 - Propostas: código SIG-AAAA-XXXXX (3 letras da sigla do cliente, ano, 5 números aleatórios), sem "Controle Previne"; canceladas fora da lista;
