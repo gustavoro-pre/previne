@@ -118,6 +118,15 @@ Notificações no celular: `.github/workflows/push.yml` (a cada 5 min, 6h–20h)
 7. Antigas: e-mail das NFs, OAuth do Conta Azul, lista de papéis dos padrões, valor do plano de saúde, OS por função para as outras funções,
    separar o cinto dos kits da trefilaria, filtro de outliers em Folha/Salários, texto da carta-convite com salário visível para todo o RH.
 
+## Lista de implementação (27/11 noite)
+Planilha (Sheets) com 57 itens, prioridade, status e dependências: https://claude.ai/artifact/2e9JqJwpzFZfTF4kcp3eSH
+Pedidos novos de 27/11 22h10:
+- Alocação de OM → MEDIÇÃO HH: importar acompanhamento do portalRDO (siderurgia/trefilaria; aprovados, reprovados, enviados ao SAP, valor),
+  roleta e ponto do RHiD; meta de medição por funcionário/local/OM (contrato fixo de HH; regra a confirmar com o Gustavo, ex.: 540 min/dia);
+  painel medido × meta × trabalhado; quem falta lançar e quais dias; reprovados por funcionário; medido × trabalhado (roleta/ponto).
+  Regras dele para apontamentos: sem HE buscar 540 min ou mais (30 min de tolerância + almoço); com HE, sem a tolerância.
+- Segurança: imprimir carteirinha de bloqueio e CRC (aguardando o que a CRC precisa conter / modelo).
+
 ## Feito em 27/11 (tarde)
 - Propostas: código SIG-AAAA-XXXXX (3 letras da sigla do cliente, ano, 5 números aleatórios), sem "Controle Previne"; canceladas fora da lista;
   botões Word e PDF (propostas/proppdf.js desenha o PDF a partir da mesma estrutura do PropDoc.build); todo texto justificado.
