@@ -23,7 +23,7 @@ const TIPOS = { preventiva: 'Preventiva', extra: 'Demanda extra', corretiva: 'Co
 const TIPO_COR = { preventiva: 'b-info', extra: 'b-warn', corretiva: 'b-bad', spot: 'b-mut', fixa: 'b-ok', outro: 'b-mut' };
 const tipoBadge = t => `<span class="badge ${TIPO_COR[t] || 'b-mut'}">${esc(TIPOS[t] || t || '—')}</span>`;
 
-const D = { func: [], areas: [], oms: [], fixa: {}, aloc: new Map(), apont: new Map(), pend: [] };
+const D = { func: [], areas: [], oms: [], fixa: {}, aloc: new Map(), apont: new Map(), pend: [], tt: [], trU: new Map() };
 const V = { tab: 'dia', dia: hoje(), area: '', busca: '', so: '', dDe: hoje().slice(0, 8) + '01', dAte: hoje(), dTipo: 'preventiva', fMes: hoje().slice(0, 7), fId: '', omBusca: '' };
 let db = null, PODE = false, MEU = '';
 const JANELA = addDays(-75);
@@ -54,6 +54,26 @@ const apontado = (fid, data) => !!(D.apont.get(fid + '_' + data) || {}).apontado
 const semOm = a => !str(a.omNumero).trim();
 const areaDe = f => f.areaId || '';
 const filtraArea = (L, area) => !area ? L : L.filter(f => areaDe(f) === area || (fixaAtual(f.id) || {}).areaId === area);
+
+/* ---------- aptidão: NRs obrigatórias da função (tipos de treinamento) e NR-35 para quem trabalha em altura ---------- */
+const ehNR35 = t => /nr-?\s?35/i.test(str(t.norma) + ' ' + str(t.nome));
+function inapto(f, data) {
+  if (!f || !D.tt.length) return [];
+  const req = D.tt.filter(t => t.ativo !== false && ((t.obrig || []).includes(str(f.funcao)) || (f.altura && ehNR35(t))));
+  const out = []; req.forEach(t => { const v = D.trU.get(f.id + '|' + t.id); const nm = str(t.norma || t.nome);
+    if (v === undefined) out.push(nm + ' não feita'); else if (v && v < data) out.push(nm + ' vencida em ' + fmtD(v)); });
+  return out;
+}
+const aptoBadge = (f, data) => { const m = inapto(f, data); return m.length ? ` <span class="badge b-bad" title="${esc(m.join(' · '))}">Não apto: ${esc(m[0])}${m.length > 1 ? ' +' + (m.length - 1) : ''}</span>` : ''; };
+async function carregarTrein() {
+  try {
+    const [t, r, x] = await Promise.all([db.collection('trein_tipos').get(), db.collection('treinamentos').get(), db.collection('trein_ext').get().catch(() => ({ docs: [] }))]);
+    D.tt = t.docs.map(d => Object.assign({}, d.data(), { id: d.id }));
+    const m = new Map(); r.docs.concat(x.docs).forEach(d => { const a = d.data(); if (!a.funcionarioId || !a.tipoId) return; const k = a.funcionarioId + '|' + a.tipoId; const v = str(a.validade); const cur = m.get(k);
+      if (cur === undefined || (cur && (!v || v > cur))) m.set(k, v); });
+    D.trU = m; render();
+  } catch (e) { /* sem permissão: não mostra aptidão */ }
+}
 
 /* ---------- dados ---------- */
 function ouvir() {
@@ -100,13 +120,13 @@ function rDia() {
   if (V.busca) { const q = norm(V.busca); P = P.filter(f => norm(f.nome).includes(q) || str(f.matricula).includes(q)); }
   const R = P.map(f => ({ f, E: diaDe(f.id, d), ap: apontado(f.id, d) }));
   const tot = { n: R.length, ap: R.filter(r => r.ap).length, sem: R.filter(r => !r.E.length).length, so: R.filter(r => r.E.some(semOm)).length, desl: R.filter(r => r.E.some(e => !e.virtual)).length, falta: R.filter(r => !r.ap && r.E.length).length };
-  let L = R; if (V.so === 'nao') L = R.filter(r => !r.ap && r.E.length); else if (V.so === 'sem') L = R.filter(r => !r.E.length); else if (V.so === 'semom') L = R.filter(r => r.E.some(semOm)); else if (V.so === 'desl') L = R.filter(r => r.E.some(e => !e.virtual));
+  let L = R; if (V.so === 'nao') L = R.filter(r => !r.ap && r.E.length); else if (V.so === 'sem') L = R.filter(r => !r.E.length); else if (V.so === 'inapto') L = R.filter(r => r.E.length && inapto(r.f, d).length); else if (V.so === 'semom') L = R.filter(r => r.E.some(semOm)); else if (V.so === 'desl') L = R.filter(r => r.E.some(e => !e.virtual));
   $('#body').innerHTML = `<div class="top2"><div class="dnav"><button class="btn sm ghost" data-dd="-1" aria-label="Dia anterior">‹</button><input type="date" id="d-dia" value="${d}"><button class="btn sm ghost" data-dd="1" aria-label="Próximo dia">›</button></div>
       <span class="note">${DSEM[dow(d)]}</span><select id="d-area">${optAreas(V.area)}</select><input id="d-busca" placeholder="Buscar nome ou matrícula" value="${esc(V.busca)}" style="flex:1;min-width:160px"></div>
     <div class="kpis k5" style="margin-bottom:12px">${kpi('Pessoas', tot.n)}${kpi('Apontados', tot.ap, 'ok')}${kpi('Falta apontar', tot.falta, tot.falta ? 'warn' : '')}${kpi('Fora da OM fixa', tot.desl, 'info')}${kpi('Sem programação', tot.sem, tot.sem ? 'bad' : '')}</div>
-    <div class="chips">${[['', 'Todos'], ['nao', 'Não apontados'], ['desl', 'Fora da OM fixa'], ['semom', 'Sem OM'], ['sem', 'Sem programação']].map(([k, t]) => `<button class="chip ${V.so === k ? 'on' : ''}" data-so="${k}">${t}</button>`).join('')}
+    <div class="chips">${[['', 'Todos'], ['nao', 'Não apontados'], ['desl', 'Fora da OM fixa'], ['semom', 'Sem OM'], ['sem', 'Sem programação'], ['inapto', 'Não aptos']].map(([k, t]) => `<button class="chip ${V.so === k ? 'on' : ''}" data-so="${k}">${t}</button>`).join('')}
       ${PODE ? `<button class="btn sm ghost" id="d-all" style="margin-left:auto">Marcar visíveis como apontados</button>` : ''}</div>
-    <div class="card">${L.length ? L.map(({ f, E, ap }) => `<div class="prow"><div class="main"><b>${esc(f.nome)}</b> <span class="t2">${esc(f.matricula || '')}${f.funcao ? ' · ' + esc(f.funcao) : ''}</span>
+    <div class="card">${L.length ? L.map(({ f, E, ap }) => `<div class="prow"><div class="main"><b>${esc(f.nome)}</b> <span class="t2">${esc(f.matricula || '')}${f.funcao ? ' · ' + esc(f.funcao) : ''}</span>${E.length ? aptoBadge(f, d) : ''}
         ${f.situacao && f.situacao !== 'Trabalhando' ? ` <span class="badge b-warn">${esc(f.situacao)}</span>` : ''}
         ${E.length ? E.map(e => `<div class="ent">${entHtml(e, PODE)}</div>`).join('') : `<div class="ent"><span class="badge b-mut">Sem programação</span>${PODE ? ` <button class="link" data-progp="${esc(f.id)}">Programar</button>` : ''}</div>`}</div>
         <label class="apt"><input type="checkbox" data-ap="${esc(f.id)}" ${ap ? 'checked' : ''} ${PODE ? '' : 'disabled'}>${ap ? 'Apontado' : 'Apontar'}</label></div>`).join('') : '<div class="empty">Ninguém nesta lista.</div>'}</div>
@@ -167,10 +187,14 @@ async function salvarProg() {
     $('#g-conf').innerHTML = `<div class="demo" style="margin-top:12px"><b>${conf.length} dia(s) já têm lançamento:</b><br>${conf.slice(0, 8).map(c => `${esc(funcBy(c.fid).nome)} em ${fmtD(c.d)}: ${c.L.map(a => esc(a.omNumero ? 'OM ' + a.omNumero : 'sem OM') + ' · ' + esc(a.local)).join(', ')}`).join('<br>')}${conf.length > 8 ? '<br>…' : ''}<br>Salvar de novo acrescenta este lançamento ao dia (não apaga o anterior).</div>`;
     btn.dataset.ok = '1'; btn.textContent = 'Salvar mesmo assim'; return;
   }
+  /* aptidão: NR obrigatória vencida ou não feita pede justificativa */
+  const inap = []; PG.sel.forEach(fid => { const m = inapto(funcBy(fid), de); if (m.length) inap.push(funcBy(fid).nome + ': ' + m.join(', ')); });
+  let just = '';
+  if (inap.length) { just = prompt(`${inap.length} pessoa(s) sem NR obrigatória em dia:\n\n${inap.slice(0, 10).join('\n')}${inap.length > 10 ? '\n…' : ''}\n\nPara programar mesmo assim, escreva a justificativa:`, ''); if (!just || !just.trim()) return toast('Programação não salva: falta a justificativa.', 'bad'); just = just.trim(); }
   const om = omByNum(omN); const lote = 'L' + Date.now().toString(36); const agora = new Date().toISOString();
   const docs = []; PG.sel.forEach(fid => { const f = funcBy(fid); dias.forEach(d => { const fx = fixaEm(fid, d);
     docs.push({ data: d, fid, nome: f.nome || '', matricula: str(f.matricula), areaId: f.areaId || '', omId: om ? om.id : '', omNumero: omN, semOm: !omN, local, inicio: ini, fim, tipo, obs, lote,
-      fixaNumero: fx ? fx.numero : '', desloc: !fx || norm(fx.numero) !== norm(omN), criadoPor: MEU, criadoEm: agora }); }); });
+      fixaNumero: fx ? fx.numero : '', desloc: !fx || norm(fx.numero) !== norm(omN), criadoPor: MEU, criadoEm: agora, ...(just && inapto(f, d).length ? { aptoJust: just, aptoMotivo: inapto(f, d).join(', ') } : {}) }); }); });
   btn.disabled = true; btn.textContent = 'Salvando…';
   try {
     const col = db.collection('alocacoes');
@@ -417,5 +441,5 @@ document.addEventListener('change', e => {
   const F = window.__FB || {}; PODE = ['admin', 'gestao', 'adm'].includes(F.papel); MEU = F.nome || '';
   db.doc('config/empresa').onSnapshot(s => { const e = s.exists ? s.data() : {}; if (/^data:image\/(png|jpeg);base64,/.test(str(e.logo))) { const l = $('header .logo'); l.classList.add('img'); l.innerHTML = `<img src="${e.logo}" alt="Logo">`; } }, () => {});
   const c = $('#conn'); c.textContent = 'Online'; c.className = 'conn ok';
-  ouvir(); render();
+  ouvir(); render(); carregarTrein();
 })();
