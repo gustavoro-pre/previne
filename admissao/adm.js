@@ -664,7 +664,7 @@ async function concluir(a) {
     if (D.func.some(f => norm(f.matricula) === norm(mat) && (!exist || f.id !== exist.id))) return toast('Essa matrícula já é de outro funcionário.', 'bad');
     const b = $('#c-go'); b.disabled = true;
     const f = { nome: a.nome, matricula: mat, cpf: a.cpf, funcao: a.funcao, area: a.area, areaId: a.areaId, subareaId: a.subareaId || '', subarea: a.subarea || '', subareas: a.subareaId ? [a.subareaId] : [], unidade: a.unidade || '',
-      admissao: adm, nascimento: dd.nascimento || '', situacao: 'Trabalhando', tamCamisa: dd.tamCamisa || '', tamRoupa: dd.tamCamisa || '', tamCalca: dd.tamCalca || '', tamCalcado: dd.tamCalcado || '',
+      admissao: adm, nascimento: dd.nascimento || '', sexo: dd.sexo || '', situacao: 'Trabalhando', tamCamisa: dd.tamCamisa || '', tamRoupa: dd.tamCamisa || '', tamCalca: dd.tamCalca || '', tamCalcado: dd.tamCalcado || '',
       telefone: dd.telefone || a.telefone, email: dd.email || '', altura: !!a.altura, adicional: a.adicional || '', vinculo: a.vinculo || 'CLT', ativo: true, admissaoId: a.id,
       asoData: e.aso.data || '', asoValidade: e.aso.validade || '', integracaoData: e.integ.realizada || '', integracaoValidade: '' };
     try {
