@@ -139,7 +139,10 @@ Pedidos novos de 27/11 22h10:
 - Resumo semanal (segunda 7h, tools/vencimentos.mjs): NRs/externos 30 dias, CA 60 dias, experiência 45/90 dias → push para admin/gestão/gerente/TST/RH.
 - Teste automático das páginas a cada push (teste.yml). Backup diário do banco (backupBanco no inventario.gs, depende do passo 4 do inventário).
 - Carta-convite só para quem vê salários (UI + regra d/carta). Indicadores › Salários: filtro de valores fora da curva.
-- Regras novas a publicar: med_mes, med_cfg, cart, cart_cfg, listas_presenca, drive_inv, epi_separacao, admissoes/d/carta.
+- Matriz por função (matriz/, gate treinamentos; matriz_funcao): proposta automática, revisão (gestor/TST) e aprovação (só admin; aprovar grava trein_tipos.obrig).
+- Alocação: aptidão (NR obrigatória/NR-35) com badge "Não apto", filtro e justificativa ao programar (aptoJust).
+- Ocorrências e ações (ocorrencias/, gate ferramentas): acidente, quase-acidente, NC, reclamação, auditoria; 5 porquês, ações, eficácia.
+- Regras novas a publicar: med_mes, med_cfg, cart, cart_cfg, listas_presenca, matriz_funcao, ocorrencias, drive_inv, epi_separacao, admissoes/d/carta.
 
 ## Feito em 27/11 (tarde)
 - Propostas: código SIG-AAAA-XXXXX (3 letras da sigla do cliente, ano, 5 números aleatórios), sem "Controle Previne"; canceladas fora da lista;
