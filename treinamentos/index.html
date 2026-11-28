@@ -2572,9 +2572,10 @@ function openTreino(id) {
   openModal(mtop('Treinamento') + `<div class="card"><dl class="kv"><dt>Participante</dt><dd><b>${esc(r.nome)}</b>${r.matricula ? ' · ' + esc(r.matricula) : ''}</dd><dt>Treinamento</dt><dd>${esc(r.tipoNome)}</dd><dt>Carga horária</dt><dd>${num(r.cargaHoraria)}h</dd>
     <dt>Período</dt><dd>${fmtD(r.inicio)} a ${fmtD(r.termino)}</dd><dt>Validade</dt><dd>${trBadge(r)}</dd><dt>Local</dt><dd>${esc(r.local)}</dd><dt>Instrutor</dt><dd>${esc(r.instrutor)} · ${esc(r.instrutorQualif)}</dd>
     <dt>Resp. técnico</dt><dd>${esc(r.rt)} · ${esc(r.rtQualif)}</dd>${r.tst ? `<dt>Téc. Segurança</dt><dd>${esc(r.tst)}${r.tstRegistro ? ' · ' + esc(r.tstRegistro) : ''}</dd>` : ''}<dt>Certificado</dt><dd><span class="code">${esc(r.codigo)}</span></dd></dl></div>
-    <div class="actions"><button class="btn danger" id="tr-del">Excluir</button><button class="btn ghost" id="tr-turma">Certificados da turma (${S.tr.filter(x => x.turma === r.turma).length})</button><button class="btn primary" id="tr-cert">Certificado (PDF)</button></div>`);
-  $('#tr-cert').onclick = () => gerarCertificados([r], 'certificado_' + norm(r.nome).replace(/[^a-z0-9]+/g, '_') + '_' + norm(r.norma || 'treinamento').replace(/[^a-z0-9]+/g, '_') + '.pdf');
-  $('#tr-turma').onclick = () => gerarCertificados(S.tr.filter(x => x.turma === r.turma).sort((a, b) => str(a.nome).localeCompare(str(b.nome), 'pt')), 'certificados_turma_' + r.turma + '.pdf');
+    ${r.origem === 'historico' ? `<div class="note">Treinamento do sistema antigo${r.arquivoDrive && r.arquivoDrive.nome ? ': ' + esc(r.arquivoDrive.nome) : ''}. O certificado é o arquivo original guardado no Drive.</div>` : ''}
+    <div class="actions"><button class="btn danger" id="tr-del">Excluir</button>${r.turma && r.origem !== 'historico' ? `<button class="btn ghost" id="tr-turma">Certificados da turma (${S.tr.filter(x => x.turma === r.turma).length})</button>` : ''}<button class="btn primary" id="tr-cert">${r.origem === 'historico' ? 'Abrir certificado original' : 'Certificado (PDF)'}</button></div>`);
+  $('#tr-cert').onclick = () => { if (r.origem === 'historico' && !(r.arquivoDrive && r.arquivoDrive.id)) return toast('Este registro antigo não tem o arquivo do certificado ligado.', 'bad'); gerarCertificados([r], 'certificado_' + norm(r.nome).replace(/[^a-z0-9]+/g, '_') + '_' + norm(r.norma || 'treinamento').replace(/[^a-z0-9]+/g, '_') + '.pdf'); };
+  if ($('#tr-turma')) $('#tr-turma').onclick = () => gerarCertificados(S.tr.filter(x => x.turma && x.turma === r.turma).sort((a, b) => str(a.nome).localeCompare(str(b.nome), 'pt')), 'certificados_turma_' + r.turma + '.pdf');
   armDelete($('#tr-del'), () => db.doc('treinamentos/' + r.id).delete());
 }
 async function sigPngDeArquivo(file) {
@@ -2697,7 +2698,7 @@ function certInto(doc, r, novaPagina) {
 }
 async function gerarCertificados(regs, nome) {
   const hist = regs.filter(r => r.origem === 'historico');
-  if (hist.length) { hist.slice(0, 5).forEach(r => { if (r.arquivoDrive && r.arquivoDrive.id) window.open('https://drive.google.com/file/d/' + encodeURIComponent(r.arquivoDrive.id) + '/view', '_blank', 'noopener'); }); toast(hist.length + ' certificado(s) do sistema antigo: aberto(s) o arquivo original no Drive.', 'ok'); regs = regs.filter(r => r.origem !== 'historico'); if (!regs.length) return; await sleep(1200); }
+  if (hist.length) { if (hist.length > 1 && !confirm('Abrir ' + Math.min(5, hist.length) + ' certificado(s) do sistema antigo no Drive' + (hist.length > 5 ? ' (dos ' + hist.length + ')' : '') + '?')) return; hist.slice(0, 5).forEach(r => { if (r.arquivoDrive && r.arquivoDrive.id) window.open('https://drive.google.com/file/d/' + encodeURIComponent(r.arquivoDrive.id) + '/view', '_blank', 'noopener'); }); toast(hist.length + ' certificado(s) do sistema antigo: aberto(s) o arquivo original no Drive.', 'ok'); regs = regs.filter(r => r.origem !== 'historico'); if (!regs.length) return; await sleep(1200); }
   if (regs.some(r => str(r.termino) > todayStr())) { toast('Há treinamento ainda não concluído (término no futuro). O certificado só deve ser emitido após a conclusão.', 'bad'); await sleep(2600); }
   toast('Gerando certificado(s)…');
   try { await loadPDF(); } catch (_) { return toast('Sem conexão para gerar o PDF.', 'bad'); }
