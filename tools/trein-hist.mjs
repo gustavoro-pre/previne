@@ -46,6 +46,8 @@ for (const o of docs) {
   const f = String(o.pkey || '').startsWith('cpf_') ? porCpf.get(o.pkey.slice(4)) : F.get(String(o.pkey || '').slice(2));
   if (!f) { cont.semPessoa++; continue; }
   if (!o.data || o.data > HOJE || o.data < '2000-01-01') { cont.semData++; continue; }
+  if (o.tipo === 'CERTIFICADO') { const T = norm(o.arquivo + ' ' + (o.tx || '').slice(0, 3000));
+    if (/DISPENSA|RESERVISTA|SERVICO MILITAR|DIPLOMA|ENSINO (MEDIO|FUNDAMENTAL)|HISTORICO ESCOLAR|CERTIDAO|NASCIMENTO|CASAMENTO|CONCLUSAO DE CURSO TECNICO|GRADUACAO|BACHAREL/.test(T) || !/CARGA HORARIA|\bHORAS\b|TREINAMENTO|CAPACITACAO|RECICLAGEM|\bCURSO\b/.test(T)) { cont.naoTreino = (cont.naoTreino || 0) + 1; continue; } }
   const { t, nome, norma } = tipoDe(o);
   const chave = f.id + '|' + norm(nome) + '|' + o.data;
   if (ja.has(chave) || vistos.has(chave) || (o.md5 && vistos.has('md5|' + f.id + '|' + o.md5))) { cont.repetido++; continue; }
