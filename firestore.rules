@@ -140,7 +140,8 @@ service cloud.firestore {
       }
       // documentos para o candidato ler e assinar (carta-convite, termo LGPD, OS e termo de EPI): só o RH grava
       match /d/{pid} {
-        allow get: if admi(['rh', 'consulta']) || get(/databases/$(database)/documents/admissoes/$(tk)).data.status == 'aberto';
+        // a carta-convite tem o salário: no portal só quem vê salários (o candidato lê pelo link enquanto o processo está aberto)
+        allow get: if (pid != 'carta' && admi(['rh', 'consulta'])) || (pid == 'carta' && admi(['rh']) && folhaOk()) || get(/databases/$(database)/documents/admissoes/$(tk)).data.status == 'aberto';
         allow list: if admi(['rh', 'consulta']);
         allow write: if admi(['rh']);
       }

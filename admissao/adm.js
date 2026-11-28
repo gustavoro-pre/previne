@@ -205,7 +205,7 @@ function assinBox(a, ro) {
   const os = (a.assinar || {}).osepi;
   return `<div class="etf"><h4>Assinaturas do candidato (no app)</h4>
     ${row('Termo LGPD', sig('lgpd'), (a.textos || {}).lgpd ? '<span class="badge b-warn">Aguardando</span>' : '<span class="badge b-mut">Não gerado</span>', `<button class="btn sm ghost" data-pdft="lgpd">PDF</button>`)}
-    ${row('Carta-convite', sig('carta'), (a.textos || {}).carta ? '<span class="badge b-warn">Aguardando</span>' : '<span class="badge b-mut">Não gerada</span>', `<button class="btn sm ghost" data-pdft="carta">PDF</button>`)}
+    ${row('Carta-convite', sig('carta'), (a.textos || {}).carta ? '<span class="badge b-warn">Aguardando</span>' : '<span class="badge b-mut">Não gerada</span>', VS() ? `<button class="btn sm ghost" data-pdft="carta">PDF</button>` : '<span class="note" title="A carta tem o salário">só quem vê salários</span>')}
     ${row('OS de segurança, ficha e termo de EPI', sig('osepi'), os ? '<span class="badge b-warn">Aguardando</span>' : '<span class="badge b-mut">Não gerado</span>', os ? '<button class="btn sm ghost" id="as-osv">PDF</button>' : '')}
     ${Object.keys(a.assinar || {}).filter(k => k !== 'osepi').map(k => row(esc(tituloDoc(a, k)), sig(k), '<span class="badge b-warn">Aguardando</span>', `<button class="btn sm ghost" data-pdfd="${esc(k)}">PDF</button>${ro || assinado(a, k) ? '' : `<button class="btn sm danger" data-rmd="${esc(k)}" title="Retirar">×</button>`}`)).join('')}
     ${os && os.modelo ? '<p class="note" style="margin:4px 0 0;color:var(--warn)">A OS usou o texto-modelo da função. Revise em Ferramentas & EPI → Cadastros → Kits e gere de novo.</p>' : ''}
@@ -444,7 +444,7 @@ const salarioDe = async a => { if (!VS()) return null; const p = await db.doc('a
 function envioContab(a) {
   const c = a.cand || {}, docs = c.docs || {}; const cfg = D.cfg || {};
   const cand = []; ADM.slotsDe(a).forEach(sl => (docs[sl.id] || []).forEach((arq, i) => cand.push({ k: 'c|' + sl.id + '|' + i, t: sl.t + ((docs[sl.id] || []).length > 1 ? ' (' + (i + 1) + ')' : ''), sub: arq.nome })));
-  const ass = []; if ((a.textos || {}).carta) ass.push({ k: 't|carta', t: 'Carta-convite' + (assinado(a, 'carta') ? ' (assinada)' : ' (não assinada)') }); if ((a.textos || {}).lgpd) ass.push({ k: 't|lgpd', t: 'Termo LGPD' + (assinado(a, 'lgpd') ? ' (assinado)' : ' (não assinado)') });
+  const ass = []; if ((a.textos || {}).carta && VS()) ass.push({ k: 't|carta', t: 'Carta-convite' + (assinado(a, 'carta') ? ' (assinada)' : ' (não assinada)') }); if ((a.textos || {}).lgpd) ass.push({ k: 't|lgpd', t: 'Termo LGPD' + (assinado(a, 'lgpd') ? ' (assinado)' : ' (não assinado)') });
   Object.keys(a.assinar || {}).forEach(id => ass.push({ k: 'a|' + id, t: tituloDoc(a, id) + (assinado(a, id) ? ' (assinado)' : ' (não assinado)') }));
   [['aso', 'ASO admissional'], ['integ', 'Comprovante da integração']].forEach(([k, t]) => ((etp(a)[k] || {}).arq || []).forEach((f, i, L) => ass.push({ k: 'e|' + k + '|' + i, t: t + (L.length > 1 ? ' (' + (i + 1) + ')' : '') + ' (anexado)', sub: f.nome })));
   const amanha = new Date(Date.now() + 864e5); const dtl = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
