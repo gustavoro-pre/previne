@@ -6,12 +6,16 @@ const faixaT = ([a, b]) => b > 1e8 ? 'acima de ' + brl(a) : a === 0 ? 'até ' + 
 const mediana = L => { if (!L.length) return null; const s = L.slice().sort((a, b) => a - b), m = Math.floor(s.length / 2); return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
 /* horista: salário-base menor que R$ 300 é valor da hora; vira mensal pelas horas do mês */
 const salM = x => { const v = num(x.salario); return v > 0 && v < 300 && num(x.horasMes) > 0 ? Math.round(v * num(x.horasMes) * 100) / 100 : v; };
+/* valores fora da curva (regra do intervalo interquartil: abaixo de Q1 − 1,5×IQR ou acima de Q3 + 1,5×IQR) */
+const quartil = (s, q) => { const p = (s.length - 1) * q, b = Math.floor(p); return s[b] + ((s[b + 1] !== undefined ? s[b + 1] : s[b]) - s[b]) * (p - b); };
+function semForaDaCurva(X) { if (X.length < 8) return { X, fora: [] }; const s = X.map(salM).sort((a, b) => a - b); const q1 = quartil(s, .25), q3 = quartil(s, .75), i = q3 - q1, lo = q1 - 1.5 * i, hi = q3 + 1.5 * i;
+  return { X: X.filter(x => salM(x) >= lo && salM(x) <= hi), fora: X.filter(x => salM(x) < lo || salM(x) > hi), lo, hi }; }
 const custoEnc = x => num(x.proventos) + num(x.fgts) + num(x.baseInss || x.proventos) * ENC;
 
 function tSal() {
   const C = comps(); if (!C.length) { PB().innerHTML = '<div class="empty">Nenhuma folha importada. Importe os extratos em <b>Folha e horas</b>.</div>'; return; }
   if (!V.comp || !C.includes(V.comp)) V.comp = C[0];
-  const L = doMes(V.comp), at = L.filter(ativoNaFolha).filter(x => salM(x) > 0); const sal = at.map(x => salM(x));
+  const L = doMes(V.comp), at0 = L.filter(ativoNaFolha).filter(x => salM(x) > 0); const SF = V.semOut ? semForaDaCurva(at0) : { X: at0, fora: [] }; const at = SF.X; const sal = at.map(x => salM(x));
   const massa = sal.reduce((a, b) => a + b, 0), prov = L.reduce((a, x) => a + num(x.proventos), 0), enc = L.reduce((a, x) => a + custoEnc(x), 0);
   const ben = benTotal(at.length); const custoTot = enc + ben.total;
   const ant = C[C.indexOf(V.comp) + 1]; const LA = ant ? doMes(ant) : []; const porCod = {}; LA.forEach(x => porCod[x.cod] = x);
@@ -22,9 +26,9 @@ function tSal() {
   const grp = fk => { const o = {}; at.forEach(x => { const k = fk(x); (o[k] = o[k] || []).push(x); }); return Object.entries(o).map(([k, X]) => ({ k, X, n: X.length, med: media(X.map(x => salM(x))), massa: X.reduce((a, x) => a + salM(x), 0), custo: X.reduce((a, x) => a + custoEnc(x), 0) })).sort((a, b) => b.massa - a.massa); };
   const GA = grp(areaDe);
   const M12 = C.slice(0, 12).reverse();
-  const evo = M12.map(c => { const X = doMes(c).filter(ativoNaFolha).filter(x => salM(x) > 0); return { c, n: X.length, med: media(X.map(x => salM(x))) || 0, massa: X.reduce((a, x) => a + salM(x), 0), custo: doMes(c).reduce((a, x) => a + custoEnc(x), 0) }; });
+  const evo = M12.map(c => { let X = doMes(c).filter(ativoNaFolha).filter(x => salM(x) > 0); if (V.semOut) X = semForaDaCurva(X).X; return { c, n: X.length, med: media(X.map(x => salM(x))) || 0, massa: X.reduce((a, x) => a + salM(x), 0), custo: doMes(c).reduce((a, x) => a + custoEnc(x), 0) }; });
   const top = at.slice().sort((a, b) => salM(b) - salM(a));
-  PB().innerHTML = `<div class="top2" style="margin-top:4px"><label style="margin:0">Mês</label><select id="sa-comp">${C.map(c => `<option value="${c}" ${c === V.comp ? 'selected' : ''}>${mesNome(c)}</option>`).join('')}</select><span class="note">${at.length} pessoas ativas com salário na folha de ${mesNome(V.comp)}</span></div>
+  PB().innerHTML = `<div class="top2" style="margin-top:4px"><label style="margin:0">Mês</label><select id="sa-comp">${C.map(c => `<option value="${c}" ${c === V.comp ? 'selected' : ''}>${mesNome(c)}</option>`).join('')}</select><span class="note">${at.length} pessoas ativas com salário na folha de ${mesNome(V.comp)}</span><label class="note" style="display:flex;gap:6px;align-items:center;margin:0"><input type="checkbox" id="sa-out" ${V.semOut ? 'checked' : ''}> Ignorar valores fora da curva${V.semOut && SF.fora.length ? ` (${SF.fora.length} fora: abaixo de ${brl(SF.lo)} ou acima de ${brl(SF.hi)})` : ''}</label></div>
     <div class="kpis">${kpiG('Massa salarial (salário-base)', brl(massa), 'info', at.length + ' pessoas', () => ['Massa salarial', 'Soma do salário-base de quem está ativo na folha (sem horas extras e adicionais).', tabela(['Nome', 'Cargo', 'Salário-base'], top.map(x => lin(x, [brl2(salM(x))])), [2])])
       + kpiG('Salário médio', brl(media(sal)), '', 'mediana ' + brl(mediana(sal)), () => ['Salário médio e mediana', `Média ${brl2(media(sal))} · mediana ${brl2(mediana(sal))} (metade ganha menos que isso).`, tabela(['Nome', 'Cargo', 'Salário-base'], top.map(x => lin(x, [brl2(salM(x))])), [2])])
       + kpiG('Menor e maior salário', brl(Math.min(...sal)), '', 'maior ' + brl(Math.max(...sal)), () => ['Menor e maior salário', '', tabela(['Nome', 'Cargo', 'Salário-base'], [...top.slice(-5).reverse(), ...top.slice(0, 5)].map(x => lin(x, [brl2(salM(x))])), [2])])
@@ -42,5 +46,6 @@ function tSal() {
       <div class="card"><p class="ct">Maiores salários</p>${barras(top.slice(0, 12).map(x => ({ t: x.nome, v: salM(x), s: brl(salM(x)) + ' · ' + str(x.cargo), cor: 'var(--s2)', data: x.funcionarioId ? `data-pessoa="${esc(x.funcionarioId)}"` : '' })))}</div></div>
     <p class="note">Encargos patronais estimados em ${Math.round(ENC * 1000) / 10}% da base do INSS (Lucro Real: INSS 20% + RAT/FAP + terceiros). Salário por cargo e horas extras ficam em <b>Folha e horas</b>.</p>`;
   $('#sa-comp').onchange = e => { V.comp = e.target.value; tSal(); };
+  $('#sa-out').onchange = e => { V.semOut = e.target.checked; tSal(); };
   PB().querySelectorAll('[data-scomp]').forEach(b => b.onclick = () => { V.comp = b.dataset.scomp; tSal(); });
 }
