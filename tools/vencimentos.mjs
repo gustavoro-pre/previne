@@ -30,15 +30,18 @@ const ca = epis.filter(p => (p.caSituacao && !/^V[ÁA]LIDO/i.test(String(p.caSit
 const somaDias = (d, n) => { const x = new Date(String(d).slice(0, 10) + 'T12:00:00Z'); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };
 const lim14 = mais(14); let exp45 = 0, exp90 = 0;
 for (const f of func) { if (!/^\d{4}-\d{2}-\d{2}/.test(String(f.admissao || ''))) continue; const a = somaDias(f.admissao, 44), b = somaDias(f.admissao, 89); if (a >= hoje && a <= lim14) exp45++; if (b >= hoje && b <= lim14) exp90++; }
-const cont = { em: new Date().toISOString(), trVencidos: venc, trVencendo30: vence, pessoas, caVencendo60: ca, exp45, exp90, funcionariosAtivos: func.length };
+// licenças e documentos da empresa (Requisitos legais e licenças)
+const lic = (await db.collection('licencas').get()).docs.map(d => d.data()).filter(l => l.validade && l.validade <= lim60).length;
+const cont = { lic, em: new Date().toISOString(), trVencidos: venc, trVencendo30: vence, pessoas, caVencendo60: ca, exp45, exp90, funcionariosAtivos: func.length };
 await db.doc('push_estado/venc').set(cont);
 console.log('Resumo:', JSON.stringify(cont));
-if (!venc && !vence && !ca && !exp45 && !exp90) process.exit(0);
+if (!venc && !vence && !ca && !exp45 && !exp90 && !lic) process.exit(0);
 const usr = (await db.collection('usuarios').get()).docs.filter(d => ['admin', 'gestao', 'gerente', 'tst', 'rh'].includes(d.data().papel) && d.data().ativo !== false).map(d => d.id);
 const toks = (await db.collection('push_tokens').get()).docs.map(d => ({ id: d.id, ...d.data() })).filter(t => usr.includes(t.uid));
 const partes = [];
 if (venc || vence) partes.push(`${venc} treinamento(s) vencido(s) e ${vence} vencendo em 30 dias (${pessoas} pessoa(s))`);
 if (ca) partes.push(`${ca} CA de EPI vencido ou vencendo em 60 dias`);
+if (lic) partes.push(`${lic} licença(s)/documento(s) da empresa vencido(s) ou vencendo em 60 dias`);
 if (exp45 || exp90) partes.push(`experiência: ${exp45} completa(m) 45 dias e ${exp90} completa(m) 90 dias nas próximas 2 semanas`);
 for (const t of toks) {
   try { await admin.messaging().send({ token: t.token, webpush: { headers: { Urgency: 'normal', TTL: '172800' }, data: { title: 'Vencimentos da semana', body: partes.join(' · ') + '.', url: '/treinamentos/#painel', tag: 'venc' } } }); }
