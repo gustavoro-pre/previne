@@ -130,6 +130,17 @@ Pedidos novos de 27/11 22h10:
   Regras dele para apontamentos: sem HE buscar 540 min ou mais (30 min de tolerância + almoço); com HE, sem a tolerância.
 - Segurança: imprimir carteirinha de bloqueio e CRC (aguardando o que a CRC precisa conter / modelo).
 
+## Feito em 27/11 (noite)
+- Alocação → aba Medição (med.js): importa acompanhamento do portalRDO (CSV, siderurgia+trefilaria juntos), roleta (xlsx, testada com a real) e ponto RHiD
+  (genérico: batidas ou horas; ajustar ao arquivo real). Mapa do mês verde/laranja/vermelho/roxo, por funcionário, OM, local, faltam lançar, reprovados,
+  previsto × realizado, medido × ponto × roleta. Tolerância 30 min e almoço 60 min em med_cfg/geral. Vínculo PN→funcionário em med_cfg/pn.
+- Carteirinhas (novo módulo, gate ferramentas): etiqueta de bloqueio no modelo do Drive (telefone (24) 98855-7273, editável) e CRC guardada/impressa.
+- Treinamentos: ficha de presença FOR-SST-002 com nº de verificação (listas_presenca/LP-AAAAMMDD-XXXXXX).
+- Resumo semanal (segunda 7h, tools/vencimentos.mjs): NRs/externos 30 dias, CA 60 dias, experiência 45/90 dias → push para admin/gestão/gerente/TST/RH.
+- Teste automático das páginas a cada push (teste.yml). Backup diário do banco (backupBanco no inventario.gs, depende do passo 4 do inventário).
+- Carta-convite só para quem vê salários (UI + regra d/carta). Indicadores › Salários: filtro de valores fora da curva.
+- Regras novas a publicar: med_mes, med_cfg, cart, cart_cfg, listas_presenca, drive_inv, epi_separacao, admissoes/d/carta.
+
 ## Feito em 27/11 (tarde)
 - Propostas: código SIG-AAAA-XXXXX (3 letras da sigla do cliente, ano, 5 números aleatórios), sem "Controle Previne"; canceladas fora da lista;
   botões Word e PDF (propostas/proppdf.js desenha o PDF a partir da mesma estrutura do PropDoc.build); todo texto justificado.
