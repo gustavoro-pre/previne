@@ -58,10 +58,11 @@ const filtraArea = (L, area) => !area ? L : L.filter(f => areaDe(f) === area || 
 /* ---------- aptidão: NRs obrigatórias da função (tipos de treinamento) e NR-35 para quem trabalha em altura ---------- */
 const ehNR35 = t => /nr-?\s?35/i.test(str(t.norma) + ' ' + str(t.nome));
 function inapto(f, data) {
-  if (!f || !D.tt.length) return [];
+  if (!f) return [];
   const req = D.tt.filter(t => t.ativo !== false && ((t.obrig || []).includes(str(f.funcao)) || (f.altura && ehNR35(t))));
   const out = []; req.forEach(t => { const v = D.trU.get(f.id + '|' + t.id); const nm = str(t.norma || t.nome);
     if (v === undefined) out.push(nm + ' não feita'); else if (v && v < data) out.push(nm + ' vencida em ' + fmtD(v)); });
+  if (f.asoValidade && str(f.asoValidade) < data) out.unshift('ASO vencido em ' + fmtD(f.asoValidade));
   return out;
 }
 const aptoBadge = (f, data) => { const m = inapto(f, data); return m.length ? ` <span class="badge b-bad" title="${esc(m.join(' · '))}">Não apto: ${esc(m[0])}${m.length > 1 ? ' +' + (m.length - 1) : ''}</span>` : ''; };
