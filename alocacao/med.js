@@ -225,14 +225,17 @@ if (typeof window !== 'undefined') (() => {
         const dd = String(i).padStart(2, '0'); const x = (d.dias || {})[dd]; const data = M.mes + '-' + dd;
         const s = MEDC.situacao(x, tol); const loc = x && x.rol ? x.rol.loc || '' : '';
         const prev = d.fid ? diaDe(d.fid, data).filter(a => a.omNumero) : [];
-        dias.push(Object.assign({ dd, data, x: x || {}, loc, prev }, s));
+        const omD = Object.keys(((x || {}).med || {}).oms || {})[0] || (prev[0] || {}).omNumero || '';
+        dias.push(Object.assign({ dd, data, x: x || {}, loc, prev, omD }, s));
       }
       const locR = (() => { const c = {}; dias.forEach(z => { if (z.loc) c[z.loc] = (c[z.loc] || 0) + 1; }); return Object.keys(c).sort((a, b) => c[b] - c[a])[0] || ''; })();
       const locL = li ? (/RESEND/i.test(li.unidade || '') ? 'RES' : /BARRA/i.test(li.unidade || '') ? 'BM' : '') : '';
       const locP = locL || locR;
       if (M.loc && locP !== M.loc) continue;
-      if (li && li.om) dias.forEach(z => { if (!z.prev.length) z.prevLista = li.om; });
-      L.push({ d, f, nome, pn: d.pn, dias, loc: locP, locRol: locR, li });
+      if (li && li.om) dias.forEach(z => { if (!z.prev.length) z.prevLista = li.om; if (!z.omD) z.omD = li.om; });
+      const locTxt = t => /RESEND|\bRES\b|\bRS\b/i.test(t || '') ? 'RES' : /BARRA|\bBM\b/i.test(t || '') ? 'BM' : '';
+      dias.forEach(z => { z.locPrev = locTxt((z.prev[0] || {}).local) || locTxt(((omByNum((z.prev[0] || {}).omNumero) || {}).local)) || locP; z.locVer = z.loc || z.locPrev; z.fora = !!(z.locVer && locP && z.locVer !== locP); });
+      L.push({ d, f, nome, pn: d.pn, dias, loc: locP, locRol: locR, li, fora: dias.filter(z => z.fora).length });
     }
     return L.sort((a, b) => a.nome.localeCompare(b.nome, 'pt'));
   }
@@ -295,14 +298,19 @@ if (typeof window !== 'undefined') (() => {
   }
   const filtroTxt = () => `Mês ${M.mes}${M.loc ? ' · ' + (M.loc === 'RES' ? 'Resende' : 'Barra Mansa') : ''}${M.busca ? ' · busca: ' + M.busca : ''}`;
 
+  const LOCN = { BM: 'Barra Mansa', RES: 'Resende' };
   function vMapa(L) {
     const nd = diasMes(M.mes); ULT = null;
     const cab = Array.from({ length: nd }, (_, i) => { const d = M.mes + '-' + String(i + 1).padStart(2, '0'); const w = dow(d); return `<th style="padding:2px;font-size:10px;font-weight:600;color:${w === 0 || w === 6 ? 'var(--bad)' : 'var(--muted)'}">${i + 1}</th>`; }).join('');
-    const rows = L.map(p => `<tr><td style="padding:4px 6px;white-space:nowrap;position:sticky;left:0;background:#fff;max-width:210px;overflow:hidden;text-overflow:ellipsis" title="${esc(p.nome)} · PN ${esc(p.pn)}">${esc(p.nome)}${p.f ? '' : ' <span class="badge b-warn" title="Sem vínculo com o cadastro do portal">?</span>'}</td>
-      ${p.dias.map(z => { const cor = COR[z.st]; const t = z.st ? `${fmtD(z.data)} · ${ROT[z.st]} · trabalhado ${h2(z.trab)} h · medido ${h2(z.med)} h` : fmtD(z.data);
-        return `<td style="padding:1px"><button data-medd="${esc(p.pn)}|${z.dd}" title="${esc(t)}" style="width:22px;height:22px;border-radius:5px;border:${cor ? '0' : '1px solid var(--line)'};background:${cor || '#fff'};cursor:${z.st || z.x.med ? 'pointer' : 'default'};padding:0"></button></td>`; }).join('')}
-      <td style="padding:4px 6px;text-align:right;white-space:nowrap">${pct(p.dias.reduce((a, z) => a + Math.min(z.med, z.trab || z.med), 0), p.dias.reduce((a, z) => a + z.trab, 0))}</td></tr>`).join('');
-    return `<div style="display:flex;gap:12px;flex-wrap:wrap;font-size:12px;margin-bottom:8px">${Object.entries(ROT).map(([k, t]) => `<span><span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:${COR[k]};vertical-align:-2px"></span> ${t}</span>`).join('')}<span>· toque no dia para ver o detalhe</span></div>
+    const rows = L.map(p => { const om = omPrincipal(p);
+      return `<tr><td style="padding:3px 6px;white-space:nowrap;position:sticky;left:0;background:#fff;min-width:200px;max-width:260px;overflow:hidden;line-height:1.25" title="${esc(p.nome)} · PN ${esc(p.pn)}">${esc(p.nome)}${p.f ? '' : ' <span class="badge b-warn" title="Sem vínculo com o cadastro do portal">?</span>'}
+        <br><span style="font-size:11px;color:var(--muted);white-space:normal;display:block">${om ? 'OM ' + esc(om) : 'sem OM'} · base ${LOCN[p.loc] || '—'}${p.fora ? ` · <b style="color:#a16207">${p.fora} dia(s) em ${p.loc === 'BM' ? 'Resende' : 'BM'}</b>` : ''}</span></td>
+      ${p.dias.map(z => { const cor = COR[z.st]; const t = (z.st ? `${fmtD(z.data)} · ${ROT[z.st]} · trabalhado ${h2(z.trab)} h · medido ${h2(z.med)} h` : fmtD(z.data)) + (z.loc ? ' · roleta em ' + LOCN[z.loc] : z.locPrev ? ' · previsto em ' + LOCN[z.locPrev] : '') + (z.fora ? ' (fora da base)' : '') + (z.omD ? ' · OM ' + z.omD : '');
+        const le = z.locVer ? (z.locVer === 'BM' ? 'B' : 'R') : ''; const real = !!z.loc;
+        const bg = cor || (z.fora ? '#fde047' : '#fff');
+        return `<td style="padding:1px"><button data-medd="${esc(p.pn)}|${z.dd}" title="${esc(t)}" style="width:22px;height:22px;border-radius:5px;border:${z.fora ? '3px solid #eab308' : cor ? '0' : '1px solid var(--line)'};background:${bg};cursor:pointer;padding:0;font-size:9px;font-weight:700;line-height:1;color:${cor ? '#fff' : z.fora ? '#713f12' : real ? '#333' : '#b0b5bd'}">${le}</button></td>`; }).join('')}
+      <td style="padding:4px 6px;text-align:right;white-space:nowrap">${pct(p.dias.reduce((a, z) => a + Math.min(z.med, z.trab || z.med), 0), p.dias.reduce((a, z) => a + z.trab, 0))}</td></tr>`; }).join('');
+    return `<div style="display:flex;gap:12px;flex-wrap:wrap;font-size:12px;margin-bottom:8px">${Object.entries(ROT).map(([k, t]) => `<span><span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:${COR[k]};vertical-align:-2px"></span> ${t}</span>`).join('')}<span>· letra = unidade do dia (B = Barra Mansa, R = Resende); cinza = previsto, preta = passou na roleta</span><span><span style="display:inline-block;width:12px;height:12px;border-radius:3px;border:2px solid #eab308;background:#fde047;vertical-align:-2px"></span> unidade diferente da base</span><span>· toque no dia para ver o detalhe</span></div>
       <div style="overflow:auto"><table style="border-collapse:collapse"><thead><tr><th style="text-align:left;padding:4px 6px;position:sticky;left:0;background:#fff">Funcionário</th>${cab}<th style="padding:4px 6px">% med.</th></tr></thead><tbody>${rows}</tbody></table></div>`;
   }
   function porPessoa(p) {
@@ -311,9 +319,9 @@ if (typeof window !== 'undefined') (() => {
     return a;
   }
   function vFunc(L) {
-    const cols = [{ t: 'Funcionário' }, { t: 'PN' }, { t: 'Local' }, { t: 'OM principal' }, { t: 'Dias trab.', tipo: 'int' }, { t: 'Medidos', tipo: 'int' }, { t: 'A menor', tipo: 'int' }, { t: 'Não medidos', tipo: 'int' }, { t: 'Sem presença', tipo: 'int' },
+    const cols = [{ t: 'Funcionário' }, { t: 'PN' }, { t: 'Base' }, { t: 'Dias fora da base', tipo: 'int' }, { t: 'OM principal' }, { t: 'Dias trab.', tipo: 'int' }, { t: 'Medidos', tipo: 'int' }, { t: 'A menor', tipo: 'int' }, { t: 'Não medidos', tipo: 'int' }, { t: 'Sem presença', tipo: 'int' },
       { t: 'H trabalhadas', tipo: 'h' }, { t: 'H medidas', tipo: 'h' }, { t: 'H a medir', tipo: 'h' }, { t: '% medido', tipo: 'pct' }, { t: 'Reprovados', tipo: 'int' }, { t: 'H reprovadas', tipo: 'h' }].concat(PODE ? [{ t: 'Valor medido', tipo: 'brl' }, { t: 'Valor reprovado', tipo: 'brl' }] : []);
-    const rows = L.map(p => { const a = porPessoa(p); return [p.nome, p.pn, p.loc, omPrincipal(p), a.dt, a.ok, a.menor, a.nao, a.sempres, a.ht, a.hm, a.falta, a.ht ? a.hm / a.ht : null, a.nRep, a.hRep].concat(PODE ? [a.val, a.vRep] : []); });
+    const rows = L.map(p => { const a = porPessoa(p); return [p.nome, p.pn, LOCN[p.loc] || p.loc, p.fora, omPrincipal(p), a.dt, a.ok, a.menor, a.nao, a.sempres, a.ht, a.hm, a.falta, a.ht ? a.hm / a.ht : null, a.nRep, a.hRep].concat(PODE ? [a.val, a.vRep] : []); });
     return tab('Medição por funcionário', cols, rows);
   }
   /* horas por OM: medidas pela OM do apontamento; a medir pela OM prevista do dia (ou a OM principal da pessoa) */
@@ -394,6 +402,8 @@ if (typeof window !== 'undefined') (() => {
     const opts = PODE && !f ? `<label style="display:block;margin-top:10px;font-size:13px">Ligar ao funcionário do portal</label><select id="med-lig" style="width:100%;padding:8px;border:1px solid #cfd4dc;border-radius:8px"><option value="">— escolha —</option>${ativos().map(x => `<option value="${esc(x.id)}">${esc(x.nome)}</option>`).join('')}</select><button class="btn sm primary" id="med-ligok" style="margin-top:6px">Ligar</button>` : '';
     sheet(`<div class="top"><h2>${esc(f ? f.nome : d.nome)}</h2><button class="btn sm ghost" id="m-x">Fechar</button></div>
       <p class="cs" style="margin:0 0 8px">PN ${esc(pn)} · ${fmtD(data)} (${DSEM[dow(data)]}) · ${s.st ? `<b style="color:${COR[s.st]}">${ROT[s.st]}</b>` : 'sem presença'}</p>
+      ${(() => { const lp = linhas().find(q => q.pn === pn); const z = lp && lp.dias.find(q => q.dd === dd); if (!lp || !z) return '';
+        return `<div class="card" style="display:flex;gap:16px;flex-wrap:wrap;${z.fora ? 'border:3px solid #eab308;background:#fefce8' : ''}"><div><div class="cs">OM do dia</div><b>${z.omD ? esc(z.omD) : '—'}</b></div><div><div class="cs">Local do dia</div><b>${LOCN[z.locVer] || '—'}</b> <span class="cs">${z.loc ? '(roleta)' : z.locPrev ? '(previsto)' : ''}</span></div><div><div class="cs">Base do funcionário</div><b>${LOCN[lp.loc] || '—'}</b>${lp.li && lp.li.area ? ' · ' + esc(lp.li.area) : ''}</div>${z.fora ? `<div style="color:#a16207;font-weight:700;align-self:center">${z.loc ? 'Trabalhou' : 'Previsto'} em unidade diferente da base</div>` : ''}</div>`; })()}
       <div class="card"><div class="ct">Roleta</div>${r.e || r.h ? `${esc(r.e || '?')} → ${esc(r.s || '?')} · ${h2(r.h)} h líquidas · ${r.loc === 'BM' ? 'Barra Mansa' : r.loc === 'RES' ? 'Resende' : '—'} · ${r.n || 0} acesso(s)${r.neg ? ` · ${r.neg} negado(s)` : ''}` : 'Sem acesso registrado.'}</div>
       <div class="card"><div class="ct">Ponto (RHiD)</div>${t.h || t.e ? `${esc(t.e || '')}${t.s ? ' → ' + esc(t.s) : ''} · ${h2(t.h)} h` : 'Sem ponto importado para o dia.'}</div>
       <div class="card"><div class="ct">Medido (portalRDO)</div>${m.n || m.nRep ? `${h2(m.h)} h válidas em ${m.n || 0} lançamento(s)${m.nRep ? ` · <b style="color:var(--bad)">${m.nRep} reprovado(s), ${h2(m.hRep)} h</b>` : ''}<br>
